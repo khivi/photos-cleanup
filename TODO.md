@@ -32,11 +32,11 @@ Full audit of the original engine (`../../photo-cleanup/photo_cleanup`, all pass
 | `original_filename` | display, heic | ⚠️ indirect — `PHAssetResource.originalFilename` |
 | `original_filesize` | size totals, heic | ⚠️ indirect/awkward — via `PHAssetResource` |
 | `hasadjustments` | **edited** pass | ⚠️ no clean bool — infer from `.adjustmentData` resource |
-| **`score.overall`** (aesthetic) | **low-quality** pass | ❌ not exposed → recompute (custom blur/exposure heuristic) |
+| **`score.overall`** (aesthetic) | **low-quality** + **clusters** (keeper ranking) | ❌ not exposed → recompute (custom blur/exposure heuristic) |
 | **`labels`** (scene classification) | **documents** pass | ❌ not exposed → recompute (`VNClassifyImageRequest` + OCR per image) |
-| **`fingerprint`** (perceptual hash) | **similar** + **clusters** dedup | ❌ not exposed → recompute (`VNGenerateImageFeaturePrintRequest` / pHash) |
+| **`fingerprint`** (perceptual hash) | **similar** pass | ❌ not exposed → recompute (`VNGenerateImageFeaturePrintRequest` / pHash) |
 
-Common thread: every "Apple already computed this" value (aesthetic score, scene labels, perceptual fingerprint) lives in the private sqlite and is **not** in PhotoKit — a rewrite re-derives all three with Vision (won't byte-match Apple's). Passes that survive on intrinsic metadata alone: **screenshots**, time-based **clusters**, read-only **heic estimate**. Upside: the album **write** path goes native, killing the Apple Events reviewer wall — but that doesn't offset losing the three computed signals.
+Common thread: every "Apple already computed this" value (aesthetic score, scene labels, perceptual fingerprint) lives in the private sqlite and is **not** in PhotoKit — a rewrite re-derives all three with Vision (won't byte-match Apple's). Passes that survive on intrinsic metadata alone: **screenshots** and read-only **heic estimate** (**clusters** keeps its time-grouping but loses score-based keeper ranking). Upside: the album **write** path goes native, killing the Apple Events reviewer wall — but that doesn't offset losing the three computed signals.
 
 ## CI
 - [ ] **GitHub Actions build** — matrix over the two Mac targets (`aarch64-apple-darwin`, `x86_64-apple-darwin`), producing a universal `.app`/`.dmg`. NOTE: macOS-only app (osxphotos / Photos.app / AppleScript) — no Windows/Linux targets are possible. Needs signing secrets for the shareable path.
