@@ -1,0 +1,14 @@
+# Node / frontend
+node_modules/
+dist/
+
+# Rust / Tauri
+src-tauri/target/
+
+# Python / uv
+.venv/
+__pycache__/
+.pytest_cache/
+
+# OS
+.DS_Store

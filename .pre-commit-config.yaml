@@ -1,0 +1,57 @@
+# Python conventions mirror the Cockpit repo (ruff + ruff-format + validate-pyproject).
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.20.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+        exclude: ^tsconfig.*\.json$  # Tauri tsconfigs are JSONC (comments)
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: debug-statements
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: ['--fix']
+        types_or: [python, pyi]
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.25
+    hooks:
+      - id: validate-pyproject
+
+  - repo: local
+    hooks:
+      # Rust hooks fire only on .rs changes (rare — Rust is just the sidecar shim).
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: bash -c 'cd src-tauri && cargo fmt'
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: bash -c 'cd src-tauri && cargo clippy --all-targets -- -D warnings'
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest (sidecar)
+        entry: uv run pytest -q
+        language: system
+        pass_filenames: false
+        always_run: true
