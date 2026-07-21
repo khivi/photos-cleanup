@@ -32,6 +32,10 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 _MIN = datetime.min.replace(tzinfo=UTC)
 
 
+# TODO(reload): add POST /reload to clear db()/_index() caches so the library
+# re-reads mid-session without an app restart. If the ~316MB full re-parse on
+# first request ever feels slow, persist a uuid-keyed index to disk and diff
+# instead of re-reading everything.
 @functools.lru_cache(maxsize=1)
 def db():
     return common.get_photosdb()
