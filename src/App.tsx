@@ -32,6 +32,8 @@ function App() {
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [committing, setCommitting] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const { width, height } = useWindowSize();
 
   // Boot: get the sidecar port, wait for it, load the full library.
@@ -89,13 +91,54 @@ function App() {
     }));
   }
 
+  function setAll(d: Decision) {
+    const next: Record<string, Decision> = {};
+    for (const p of photos) next[p.uuid] = d;
+    setDecisions(next);
+  }
+
+  async function commit() {
+    if (port == null || view === "all") return;
+    const uuids = Object.entries(decisions)
+      .filter(([, d]) => d === "delete")
+      .map(([u]) => u);
+    if (uuids.length === 0) return;
+    setCommitting(true);
+    setStatus(null);
+    // First commit triggers a macOS "control Photos" prompt; if it isn't
+    // answered the request blocks. Time out so the UI never hangs forever.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 90_000);
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/commit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: view, uuids }),
+        signal: ctrl.signal,
+      });
+      if (!r.ok) throw new Error(`commit failed (${r.status})`);
+      const data = await r.json();
+      setStatus(`Moved ${data.added} to “${data.album}” — review & delete in Photos.`);
+    } catch (e) {
+      const timedOut = e instanceof DOMException && e.name === "AbortError";
+      setStatus(
+        timedOut
+          ? "Timed out — approve the “control Photos” prompt (System Settings → Privacy → Automation), then try again."
+          : String(e),
+      );
+    } finally {
+      clearTimeout(timer);
+      setCommitting(false);
+    }
+  }
+
   if (error) return <div style={{ padding: 20, color: "crimson" }}>{error}</div>;
 
   const inCleanup = view !== "all";
   const flagged = Object.values(decisions).filter((d) => d === "delete").length;
   const columnCount = Math.max(1, Math.floor(width / CELL));
   const rowCount = Math.ceil(photos.length / columnCount);
-  const gridHeight = height - HEADER_H;
+  const gridHeight = height - HEADER_H - (status ? 30 : 0);
 
   const Tab = ({ v, label }: { v: View; label: string }) => (
     <button
@@ -128,6 +171,35 @@ function App() {
         <Tab v="all" label="All" />
         <Tab v="screenshots" label="Screenshots" />
         <Tab v="low-quality" label="Low quality" />
+        {inCleanup && !loading && (
+          <>
+            <span style={{ width: 1, height: 20, background: "#ddd" }} />
+            <button
+              onClick={() => setAll("keep")}
+              style={{
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: "1px solid #ccc",
+                background: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              Keep all
+            </button>
+            <button
+              onClick={() => setAll("delete")}
+              style={{
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: "1px solid #ccc",
+                background: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              Delete all
+            </button>
+          </>
+        )}
         <span style={{ marginLeft: "auto", fontWeight: 600 }}>
           {loading
             ? "Loading…"
@@ -135,7 +207,29 @@ function App() {
               ? `${photos.length} candidates · ${flagged} to delete`
               : `${photos.length.toLocaleString()} photos`}
         </span>
+        {inCleanup && !loading && (
+          <button
+            onClick={commit}
+            disabled={committing || flagged === 0}
+            style={{
+              padding: "4px 12px",
+              borderRadius: 6,
+              border: "none",
+              background: flagged === 0 ? "#ccc" : "#d33",
+              color: "#fff",
+              fontWeight: 600,
+              cursor: flagged === 0 ? "default" : "pointer",
+            }}
+          >
+            {committing ? "Moving…" : `Move ${flagged} → Delete Me album`}
+          </button>
+        )}
       </header>
+      {status && (
+        <div style={{ padding: "6px 12px", background: "#eef", fontSize: 13 }}>
+          {status}
+        </div>
+      )}
       <div style={{ flex: 1, overflow: "hidden" }}>
         {!loading && width > 0 && (
           <FixedSizeGrid

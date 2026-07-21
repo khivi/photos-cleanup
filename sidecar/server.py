@@ -17,6 +17,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from photo_cleanup import common
+from pydantic import BaseModel
+
+# Per-pass album names (engine convention: end with "Delete Me" / "Review Me").
+ALBUMS = {
+    "screenshots": "Screenshots - Delete Me",
+    "low-quality": "Low Quality - Review Me",
+}
 
 app = FastAPI(title="photo-cleanup sidecar")
 # ponytail: allow-all CORS — this only ever listens on 127.0.0.1 for the webview.
@@ -94,6 +101,26 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
         raise HTTPException(status_code=404, detail="unknown cleanup kind")
     photos.sort(key=lambda p: common.make_aware(p.date) if p.date else _MIN, reverse=True)
     return {"kind": kind, "count": len(photos), "photos": [_meta(p) for p in photos]}
+
+
+class CommitReq(BaseModel):
+    kind: str
+    uuids: list[str]
+
+
+@app.post("/commit")
+def commit(req: CommitReq) -> dict:
+    """Move the given photos into this pass's review album (never deletes)."""
+    album = ALBUMS.get(req.kind)
+    if album is None:
+        raise HTTPException(status_code=404, detail="unknown cleanup kind")
+    _, by_uuid = _index()
+    photos = [by_uuid[u] for u in req.uuids if u in by_uuid]
+    if not photos:
+        raise HTTPException(status_code=400, detail="no matching photos")
+    # assume_yes=True: no TTY here; the caller (GUI) already confirmed.
+    common.add_to_album(photos, album, dry_run=False, assume_yes=True)
+    return {"added": len(photos), "album": album}
 
 
 def main() -> None:

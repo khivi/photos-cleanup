@@ -79,3 +79,35 @@ def test_cleanup_low_quality_filters_by_score(monkeypatch):
 def test_cleanup_unknown_404(monkeypatch):
     _patch_engine(monkeypatch, [])
     assert TestClient(server.app).get("/cleanup/bogus").status_code == 404
+
+
+def test_commit_adds_to_pass_album(monkeypatch):
+    items = [FakePhoto("a"), FakePhoto("b")]
+    monkeypatch.setattr(server, "_index", lambda: (items, {p.uuid: p for p in items}))
+    called = {}
+
+    def fake_add(photos, album, dry_run, assume_yes):
+        called.update(n=len(photos), album=album, dry_run=dry_run, assume_yes=assume_yes)
+
+    monkeypatch.setattr(server.common, "add_to_album", fake_add)
+    r = TestClient(server.app).post("/commit", json={"kind": "screenshots", "uuids": ["a", "b"]})
+    assert r.json() == {"added": 2, "album": "Screenshots - Delete Me"}
+    assert called == {
+        "n": 2,
+        "album": "Screenshots - Delete Me",
+        "dry_run": False,
+        "assume_yes": True,
+    }
+
+
+def test_commit_unknown_kind_404(monkeypatch):
+    monkeypatch.setattr(server, "_index", lambda: ([], {}))
+    r = TestClient(server.app).post("/commit", json={"kind": "bogus", "uuids": ["a"]})
+    assert r.status_code == 404
+
+
+def test_commit_no_matching_400(monkeypatch):
+    monkeypatch.setattr(server, "_index", lambda: ([], {}))
+    monkeypatch.setattr(server.common, "add_to_album", lambda *a, **k: None)
+    r = TestClient(server.app).post("/commit", json={"kind": "screenshots", "uuids": ["missing"]})
+    assert r.status_code == 400
