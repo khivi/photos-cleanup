@@ -1,8 +1,8 @@
 """Local HTTP sidecar for the Tauri shell. Wraps the photo_cleanup engine.
 
 The Tauri app spawns this on 127.0.0.1 and the webview talks to it directly.
-ponytail: single cached PhotosDB — the load is slow (seconds on a big library)
-so we do it once; add a /reload endpoint if the library changes mid-session.
+ponytail: single cached PhotosDB + photo index — the load is slow (seconds on a
+big library) so we do it once; add a /reload endpoint if the library changes.
 
 The engine (photo_cleanup, osxphotos) is a dependency; we never edit its repo.
 """
@@ -11,19 +11,43 @@ from __future__ import annotations
 
 import argparse
 import functools
+from datetime import UTC, datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from photo_cleanup import common
 
 app = FastAPI(title="photo-cleanup sidecar")
 # ponytail: allow-all CORS — this only ever listens on 127.0.0.1 for the webview.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+_MIN = datetime.min.replace(tzinfo=UTC)
+
 
 @functools.lru_cache(maxsize=1)
 def db():
     return common.get_photosdb()
+
+
+@functools.lru_cache(maxsize=1)
+def _index():
+    """Newest-first photo list + uuid lookup, built once."""
+    photos = db().photos()
+    photos.sort(key=lambda p: common.make_aware(p.date) if p.date else _MIN, reverse=True)
+    return photos, {p.uuid: p for p in photos}
+
+
+def _meta(p) -> dict:
+    return {
+        "uuid": p.uuid,
+        "filename": p.original_filename,
+        "width": p.width,
+        "height": p.height,
+        "date": p.date.isoformat() if p.date else None,
+        "is_video": p.ismovie,
+        "size": p.original_filesize,
+    }
 
 
 @app.get("/health")
@@ -36,6 +60,22 @@ def stats() -> dict:
     photos = db().photos()
     total_bytes = sum(p.original_filesize or 0 for p in photos)
     return {"count": len(photos), "size_gb": round(total_bytes / 1024**3, 1)}
+
+
+@app.get("/photos")
+def photos(offset: int = 0, limit: int = 100) -> dict:
+    items, _ = _index()
+    return {"total": len(items), "photos": [_meta(p) for p in items[offset : offset + limit]]}
+
+
+@app.get("/thumb/{uuid}")
+def thumb(uuid: str):
+    _, by_uuid = _index()
+    p = by_uuid.get(uuid)
+    if p is None or not p.path_derivatives:
+        raise HTTPException(status_code=404)
+    # path_derivatives[-1] is the smallest derivative — right size for a grid thumb.
+    return FileResponse(p.path_derivatives[-1])
 
 
 def main() -> None:
