@@ -74,9 +74,9 @@ def stats() -> dict:
 
 
 @app.get("/photos")
-def photos(offset: int = 0, limit: int = 100) -> dict:
+def photos() -> dict:
     items, _ = _index()
-    return {"total": len(items), "photos": [_meta(p) for p in items[offset : offset + limit]]}
+    return {"total": len(items), "photos": [_meta(p) for p in items]}
 
 
 @app.get("/thumb/{uuid}")

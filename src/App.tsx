@@ -47,7 +47,7 @@ function App() {
       setPort(p);
       for (let i = 0; i < 120 && !cancelled; i++) {
         try {
-          const r = await fetch(`http://127.0.0.1:${p}/photos?limit=100000`);
+          const r = await fetch(`http://127.0.0.1:${p}/photos`);
           if (r.ok) {
             const data = await r.json();
             if (!cancelled) {
@@ -78,7 +78,7 @@ function App() {
     }
     setLoading(true);
     try {
-      const path = v === "all" ? "/photos?limit=100000" : `/cleanup/${v}`;
+      const path = v === "all" ? "/photos" : `/cleanup/${v}`;
       const r = await fetch(`http://127.0.0.1:${port}${path}`);
       const data = await r.json();
       setPhotos(data.photos);

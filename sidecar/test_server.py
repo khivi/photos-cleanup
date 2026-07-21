@@ -35,12 +35,12 @@ def test_stats(monkeypatch):
     assert data["size_gb"] == 3.0
 
 
-def test_photos_paginates(monkeypatch):
+def test_photos_returns_all(monkeypatch):
     items = [FakePhoto("a"), FakePhoto("b"), FakePhoto("c")]
     monkeypatch.setattr(server, "_index", lambda: (items, {p.uuid: p for p in items}))
-    data = TestClient(server.app).get("/photos?offset=1&limit=1").json()
+    data = TestClient(server.app).get("/photos").json()
     assert data["total"] == 3
-    assert [p["uuid"] for p in data["photos"]] == ["b"]
+    assert [p["uuid"] for p in data["photos"]] == ["a", "b", "c"]
 
 
 def test_thumb_serves_and_404(monkeypatch, tmp_path):
