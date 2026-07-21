@@ -19,6 +19,7 @@ dev = [
     "pytest>=7",
     "httpx",          # required by fastapi TestClient
     "pre-commit>=3",
+    "pyinstaller>=6.21.0",
 ]
 
 [tool.pytest.ini_options]
