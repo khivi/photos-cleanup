@@ -51,3 +51,31 @@ def test_thumb_serves_and_404(monkeypatch, tmp_path):
     client = TestClient(server.app)
     assert client.get("/thumb/a").status_code == 200
     assert client.get("/thumb/missing").status_code == 404
+
+
+def _patch_engine(monkeypatch, candidates):
+    monkeypatch.setattr(server, "db", lambda: object())
+    monkeypatch.setattr(server.common, "load_ignore_albums", lambda extra=None: frozenset())
+    monkeypatch.setattr(
+        server.common, "get_candidate_photos", lambda pdb, ignore, **kw: (candidates, {})
+    )
+
+
+def test_cleanup_screenshots(monkeypatch):
+    _patch_engine(monkeypatch, [FakePhoto("a"), FakePhoto("b")])
+    data = TestClient(server.app).get("/cleanup/screenshots").json()
+    assert data["count"] == 2
+    assert {p["uuid"] for p in data["photos"]} == {"a", "b"}
+
+
+def test_cleanup_low_quality_filters_by_score(monkeypatch):
+    _patch_engine(monkeypatch, [FakePhoto("a"), FakePhoto("b"), FakePhoto("c")])
+    scores = {"a": 0.005, "b": 0.5, "c": None}  # c is unscored -> excluded
+    monkeypatch.setattr(server.common, "get_photo_score", lambda p: scores[p.uuid])
+    data = TestClient(server.app).get("/cleanup/low-quality?threshold=0.01").json()
+    assert [p["uuid"] for p in data["photos"]] == ["a"]
+
+
+def test_cleanup_unknown_404(monkeypatch):
+    _patch_engine(monkeypatch, [])
+    assert TestClient(server.app).get("/cleanup/bogus").status_code == 404

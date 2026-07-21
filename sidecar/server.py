@@ -78,6 +78,24 @@ def thumb(uuid: str):
     return FileResponse(p.path_derivatives[-1])
 
 
+@app.get("/cleanup/{kind}")
+def cleanup(kind: str, threshold: float = 0.01) -> dict:
+    """Run a cleanup pass and return its candidate photos (newest-first)."""
+    photosdb = db()
+    ignore = common.load_ignore_albums(None)
+    if kind == "screenshots":
+        photos, _ = common.get_candidate_photos(photosdb, ignore, only_screenshots=True)
+    elif kind == "low-quality":
+        photos, _ = common.get_candidate_photos(photosdb, ignore)
+        photos = [
+            p for p in photos if (s := common.get_photo_score(p)) is not None and s <= threshold
+        ]
+    else:
+        raise HTTPException(status_code=404, detail="unknown cleanup kind")
+    photos.sort(key=lambda p: common.make_aware(p.date) if p.date else _MIN, reverse=True)
+    return {"kind": kind, "count": len(photos), "photos": [_meta(p) for p in photos]}
+
+
 def main() -> None:
     import uvicorn
 
