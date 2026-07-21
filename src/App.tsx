@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FixedSizeGrid } from "react-window";
 import "./App.css";
 
 type Photo = { uuid: string; filename: string; is_video: boolean };
-type View = "all" | "screenshots" | "low-quality";
+type View = "all" | "screenshots" | "low-quality" | "deleted";
 type Decision = "keep" | "delete";
+const CLEANUP_VIEWS: View[] = ["screenshots", "low-quality"];
 
 const CELL = 170; // px per thumbnail cell
 const HEADER_H = 46; // toolbar height in px
@@ -29,6 +30,7 @@ function App() {
   const [port, setPort] = useState<number | null>(null);
   const [view, setView] = useState<View>("all");
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [deleted, setDeleted] = useState<Photo[]>([]); // queued-for-deletion this session
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +70,12 @@ function App() {
 
   async function loadView(v: View) {
     if (port == null) return;
+    setStatus(null);
+    // "deleted" is a client-side view of what we queued this session — no fetch.
+    if (v === "deleted") {
+      setView(v);
+      return;
+    }
     setLoading(true);
     try {
       const path = v === "all" ? "/photos?limit=100000" : `/cleanup/${v}`;
@@ -77,7 +85,7 @@ function App() {
       setView(v);
       // Cleanup candidates start flagged for delete; user toggles to keep.
       const next: Record<string, Decision> = {};
-      if (v !== "all") for (const p of data.photos) next[p.uuid] = "delete";
+      if (CLEANUP_VIEWS.includes(v)) for (const p of data.photos) next[p.uuid] = "delete";
       setDecisions(next);
     } finally {
       setLoading(false);
@@ -98,10 +106,9 @@ function App() {
   }
 
   async function commit() {
-    if (port == null || view === "all") return;
-    const uuids = Object.entries(decisions)
-      .filter(([, d]) => d === "delete")
-      .map(([u]) => u);
+    if (port == null || !CLEANUP_VIEWS.includes(view)) return;
+    const doomed = photos.filter((p) => decisions[p.uuid] === "delete");
+    const uuids = doomed.map((p) => p.uuid);
     if (uuids.length === 0) return;
     setCommitting(true);
     setStatus(null);
@@ -118,7 +125,20 @@ function App() {
       });
       if (!r.ok) throw new Error(`commit failed (${r.status})`);
       const data = await r.json();
-      setStatus(`Moved ${data.added} to “${data.album}” — review & delete in Photos.`);
+      // Refresh: pull the moved photos out of the candidate grid and into the
+      // "To be deleted" tab (dedupe by uuid).
+      const doomedIds = new Set(uuids);
+      setDeleted((prev) => {
+        const seen = new Set(prev.map((p) => p.uuid));
+        return [...doomed.filter((p) => !seen.has(p.uuid)), ...prev];
+      });
+      setPhotos((prev) => prev.filter((p) => !doomedIds.has(p.uuid)));
+      setDecisions((prev) => {
+        const next = { ...prev };
+        for (const id of uuids) delete next[id];
+        return next;
+      });
+      setStatus(`Moved ${data.added} to “${data.album}” — see “To be deleted”.`);
     } catch (e) {
       const timedOut = e instanceof DOMException && e.name === "AbortError";
       setStatus(
@@ -134,10 +154,11 @@ function App() {
 
   if (error) return <div style={{ padding: 20, color: "crimson" }}>{error}</div>;
 
-  const inCleanup = view !== "all";
+  const inCleanup = CLEANUP_VIEWS.includes(view);
+  const displayed = view === "deleted" ? deleted : photos;
   const flagged = Object.values(decisions).filter((d) => d === "delete").length;
   const columnCount = Math.max(1, Math.floor(width / CELL));
-  const rowCount = Math.ceil(photos.length / columnCount);
+  const rowCount = Math.ceil(displayed.length / columnCount);
   const gridHeight = height - HEADER_H - (status ? 30 : 0);
 
   const Tab = ({ v, label }: { v: View; label: string }) => (
@@ -157,6 +178,16 @@ function App() {
     </button>
   );
 
+  const bulkBtn = (color: string): CSSProperties => ({
+    padding: "4px 10px",
+    borderRadius: 6,
+    border: `1px solid ${color}`,
+    background: "#fff",
+    color,
+    fontWeight: 600,
+    cursor: "pointer",
+  });
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <header
@@ -171,41 +202,30 @@ function App() {
         <Tab v="all" label="All" />
         <Tab v="screenshots" label="Screenshots" />
         <Tab v="low-quality" label="Low quality" />
+        <Tab
+          v="deleted"
+          label={`To be deleted${deleted.length ? ` (${deleted.length})` : ""}`}
+        />
         {inCleanup && !loading && (
           <>
-            <span style={{ width: 1, height: 20, background: "#ddd" }} />
-            <button
-              onClick={() => setAll("keep")}
-              style={{
-                padding: "4px 10px",
-                borderRadius: 6,
-                border: "1px solid #ccc",
-                background: "#fff",
-                cursor: "pointer",
-              }}
-            >
-              Keep all
+            <span style={{ width: 1, height: 22, background: "#ddd", margin: "0 2px" }} />
+            <span style={{ fontSize: 12, color: "#666" }}>Select all:</span>
+            <button onClick={() => setAll("keep")} style={bulkBtn("#2a2")}>
+              ✓ Keep
             </button>
-            <button
-              onClick={() => setAll("delete")}
-              style={{
-                padding: "4px 10px",
-                borderRadius: 6,
-                border: "1px solid #ccc",
-                background: "#fff",
-                cursor: "pointer",
-              }}
-            >
-              Delete all
+            <button onClick={() => setAll("delete")} style={bulkBtn("#d33")}>
+              ✗ Delete
             </button>
           </>
         )}
         <span style={{ marginLeft: "auto", fontWeight: 600 }}>
           {loading
             ? "Loading…"
-            : inCleanup
-              ? `${photos.length} candidates · ${flagged} to delete`
-              : `${photos.length.toLocaleString()} photos`}
+            : view === "deleted"
+              ? `${deleted.length} queued for deletion`
+              : inCleanup
+                ? `${photos.length} candidates · ${flagged} to delete`
+                : `${photos.length.toLocaleString()} photos`}
         </span>
         {inCleanup && !loading && (
           <button
@@ -243,10 +263,11 @@ function App() {
           >
             {({ columnIndex, rowIndex, style }) => {
               const idx = rowIndex * columnCount + columnIndex;
-              if (idx >= photos.length) return null;
-              const ph = photos[idx];
-              const dec = decisions[ph.uuid];
-              const willDelete = inCleanup && dec === "delete";
+              if (idx >= displayed.length) return null;
+              const ph = displayed[idx];
+              const isDeletedView = view === "deleted";
+              const willDelete = inCleanup && decisions[ph.uuid] === "delete";
+              const dim = willDelete || isDeletedView;
               return (
                 <div style={{ ...style, padding: 4, boxSizing: "border-box" }}>
                   <div
@@ -268,10 +289,10 @@ function App() {
                         objectFit: "cover",
                         borderRadius: 4,
                         background: "#eee",
-                        opacity: willDelete ? 0.5 : 1,
+                        opacity: dim ? 0.5 : 1,
                       }}
                     />
-                    {inCleanup && (
+                    {(inCleanup || isDeletedView) && (
                       <span
                         style={{
                           position: "absolute",
@@ -282,10 +303,14 @@ function App() {
                           fontSize: 12,
                           fontWeight: 600,
                           color: "#fff",
-                          background: willDelete ? "#d33" : "#2a2",
+                          background: dim ? "#d33" : "#2a2",
                         }}
                       >
-                        {willDelete ? "✗ Delete" : "✓ Keep"}
+                        {isDeletedView
+                          ? "✗ Delete Me"
+                          : willDelete
+                            ? "✗ Delete"
+                            : "✓ Keep"}
                       </span>
                     )}
                   </div>
