@@ -15,6 +15,8 @@ Chosen end-state: rebuild as one native **SwiftUI + PhotoKit + Vision** app — 
 
 Net: nothing is lost in the rewrite; two passes improve. This overturns the "data gap" pessimism recorded below (kept as the record of why the *Python* stack can't reach the App Store).
 
+Dev workflow when we start: install Xcode, keep it open on a second display purely as a live preview canvas — do all editing and building from Claude Code. Once the layout reflex is there (~two weeks, not two months), drop to xcodegen + Inject for hot-reload and stop opening Xcode.
+
 ## Distribution: Mac App Store — BLOCKED (sandbox kills the PyInstaller sidecar)
 Investigated + spiked 2026-07-21. Not viable without a rewrite. Evidence from the spike (real sidecar, ad-hoc signed with `app-sandbox` + `personal-information.photos-library` + `temporary-exception.apple-events` for `com.apple.Photos`):
 - Unsandboxed baseline reads fine: 9220 photos / 21.8 GB in ~6s.
