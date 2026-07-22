@@ -7,6 +7,14 @@
 Chosen path (spike 2026-07-21). Works with the existing PyInstaller sidecar unchanged — no sandbox. Needs the $99/yr Apple Developer membership (also covers Developer ID).
 - [ ] **Shareable build** — Developer ID sign the `.app` + sidecar, then notarize (`notarytool`) + staple. Needed to run on other Macs without Gatekeeper friction, and so TCC grants (Full Disk Access, Automation) survive rebuilds. Add Hardened Runtime entitlements (`com.apple.security.automation.apple-events`, likely `disable-library-validation` for PyInstaller dylibs). Distribute as `.dmg`/`.zip` from the site.
 
+## Native SwiftUI rewrite — DECIDED, gated on learning SwiftUI (2026-07-22)
+Chosen end-state: rebuild as one native **SwiftUI + PhotoKit + Vision** app — drop Tauri, React, the Python sidecar, and osxphotos entirely. Opens the App Store, swaps Full Disk Access for a normal Photos permission, makes album writes native (`PHAssetCollectionChangeRequest`, no AppleScript), single signed binary. Not starting yet — learning SwiftUI first. Evidence lives in `spike/` (run against the real 6.6k-photo library):
+- **low-quality survives natively** — `VNCalculateImageAestheticsScoresRequest.overallScore` vs osxphotos `score.overall`: Spearman **rho 0.91**, worst-decile overlap 70%. Near-identical ranking; a native pass just needs its own threshold.
+- **screenshots/documents get a free native signal** — Vision's `isUtility` flag fired on 19% of photos (screenshots/receipts/docs).
+- **similar survives and upgrades** — osxphotos `.fingerprint` is a 28-char content fingerprint, not perceptual: it only finds near-identical dupes (3 clusters in the whole library; 0 of 1.1M random pairs > 50%). Vision feature-print distance catches those exact dupes (0.0–0.35) with a clean margin to random pairs (0.70+), and adds the graded visual similarity osxphotos never had.
+
+Net: nothing is lost in the rewrite; two passes improve. This overturns the "data gap" pessimism recorded below (kept as the record of why the *Python* stack can't reach the App Store).
+
 ## Distribution: Mac App Store — BLOCKED (sandbox kills the PyInstaller sidecar)
 Investigated + spiked 2026-07-21. Not viable without a rewrite. Evidence from the spike (real sidecar, ad-hoc signed with `app-sandbox` + `personal-information.photos-library` + `temporary-exception.apple-events` for `com.apple.Photos`):
 - Unsandboxed baseline reads fine: 9220 photos / 21.8 GB in ~6s.
@@ -16,12 +24,12 @@ Investigated + spiked 2026-07-21. Not viable without a rewrite. Evidence from th
 - [ ] **Only revisit if** rebuilding the photo layer natively in Swift/PhotoKit (drops the Python/osxphotos sidecar — effectively a different app).
 
 ### PhotoKit rewrite cost (if App Store is ever pursued)
-The blocker is a **data gap, not speed**. PhotoKit is backed by the same store, lazy, and native — for the fields we show (count, date, dims, filesize, screenshot flag) it's as fast or faster than osxphotos, and enumerate-once-into-our-own-SQLite makes steady-state identical. What breaks:
-- **screenshots pass survives** — `PHAsset.mediaSubtypes` has `.photoScreenshot`.
-- **low-quality pass breaks** — it relies on `common.get_photo_score()` (osxphotos `.score`, Photos' private aesthetic-scoring sqlite columns). PhotoKit does **not** expose this. A rewrite would have to compute our own quality heuristic (Vision/Core Image blur+exposure on pixels — real work, won't match Photos' scores).
-- "Keep our own sqlite" is a speed win only; under the sandbox we can't copy Photos' sqlite, so the cache can only hold what PhotoKit gives — which never includes the score.
+Originally feared a **data gap** (PhotoKit doesn't expose Apple's private score/labels/fingerprint). The 2026-07-22 spikes disproved this — Vision recomputes those signals faithfully (see the decision section above). PhotoKit is backed by the same store, lazy, and native — for the fields we show (count, date, dims, filesize, screenshot flag) it's as fast or faster than osxphotos. Status of each pass:
+- **screenshots pass survives** — `PHAsset.mediaSubtypes` has `.photoScreenshot` (and Vision `isUtility` as a cross-check).
+- **low-quality pass survives** — spike-proven: `VNCalculateImageAestheticsScoresRequest.overallScore` reproduces osxphotos `score.overall` at rho 0.91. Not a byte-match to Apple's private score, but the *ranking* — all the pass needs — holds.
+- **similar pass survives + upgrades** — Vision feature prints reproduce osxphotos' dupe grouping and add real graded visual similarity (spike-proven).
 
-Full audit of the original engine (`../../photo-cleanup/photo_cleanup`, all passes) vs PhotoKit:
+Full audit of the vendored engine (`./photo_cleanup`, all passes) vs PhotoKit:
 
 | osxphotos feature | Used by | PhotoKit |
 |---|---|---|
@@ -32,11 +40,11 @@ Full audit of the original engine (`../../photo-cleanup/photo_cleanup`, all pass
 | `original_filename` | display, heic | ⚠️ indirect — `PHAssetResource.originalFilename` |
 | `original_filesize` | size totals, heic | ⚠️ indirect/awkward — via `PHAssetResource` |
 | `hasadjustments` | **edited** pass | ⚠️ no clean bool — infer from `.adjustmentData` resource |
-| **`score.overall`** (aesthetic) | **low-quality** + **clusters** (keeper ranking) | ❌ not exposed → recompute (custom blur/exposure heuristic) |
-| **`labels`** (scene classification) | **documents** pass | ❌ not exposed → recompute (`VNClassifyImageRequest` + OCR per image) |
-| **`fingerprint`** (perceptual hash) | **similar** pass | ❌ not exposed → recompute (`VNGenerateImageFeaturePrintRequest` / pHash) |
+| **`score.overall`** (aesthetic) | **low-quality** + **clusters** (keeper ranking) | ✅ spike-proven — `VNCalculateImageAestheticsScoresRequest.overallScore` reproduces the ranking (rho 0.91) |
+| **`labels`** (scene classification) | **documents** pass | ⚠️ Vision `isUtility` covers docs/receipts directly; `VNClassifyImageRequest` for full labels |
+| **`fingerprint`** (perceptual hash) | **similar** pass | ✅ spike-proven — `VNGenerateImageFeaturePrintRequest` distance reproduces dupes + adds real similarity |
 
-Common thread: every "Apple already computed this" value (aesthetic score, scene labels, perceptual fingerprint) lives in the private sqlite and is **not** in PhotoKit — a rewrite re-derives all three with Vision (won't byte-match Apple's). Passes that survive on intrinsic metadata alone: **screenshots** and read-only **heic estimate** (**clusters** keeps its time-grouping but loses score-based keeper ranking). Upside: the album **write** path goes native, killing the Apple Events reviewer wall — but that doesn't offset losing the three computed signals.
+Common thread (updated post-spike): every "Apple already computed this" value (aesthetic score, scene labels, perceptual fingerprint) lives in the private sqlite and is **not** in PhotoKit — but Vision re-derives all three on-device and, per the spikes, reproduces the rankings/grouping the passes actually depend on (it won't byte-match Apple's, and doesn't need to). **clusters** keeps its time-grouping and regains score-based keeper ranking via the Vision aesthetics score. Upside stacks: the album **write** path also goes native, killing the Apple Events reviewer wall.
 
 ## CI
 - [ ] **GitHub Actions build** — matrix over the two Mac targets (`aarch64-apple-darwin`, `x86_64-apple-darwin`), producing a universal `.app`/`.dmg`. NOTE: macOS-only app (osxphotos / Photos.app / AppleScript) — no Windows/Linux targets are possible. Needs signing secrets for the shareable path.
