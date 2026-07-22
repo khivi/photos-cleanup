@@ -802,30 +802,12 @@ wheels = [
 ]
 
 [[package]]
-name = "photo-cleanup"
+name = "photos-cleanup"
 version = "0.1.0"
-source = { directory = "../../photo-cleanup" }
-dependencies = [
-    { name = "osxphotos" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "osxphotos", specifier = ">=0.68" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.33" },
-]
-provides-extras = ["dev"]
-
-[[package]]
-name = "photos-cleanup-sidecar"
-version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
-    { name = "photo-cleanup" },
+    { name = "osxphotos" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -840,7 +822,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi" },
-    { name = "photo-cleanup", directory = "../../photo-cleanup" },
+    { name = "osxphotos", specifier = ">=0.68" },
     { name = "uvicorn", extras = ["standard"] },
 ]
 

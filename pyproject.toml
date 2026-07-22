@@ -1,18 +1,22 @@
 [project]
-name = "photos-cleanup-sidecar"
+name = "photos-cleanup"
 version = "0.1.0"
-description = "Local HTTP sidecar wrapping the photo_cleanup engine for the Tauri GUI."
+description = "macOS Photos cleanup app: Tauri shell + FastAPI sidecar + vendored photo_cleanup engine."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
-    "photo-cleanup",
+    "osxphotos>=0.68",  # the engine (photo_cleanup, vendored below) reads the library
 ]
 
-# ponytail: local path dep to the sibling engine repo — never modifies it.
-# Assumes the sibling layout Projects/photo-cleanup next to Projects/git/photos-cleanup.
-[tool.uv.sources]
-photo-cleanup = { path = "../../photo-cleanup" }
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# One codebase: the vendored engine lives at ./photo_cleanup and installs from this
+# same pyproject (no separate package, no external path dep).
+[tool.hatch.build.targets.wheel]
+packages = ["photo_cleanup"]
 
 [dependency-groups]
 dev = [

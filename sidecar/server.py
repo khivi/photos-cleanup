@@ -4,7 +4,7 @@ The Tauri app spawns this on 127.0.0.1 and the webview talks to it directly.
 ponytail: single cached PhotosDB + photo index — the load is slow (seconds on a
 big library) so we do it once; add a /reload endpoint if the library changes.
 
-The engine (photo_cleanup, osxphotos) is a dependency; we never edit its repo.
+The engine (photo_cleanup) is vendored in-repo — see CLAUDE.md.
 """
 
 from __future__ import annotations
@@ -16,8 +16,9 @@ from datetime import UTC, datetime
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from photo_cleanup import common
 from pydantic import BaseModel
+
+from photo_cleanup import common
 
 # Per-pass album names (engine convention: end with "Delete Me" / "Review Me").
 ALBUMS = {

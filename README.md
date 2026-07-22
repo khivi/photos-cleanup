@@ -9,7 +9,7 @@ ever deleted by the app; favorites and photos already in your albums are skipped
 ## Architecture
 
 Tauri (Rust) shell that spawns a Python FastAPI sidecar. The webview talks HTTP
-to the sidecar, which wraps the [`photo-cleanup`](../photo-cleanup) engine and
+to the sidecar, which wraps the vendored `photo_cleanup` engine and
 [`osxphotos`](https://github.com/RhetTbull/osxphotos) to read the library and
 move photos into albums. macOS-only (reads `Photos.sqlite`, drives Photos.app
 via AppleScript).
