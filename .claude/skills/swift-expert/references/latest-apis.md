@@ -42,14 +42,24 @@ finer-grained invalidation. Use `@Bindable` inside a view to get `$vm.x`.
 - `ScrollView` + `.scrollTargetBehavior(.viewAligned)` and `.scrollPosition` for the grid.
 - `LazyVGrid` is still correct for the thumbnail grid; pair with `.task` for async thumbnail loads.
 
-## Swift language
+## Swift language / concurrency (Swift 6.2, Xcode 26)
 
-- **Swift 6 language mode**: strict data-race checking is on. Types crossing
-  concurrency boundaries must be `Sendable`. Annotate UI-touching types
+- **Strict data-race checking** is on in Swift 6 mode. Types crossing
+  concurrency boundaries must be `Sendable`; annotate UI-touching types
   `@MainActor` (the whole `View` graph already is).
+- **Default-MainActor isolation** (Swift 6.2): opt a target into implicit
+  `@MainActor` with `.defaultIsolation(MainActor.self)` (SwiftPM) /
+  `-default-isolation MainActor`. For a small single-window app this removes
+  most manual `@MainActor` and `Sendable` noise — turn it on, then peel work off
+  the main actor deliberately.
+- `nonisolated(nonsending)` + `@concurrent` (Swift 6.2, SE-0461): an `async`
+  func now runs on the *caller's* actor by default; mark it `@concurrent` to
+  force the shared pool. Use `@concurrent` for the Vision/thumbnail batch work.
+- Locks/atomics: `import Synchronization` → `Mutex<T>`, `Atomic<T>` over
+  `NSLock`/`os_unfair_lock`.
 - Prefer `async`/`await` + structured concurrency (`async let`, `TaskGroup`)
-  over `DispatchQueue`/completion handlers.
-- `Duration`/`ContinuousClock` over `Date`-diffing for timing.
+  over `DispatchQueue`/completion handlers. `Duration`/`ContinuousClock` over
+  `Date`-diffing for timing. `InlineArray` / `Span` for hot fixed-size buffers.
 
 ## PhotoKit — the part this repo actually needs
 
@@ -67,6 +77,24 @@ finer-grained invalidation. Use `@Bindable` inside a view to get `$vm.x`.
 PhotoKit does **not** expose Apple's aesthetic `score`, scene `labels`, or
 perceptual `fingerprint`. Those get re-derived with Vision (below). They will
 not byte-match Photos' values — that's expected, see `TODO.md`.
+
+## App Store gating — privacy (the PhotoKit path only)
+
+These block review, not compilation — the model forgets them because they live
+in plists/manifests, not code.
+
+- **Usage string**: `NSPhotoLibraryUsageDescription` in `Info.plist` (read-write
+  library access). Add-only access uses `NSPhotoLibraryAddUsageDescription`.
+  Missing string = hard crash on first `requestAuthorization`.
+- **Privacy manifest**: ship `PrivacyInfo.xcprivacy`. Declare data collection
+  (none, for this app) and every **required-reason API** you call.
+- **Required-reason APIs this app trips**: file timestamp
+  (`NSURL.contentModificationDateKey` / `stat`) and disk-space APIs — both used
+  by any "how big / how old" logic. Each needs a declared reason code in the
+  manifest or the upload is rejected.
+- Sandbox entitlements for the App Store target live in `TODO.md` (that path is
+  BLOCKED for the current PyInstaller sidecar — this section only applies to a
+  native rewrite).
 
 ## Vision — re-deriving the lost signals
 
