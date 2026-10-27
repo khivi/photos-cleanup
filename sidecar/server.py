@@ -80,8 +80,6 @@ def _parse_verdict(line: str) -> tuple[str, dict | None]:
     """One verdict.swift output line -> (uuid, verdict); None for errors (retried next run)."""
     uuid, _, rest = line.partition("\t")
     fields = rest.split("\t")
-    if fields == ["SKIP"]:
-        return uuid, {"keep": True, "kind": "picture", "reason": "Not a utility image"}
     if len(fields) != 3 or fields[0] == "ERR":
         return uuid, None
     kind, keep, reason = fields

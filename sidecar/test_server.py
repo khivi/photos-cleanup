@@ -129,7 +129,7 @@ def test_parse_verdict():
         "u1",
         {"keep": False, "kind": "receipt", "reason": "Paid"},
     )
-    assert server._parse_verdict("u2\tSKIP")[1]["keep"] is True
+    assert server._parse_verdict("u2\tpicture\t1\tNot a utility image")[1]["keep"] is True
     assert server._parse_verdict("u3\tERR\tboom") == ("u3", None)
     assert server._parse_verdict("garbage") == ("garbage", None)
 
