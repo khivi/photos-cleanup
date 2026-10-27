@@ -13,8 +13,6 @@ Not pursuing:
 
 Released on PyPI (`macos-photos-cleanup`) and the Homebrew tap; 0.2.0 is current. Release steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release): bump `version` in `pyproject.toml` on master.
 
-- [ ] **Give the `COCKPIT_GITHUB_API_TOKEN` PAT access to this repo and `khivi/homebrew-photos-cleanup`** (Contents: read and write). It's the fine-grained token shared with cockpit (fnox profile `cockpit`). Without it, `tag.yml` can't push the tag and `bump-tap` can't update the formula. 0.1.0 and 0.2.0 were tagged and bumped by hand.
-
 ## CI
 
 `ci.yml` passes on macOS runners for master and pull requests. Dependabot opens monthly PRs with a 7-day cooldown.
