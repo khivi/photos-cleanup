@@ -79,6 +79,8 @@ _committed: set[str] = set()
 _classify: dict = {"pending": 0, "error": None}
 _classify_lock = threading.Lock()
 _classifier: threading.Thread | None = None
+_queue: list = []  # photos waiting for the classifier thread, across passes
+_inflight: set[str] = set()  # uuids queued or being judged; "pending" is its size
 # Set at startup when the classifier can't run here; shown in the UI instead of verdicts.
 _verdicts_off: str | None = None
 
@@ -178,7 +180,9 @@ def _run_classifier(photos) -> None:
                     verdicts[uuid] = v
                     cache.write(json.dumps({"uuid": uuid, **v}) + "\n")
                     cache.flush()
-                _classify["pending"] -= 1
+                with _classify_lock:
+                    _inflight.discard(uuid)
+                    _classify["pending"] = len(_inflight)
             if proc.wait() != 0:
                 err.seek(0)
                 _classify["error"] = err.read().strip()[-300:] or f"exit {proc.returncode}"
@@ -187,23 +191,45 @@ def _run_classifier(photos) -> None:
     except OSError as e:
         _classify["error"] = str(e)
     finally:
-        _classify["pending"] = 0
+        with _classify_lock:
+            _inflight.difference_update(p.uuid for p in photos)  # ERR lines: retried next visit
+            _classify["pending"] = len(_inflight)
+
+
+def _drain_queue() -> None:
+    global _classifier
+    while True:
+        with _classify_lock:
+            if not _queue:
+                # Cleared under the lock, so a request racing this exit starts a new thread.
+                _classifier = None
+                return
+            batch = _queue[:]
+            _queue.clear()
+        _run_classifier(batch)
 
 
 def _start_classifier(photos) -> None:
+    """Queue unjudged photos; one thread judges them in order, whichever pass asked."""
     global _classifier
     with _classify_lock:
         if _verdicts_off:
             _classify.update(pending=0, error=_verdicts_off)
             return
-        if _classifier is not None and _classifier.is_alive():
-            return
-        todo = [p for p in photos if p.uuid not in _verdicts() and _image_path(p)]
+        verdicts = _verdicts()
+        todo = [
+            p
+            for p in photos
+            if p.uuid not in verdicts and p.uuid not in _inflight and _image_path(p)
+        ]
         if not todo:
             return
-        _classify.update(pending=len(todo), error=None)
-        _classifier = threading.Thread(target=_run_classifier, args=(todo,), daemon=True)
-        _classifier.start()
+        _queue.extend(todo)
+        _inflight.update(p.uuid for p in todo)
+        _classify.update(pending=len(_inflight), error=None)
+        if _classifier is None:
+            _classifier = threading.Thread(target=_drain_queue, daemon=True)
+            _classifier.start()
 
 
 @functools.lru_cache(maxsize=1)

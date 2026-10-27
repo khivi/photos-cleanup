@@ -328,3 +328,37 @@ def test_verdicts_off_reported_without_spawning(monkeypatch):
     monkeypatch.setattr(server, "_classify", {"pending": 0, "error": None})
     server._start_classifier([FakePhoto("a")])
     assert server._classify == {"pending": 0, "error": "needs macOS 27"}
+
+
+def test_second_pass_queues_behind_a_running_classifier(monkeypatch):
+    import threading
+
+    monkeypatch.setattr(server, "_verdicts", lambda: {})
+    monkeypatch.setattr(server, "_classify", {"pending": 0, "error": None})
+    monkeypatch.setattr(server, "_queue", [])
+    monkeypatch.setattr(server, "_inflight", set())
+    monkeypatch.setattr(server, "_classifier", None)
+    first_running, release = threading.Event(), threading.Event()
+    judged: list[list[str]] = []
+
+    def fake_run(photos):
+        judged.append([p.uuid for p in photos])
+        first_running.set()
+        release.wait(5)
+        with server._classify_lock:
+            server._inflight.difference_update(p.uuid for p in photos)
+
+    monkeypatch.setattr(server, "_run_classifier", fake_run)
+    shots = [FakePhoto("s1", deriv=["x"]), FakePhoto("s2", deriv=["x"])]
+    server._start_classifier(shots)  # Screenshots tab
+    assert first_running.wait(5)
+    server._start_classifier([FakePhoto("u1", deriv=["x"])])  # Utility tab, mid-run
+    server._start_classifier(shots)  # Screenshots reopened: already in flight, not re-queued
+    assert server._classify["pending"] == 3
+    release.set()
+    for _ in range(50):
+        if server._classifier is None:
+            break
+        threading.Event().wait(0.1)
+    assert judged == [["s1", "s2"], ["u1"]]
+    assert server._classifier is None
