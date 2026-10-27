@@ -318,6 +318,11 @@ function App() {
         </div>
       )}
       <div style={{ flex: 1, overflow: "hidden" }}>
+        {!loading && inCleanup && displayed.length === 0 && (
+          <div style={{ padding: 40, textAlign: "center", color: "#666" }}>
+            Nothing left to review. Photos already filed in this pass’s albums are hidden.
+          </div>
+        )}
         {!loading && width > 0 && (
           <FixedSizeGrid
             key={view}

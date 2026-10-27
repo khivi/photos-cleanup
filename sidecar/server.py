@@ -214,7 +214,9 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
         ]
     else:
         raise HTTPException(status_code=404, detail="unknown cleanup kind")
-    photos = [p for p in photos if p.uuid not in _committed]
+    # Album membership comes from the startup snapshot; _committed covers this session's commits.
+    filed = {ALBUMS[kind], KEEP_ALBUMS[kind]}
+    photos = [p for p in photos if p.uuid not in _committed and filed.isdisjoint(p.albums)]
     photos.sort(key=lambda p: common.make_aware(p.date) if p.date else _MIN, reverse=True)
     verdicts: dict[str, dict] = {}
     classify = {"pending": 0, "error": None}

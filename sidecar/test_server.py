@@ -7,8 +7,9 @@ from sidecar import server
 
 
 class FakePhoto:
-    def __init__(self, uuid="x", size=0, deriv=None):
+    def __init__(self, uuid="x", size=0, deriv=None, albums=()):
         self.uuid = uuid
+        self.albums = list(albums)
         self.original_filename = f"{uuid}.jpg"
         self.width = 100
         self.height = 100
@@ -98,6 +99,22 @@ def test_cleanup_low_quality_filters_by_score(monkeypatch):
     )
     assert [p["uuid"] for p in data["photos"]] == ["a"]
     assert data["photos"][0]["verdict"] is None
+
+
+def test_cleanup_skips_already_filed(monkeypatch):
+    _patch_engine(
+        monkeypatch,
+        [
+            FakePhoto("a"),
+            FakePhoto("b", albums=["Screenshots - Delete Me"]),
+            FakePhoto("c", albums=["Screenshots - Keep"]),
+            FakePhoto("d", albums=["Low Quality - Review Me"]),  # other pass's album
+            FakePhoto("e"),
+        ],
+    )
+    server._committed.add("e")
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/screenshots").json()
+    assert sorted(p["uuid"] for p in data["photos"]) == ["a", "d"]
 
 
 def test_cleanup_unknown_404(monkeypatch):
