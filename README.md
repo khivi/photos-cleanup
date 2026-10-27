@@ -2,9 +2,16 @@
 
 A macOS app for reviewing and clearing out unwanted photos in your
 Photos library. Scan the library, review a cleanup pass (screenshots, low
-quality) as a thumbnail grid, keep/delete per photo, then move the flagged ones
-into a "Delete Me" album in Photos — you do the actual delete there. Nothing is
-ever deleted by the app; favorites and photos already in your albums are skipped.
+quality) as a thumbnail grid, keep/delete per photo, then commit. Flagged photos
+go to a "Delete Me" album in Photos, where you do the actual delete. Keepers go
+to a "Keep" album, so later runs skip them. Nothing is ever deleted by the app.
+Favorites and photos already in your albums are skipped.
+
+Screenshots start as "keep" unless the on-device model judges them junk
+(receipt, ticket, app or chat screenshot, meme). Verdicts come from
+`sidecar/verdict.swift` (Vision + Foundation Models; macOS 27+, Apple
+Intelligence on). It runs in the background and caches each verdict in
+`~/Library/Caches/photos-cleanup/`. Without it, every screenshot starts as "keep".
 
 ## Architecture
 

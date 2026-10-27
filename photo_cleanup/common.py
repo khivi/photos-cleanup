@@ -203,9 +203,14 @@ def get_photo_score(photo) -> float | None:
 
 
 def add_to_album(
-    photos, album_name: str, *, dry_run: bool = False, assume_yes: bool = False
+    photos,
+    album_name: str,
+    *,
+    dry_run: bool = False,
+    assume_yes: bool = False,
+    replace: bool = True,
 ) -> bool:
-    """Create or replace an album with the given photos.
+    """Create or replace an album with the given photos; replace=False appends instead.
 
     Raises on Photos API errors instead of swallowing them.
     """
@@ -227,7 +232,7 @@ def add_to_album(
     from osxphotos.photosalbum import PhotosAlbum
 
     album = PhotosAlbum(album_name)
-    existing = list(album.photos())
+    existing = list(album.photos()) if replace else []
     if existing:
         album.album.remove(existing)
     for p in photos:

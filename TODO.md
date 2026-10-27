@@ -54,5 +54,6 @@ Common thread (updated post-spike): every "Apple already computed this" value (a
 ## App
 - [ ] **`/reload` endpoint** — clear the server's db()/_index() caches to re-read the library mid-session without a server restart (also noted in sidecar/server.py).
 - [ ] **Live "To be deleted"** — read the delete/review albums back from Photos so the tab survives restarts (currently session-scoped, client-side).
+- [ ] **Tune screenshot verdicts** — the delete-trusted kinds (receipt, ticket, app/chat screenshot, meme) come from the 300-photo spike. The model's `reason` sometimes contradicts its `keep` (parrots the instructions). Editing `sidecar/verdict.swift` re-judges everything (the cache file is keyed to its hash).
 - [ ] **More passes** — clusters / similar / edited / documents; the grouped ones need a "keep best per group" review UI.
 - [ ] **"Keep photos in albums" toggle** — persisted setting (default on) that surfaces the *existing* default: candidates already skip any photo in a user-created album (`is_in_user_album`). "Off" needs custom candidate logic to *include* album photos. Decide how iCloud Shared Albums count — osxphotos may report them outside `photo.albums`.

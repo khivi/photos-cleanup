@@ -67,19 +67,24 @@ def test_thumb_serves_and_404(monkeypatch, tmp_path):
     assert client.get("/thumb/missing").status_code == 404
 
 
-def _patch_engine(monkeypatch, candidates):
+def _patch_engine(monkeypatch, candidates, verdicts=None):
     monkeypatch.setattr(server, "db", lambda: object())
     monkeypatch.setattr(server.common, "load_ignore_albums", lambda extra=None: frozenset())
     monkeypatch.setattr(
         server.common, "get_candidate_photos", lambda pdb, ignore, **kw: (candidates, {})
     )
+    monkeypatch.setattr(server, "_verdicts", lambda: verdicts or {})
+    monkeypatch.setattr(server, "_start_classifier", lambda photos: None)
+    monkeypatch.setattr(server, "_committed", set())
 
 
-def test_cleanup_screenshots(monkeypatch):
-    _patch_engine(monkeypatch, [FakePhoto("a"), FakePhoto("b")])
+def test_cleanup_screenshots_attaches_verdicts(monkeypatch):
+    verdict = {"keep": False, "kind": "receipt", "reason": "Paid coffee receipt"}
+    _patch_engine(monkeypatch, [FakePhoto("a"), FakePhoto("b")], {"a": verdict})
     data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/screenshots").json()
     assert data["count"] == 2
-    assert {p["uuid"] for p in data["photos"]} == {"a", "b"}
+    assert {p["uuid"]: p["verdict"] for p in data["photos"]} == {"a": verdict, "b": None}
+    assert data["classify"] == {"pending": 0, "error": None}
 
 
 def test_cleanup_low_quality_filters_by_score(monkeypatch):
@@ -92,6 +97,7 @@ def test_cleanup_low_quality_filters_by_score(monkeypatch):
         .json()
     )
     assert [p["uuid"] for p in data["photos"]] == ["a"]
+    assert data["photos"][0]["verdict"] is None
 
 
 def test_cleanup_unknown_404(monkeypatch):
@@ -101,25 +107,40 @@ def test_cleanup_unknown_404(monkeypatch):
     )
 
 
-def test_commit_adds_to_pass_album(monkeypatch):
-    items = [FakePhoto("a"), FakePhoto("b")]
-    monkeypatch.setattr(server, "_index", lambda: (items, {p.uuid: p for p in items}))
-    called = {}
-
-    def fake_add(photos, album, dry_run, assume_yes):
-        called.update(n=len(photos), album=album, dry_run=dry_run, assume_yes=assume_yes)
-
-    monkeypatch.setattr(server.common, "add_to_album", fake_add)
-    r = TestClient(server.app, base_url="http://127.0.0.1").post(
-        "/commit", json={"kind": "screenshots", "uuids": ["a", "b"]}
+def test_parse_verdict():
+    assert server._parse_verdict("u1\treceipt\t0\tPaid") == (
+        "u1",
+        {"keep": False, "kind": "receipt", "reason": "Paid"},
     )
-    assert r.json() == {"added": 2, "album": "Screenshots - Delete Me"}
-    assert called == {
-        "n": 2,
+    assert server._parse_verdict("u2\tSKIP")[1]["keep"] is True
+    assert server._parse_verdict("u3\tERR\tboom") == ("u3", None)
+    assert server._parse_verdict("garbage") == ("garbage", None)
+
+
+def test_commit_files_delete_and_keep_then_hides_them(monkeypatch):
+    items = [FakePhoto("a"), FakePhoto("b"), FakePhoto("c")]
+    monkeypatch.setattr(server, "_index", lambda: (items, {p.uuid: p for p in items}))
+    _patch_engine(monkeypatch, items)
+    calls = []
+    monkeypatch.setattr(
+        server.common,
+        "add_to_album",
+        lambda photos, album, **kw: calls.append(([p.uuid for p in photos], album, kw)),
+    )
+    client = TestClient(server.app, base_url="http://127.0.0.1")
+    r = client.post("/commit", json={"kind": "screenshots", "uuids": ["a"], "keep": ["b"]})
+    assert r.json() == {
+        "added": 1,
         "album": "Screenshots - Delete Me",
-        "dry_run": False,
-        "assume_yes": True,
+        "kept": 1,
+        "keep_album": "Screenshots - Keep",
     }
+    assert calls == [
+        (["a"], "Screenshots - Delete Me", {"assume_yes": True, "replace": False}),
+        (["b"], "Screenshots - Keep", {"assume_yes": True, "replace": False}),
+    ]
+    remaining = client.get("/cleanup/screenshots").json()["photos"]
+    assert [p["uuid"] for p in remaining] == ["c"]
 
 
 def test_commit_unknown_kind_404(monkeypatch):
@@ -134,6 +155,6 @@ def test_commit_no_matching_400(monkeypatch):
     monkeypatch.setattr(server, "_index", lambda: ([], {}))
     monkeypatch.setattr(server.common, "add_to_album", lambda *a, **k: None)
     r = TestClient(server.app, base_url="http://127.0.0.1").post(
-        "/commit", json={"kind": "screenshots", "uuids": ["missing"]}
+        "/commit", json={"kind": "screenshots", "uuids": ["missing"], "keep": ["gone"]}
     )
     assert r.status_code == 400

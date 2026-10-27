@@ -1,14 +1,22 @@
-import { type CSSProperties, useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { FixedSizeGrid } from "react-window";
 import "./App.css";
 
-type Photo = { uuid: string; filename: string; is_video: boolean };
+type Verdict = { keep: boolean; kind: string; reason: string };
+type Photo = { uuid: string; filename: string; is_video: boolean; verdict?: Verdict | null };
+type Classify = { pending: number; error: string | null };
 type View = "all" | "screenshots" | "low-quality" | "deleted";
 type Decision = "keep" | "delete";
 const CLEANUP_VIEWS: View[] = ["screenshots", "low-quality"];
 
 const CELL = 170; // px per thumbnail cell
 const HEADER_H = 46; // toolbar height in px
+const POLL_MS = 5000; // verdict refresh while the server is classifying
+
+function initialDecision(v: View, p: Photo): Decision {
+  if (v !== "screenshots") return "delete";
+  return p.verdict && !p.verdict.keep ? "delete" : "keep";
+}
 
 /** Window size — available at first render, so no ref-mount timing trap. */
 function useWindowSize() {
@@ -30,6 +38,10 @@ function App() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [deleted, setDeleted] = useState<Photo[]>([]); // queued-for-deletion this session
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
+  const [touched, setTouched] = useState<Set<string>>(new Set()); // decided explicitly by the user
+  const touchedRef = useRef(touched);
+  touchedRef.current = touched;
+  const [classify, setClassify] = useState<Classify>({ pending: 0, error: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
@@ -63,6 +75,38 @@ function App() {
     };
   }, []);
 
+  // Poll for verdicts while the server classifies screenshots in the background.
+  const polling = view === "screenshots" && classify.pending > 0;
+  useEffect(() => {
+    if (!polling) return;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      try {
+        const r = await fetch("/cleanup/screenshots");
+        if (!r.ok) return;
+        const data = await r.json();
+        if (cancelled) return;
+        const fresh = new Map<string, Photo>(data.photos.map((p: Photo) => [p.uuid, p]));
+        setPhotos((prev) =>
+          prev.map((p) => (fresh.has(p.uuid) ? { ...p, verdict: fresh.get(p.uuid)!.verdict } : p)),
+        );
+        setDecisions((prev) => {
+          const next = { ...prev };
+          for (const [id, p] of fresh)
+            if (id in prev && !touchedRef.current.has(id)) next[id] = initialDecision("screenshots", p);
+          return next;
+        });
+        setClassify(data.classify);
+      } catch {
+        /* retry next tick */
+      }
+    }, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [polling]);
+
   async function loadView(v: View) {
     setStatus(null);
     // "deleted" is a client-side view of what we queued this session — no fetch.
@@ -77,16 +121,19 @@ function App() {
       const data = await r.json();
       setPhotos(data.photos);
       setView(v);
-      // Cleanup candidates start flagged for delete; user toggles to keep.
+      // Cleanup candidates start per initialDecision; user toggles.
       const next: Record<string, Decision> = {};
-      if (CLEANUP_VIEWS.includes(v)) for (const p of data.photos) next[p.uuid] = "delete";
+      if (CLEANUP_VIEWS.includes(v)) for (const p of data.photos) next[p.uuid] = initialDecision(v, p);
       setDecisions(next);
+      setTouched(new Set());
+      setClassify(data.classify ?? { pending: 0, error: null });
     } finally {
       setLoading(false);
     }
   }
 
   function toggle(uuid: string) {
+    setTouched((prev) => new Set(prev).add(uuid));
     setDecisions((prev) => ({
       ...prev,
       [uuid]: prev[uuid] === "delete" ? "keep" : "delete",
@@ -97,13 +144,19 @@ function App() {
     const next: Record<string, Decision> = {};
     for (const p of photos) next[p.uuid] = d;
     setDecisions(next);
+    setTouched(new Set(photos.map((p) => p.uuid)));
   }
+
+  const doomed = photos.filter((p) => decisions[p.uuid] === "delete");
+  const keepers = photos.filter(
+    (p) => decisions[p.uuid] === "keep" && (touched.has(p.uuid) || p.verdict),
+  );
 
   async function commit() {
     if (!CLEANUP_VIEWS.includes(view)) return;
-    const doomed = photos.filter((p) => decisions[p.uuid] === "delete");
     const uuids = doomed.map((p) => p.uuid);
-    if (uuids.length === 0) return;
+    const keep = keepers.map((p) => p.uuid);
+    if (uuids.length === 0 && keep.length === 0) return;
     setCommitting(true);
     setStatus(null);
     // First commit triggers a macOS "control Photos" prompt; if it isn't
@@ -114,25 +167,29 @@ function App() {
       const r = await fetch("/commit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: view, uuids }),
+        body: JSON.stringify({ kind: view, uuids, keep }),
         signal: ctrl.signal,
       });
       if (!r.ok) throw new Error(`commit failed (${r.status})`);
       const data = await r.json();
       // Refresh: pull the moved photos out of the candidate grid and into the
       // "To be deleted" tab (dedupe by uuid).
-      const doomedIds = new Set(uuids);
+      const gone = new Set([...uuids, ...keep]);
       setDeleted((prev) => {
         const seen = new Set(prev.map((p) => p.uuid));
         return [...doomed.filter((p) => !seen.has(p.uuid)), ...prev];
       });
-      setPhotos((prev) => prev.filter((p) => !doomedIds.has(p.uuid)));
+      setPhotos((prev) => prev.filter((p) => !gone.has(p.uuid)));
       setDecisions((prev) => {
         const next = { ...prev };
-        for (const id of uuids) delete next[id];
+        for (const id of gone) delete next[id];
         return next;
       });
-      setStatus(`Moved ${data.added} to “${data.album}” — see “To be deleted”.`);
+      setTouched((prev) => new Set([...prev].filter((id) => !gone.has(id))));
+      const parts = [];
+      if (data.added) parts.push(`${data.added} to “${data.album}”`);
+      if (data.kept) parts.push(`${data.kept} to “${data.keep_album}”`);
+      setStatus(`Moved ${parts.join(", ")}.`);
     } catch (e) {
       const timedOut = e instanceof DOMException && e.name === "AbortError";
       setStatus(
@@ -150,7 +207,9 @@ function App() {
 
   const inCleanup = CLEANUP_VIEWS.includes(view);
   const displayed = view === "deleted" ? deleted : photos;
-  const flagged = Object.values(decisions).filter((d) => d === "delete").length;
+  const flagged = doomed.length;
+  const kept = keepers.length;
+  const canCommit = flagged > 0 || kept > 0;
   const columnCount = Math.max(1, Math.floor(width / CELL));
   const rowCount = Math.ceil(displayed.length / columnCount);
   const gridHeight = height - HEADER_H - (status ? 30 : 0);
@@ -213,6 +272,16 @@ function App() {
           </>
         )}
         <span style={{ marginLeft: "auto", fontWeight: 600 }}>
+          {view === "screenshots" && !loading && classify.pending > 0 && (
+            <span style={{ fontWeight: 400, fontSize: 12, color: "#666", marginRight: 10 }}>
+              Classifying… {classify.pending} left
+            </span>
+          )}
+          {view === "screenshots" && !loading && classify.error && (
+            <span style={{ fontWeight: 400, fontSize: 12, color: "crimson", marginRight: 10 }}>
+              AI verdicts unavailable: {classify.error}
+            </span>
+          )}
           {loading
             ? "Loading…"
             : view === "deleted"
@@ -224,18 +293,18 @@ function App() {
         {inCleanup && !loading && (
           <button
             onClick={commit}
-            disabled={committing || flagged === 0}
+            disabled={committing || !canCommit}
             style={{
               padding: "4px 12px",
               borderRadius: 6,
               border: "none",
-              background: flagged === 0 ? "#ccc" : "#d33",
+              background: canCommit ? "#d33" : "#ccc",
               color: "#fff",
               fontWeight: 600,
-              cursor: flagged === 0 ? "default" : "pointer",
+              cursor: canCommit ? "pointer" : "default",
             }}
           >
-            {committing ? "Moving…" : `Move ${flagged} → Delete Me album`}
+            {committing ? "Moving…" : `Commit: ${flagged} → Delete Me · ${kept} → Keep`}
           </button>
         )}
       </header>
@@ -276,7 +345,7 @@ function App() {
                     <img
                       src={`/thumb/${ph.uuid}`}
                       loading="lazy"
-                      title={ph.filename}
+                      title={ph.verdict ? `${ph.filename} — ${ph.verdict.kind}: ${ph.verdict.reason}` : ph.filename}
                       style={{
                         width: "100%",
                         height: "100%",
@@ -305,6 +374,22 @@ function App() {
                           : willDelete
                             ? "✗ Delete"
                             : "✓ Keep"}
+                      </span>
+                    )}
+                    {inCleanup && ph.verdict && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          bottom: 6,
+                          left: 6,
+                          padding: "1px 5px",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          color: "#fff",
+                          background: "rgba(0,0,0,0.6)",
+                        }}
+                      >
+                        {ph.verdict.kind}
                       </span>
                     )}
                   </div>
