@@ -2,7 +2,7 @@
 
 Wraps the photo_cleanup engine; the UI is same-origin, so no CORS.
 ponytail: single cached PhotosDB + photo index — the load is slow (seconds on a
-big library) so we do it once; add a /reload endpoint if the library changes.
+big library) so we do it once; restart the server to pick up library changes.
 
 The engine (photo_cleanup) is vendored in-repo — see CLAUDE.md.
 """
@@ -52,10 +52,6 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost
 _MIN = datetime.min.replace(tzinfo=UTC)
 
 
-# TODO(reload): add POST /reload to clear db()/_index() caches so the library
-# re-reads mid-session without an app restart. If the ~316MB full re-parse on
-# first request ever feels slow, persist a uuid-keyed index to disk and diff
-# instead of re-reading everything.
 @functools.lru_cache(maxsize=1)
 def db():
     return common.get_photosdb()

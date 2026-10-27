@@ -62,7 +62,6 @@ Common thread (updated post-spike): every "Apple already computed this" value (a
 
 ## App
 
-- [ ] **`/reload` endpoint** — clear the server's db()/_index() caches to re-read the library mid-session without a server restart (also noted in sidecar/server.py).
 - [ ] **Live "To be deleted"** — read the delete/review albums back from Photos so the tab survives restarts (currently session-scoped, client-side).
 - [ ] **Tune screenshot verdicts** — the delete-trusted kinds (receipt, ticket, app/chat screenshot, meme) come from the 300-photo spike. The model's `reason` sometimes contradicts its `keep` (parrots the instructions). Editing `sidecar/verdict.swift` re-judges everything (the cache file is keyed to its hash).
 - [ ] **Recheck kept photos when the on-device model improves** — a pass's "Keep" album is the record of what was kept. Load it (hidden from candidates today), re-classify bypassing the verdict cache (keyed to `verdict.swift`'s hash, so an OS model update alone doesn't invalidate it — key on the OS build too), show only new delete verdicts, and on commit move them Keep → Delete Me (needs album-removal code). Wait for an actual model update first.
