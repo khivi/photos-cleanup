@@ -194,7 +194,7 @@ function App() {
       const timedOut = e instanceof DOMException && e.name === "AbortError";
       setStatus(
         timedOut
-          ? "Timed out — approve the “control Photos” prompt (System Settings → Privacy → Automation), then try again."
+          ? "Timed out — Photos may still be adding, or a “control Photos” prompt is pending (System Settings → Privacy → Automation). Try again; re-adding is safe."
           : String(e),
       );
     } finally {

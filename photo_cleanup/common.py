@@ -235,8 +235,8 @@ def add_to_album(
     existing = list(album.photos()) if replace else []
     if existing:
         album.album.remove(existing)
-    for p in photos:
-        album.add(p)
+    # Batched (10 per Apple Event): one add per photo timed out the GUI commit on ~100 photos.
+    album.update(photos)
     print(f"Created '{album_name}' with {len(photos)} photos")
     return True
 
