@@ -55,7 +55,17 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [counts, setCounts] = useState<Partial<Record<View, number | null>>>({});
   const { width, height } = useWindowSize();
+
+  // Tab counts change after a load, a commit, or a classification run finishing.
+  useEffect(() => {
+    if (loading || committing) return;
+    fetch("/counts")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c) => c && setCounts(c))
+      .catch(() => {});
+  }, [loading, committing, classify.pending === 0]);
 
   // Boot: wait for the same-origin server to answer, then load the full library.
   useEffect(() => {
@@ -241,7 +251,9 @@ function App() {
       : status;
   const gridHeight = height - HEADER_H - (banner ? 30 : 0);
 
-  const Tab = ({ v, label }: { v: View; label: string }) => (
+  const Tab = ({ v, label }: { v: View; label: string }) => {
+    const n = v === "deleted" ? deleted.length || null : counts[v];
+    return (
     <button
       onClick={() => loadView(v)}
       disabled={view === v || loading}
@@ -254,9 +266,10 @@ function App() {
         cursor: "pointer",
       }}
     >
-      {label}
+      {n == null ? label : `${label} (${n.toLocaleString()})`}
     </button>
-  );
+    );
+  };
 
   const bulkBtn = (color: string): CSSProperties => ({
     padding: "4px 10px",
@@ -356,7 +369,7 @@ function App() {
         <Tab v="low-quality" label="Low quality" />
         <Tab
           v="deleted"
-          label={`To be deleted${deleted.length ? ` (${deleted.length})` : ""}`}
+          label="To be deleted"
         />
         {inCleanup && !loading && (
           <>

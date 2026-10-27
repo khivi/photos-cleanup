@@ -362,3 +362,29 @@ def test_second_pass_queues_behind_a_running_classifier(monkeypatch):
         threading.Event().wait(0.1)
     assert judged == [["s1", "s2"], ["u1"]]
     assert server._classifier is None
+
+
+def test_counts_only_where_known(monkeypatch):
+    t0 = datetime(2024, 1, 1, tzinfo=UTC)
+    photos = [FakePhoto(u, deriv=["x"]) for u in "abc"]
+    for i, p in enumerate(photos):
+        p.date = t0 + timedelta(seconds=i)
+    _patch_engine(monkeypatch, photos)
+    monkeypatch.setattr(server, "_index", lambda: (photos, {p.uuid: p for p in photos}))
+    monkeypatch.setattr(server.common, "get_photo_score", lambda p: 0.0)
+    monkeypatch.setattr(server, "_prints", {})
+    client = TestClient(server.app, base_url="http://127.0.0.1")
+    data = client.get("/counts").json()
+    assert data == {
+        "all": 3,
+        "screenshots": 3,
+        "low-quality": 3,
+        "utility": None,  # not every photo judged yet
+        "clusters": None,  # feature prints not computed yet
+    }
+    pic = {"keep": True, "kind": "picture", "reason": ""}
+    doc = {"keep": False, "kind": "receipt", "reason": ""}
+    monkeypatch.setattr(server, "_verdicts", lambda: {"a": doc, "b": pic, "c": pic})
+    monkeypatch.setattr(server, "_prints", {"a": [0.0], "b": [0.1], "c": [9.0]})
+    data = client.get("/counts").json()
+    assert data["utility"] == 1 and data["clusters"] == 2

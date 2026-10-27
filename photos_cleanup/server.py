@@ -280,9 +280,8 @@ def thumb(uuid: str):
     return FileResponse(p.path_derivatives[-1])
 
 
-@app.get("/cleanup/{kind}")
-def cleanup(kind: str, threshold: float = 0.01) -> dict:
-    """Run a cleanup pass and return its candidate photos (newest-first)."""
+def _candidates(kind: str, threshold: float = 0.01) -> list:
+    """A pass's photos, before any model judgement, minus those already filed."""
     photosdb = db()
     ignore = common.load_ignore_albums(None)
     if kind == "screenshots":
@@ -302,10 +301,42 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
         raise HTTPException(status_code=404, detail="unknown cleanup kind")
     # Album membership comes from the startup snapshot; _committed covers this session's commits.
     filed = {ALBUMS[kind], KEEP_ALBUMS[kind]}
-    photos = [p for p in photos if p.uuid not in _committed and filed.isdisjoint(p.albums)]
+    return [p for p in photos if p.uuid not in _committed and filed.isdisjoint(p.albums)]
+
+
+def _time_bursts(photos) -> list[list]:
+    photos = sorted(photos, key=lambda p: common.make_aware(p.date))
+    return common.group_by_time(photos, CLUSTER_WINDOW_S, 2)
+
+
+@app.get("/counts")
+def counts() -> dict:
+    """Photos per tab, or None where knowing it needs work not done yet."""
+    out: dict[str, int | None] = {"all": len(_index()[0])}
+    verdicts = _verdicts()
+    for kind in ALBUMS:
+        photos = _candidates(kind)
+        if kind == "utility":
+            judged = [verdicts[p.uuid] for p in photos if p.uuid in verdicts]
+            done = len(judged) == len(photos)
+            out[kind] = sum(v["kind"] != "picture" for v in judged) if done else None
+        elif kind == "clusters":
+            bursts = _time_bursts(photos)
+            if all(p.uuid in _prints for g in bursts for p in g):
+                out[kind] = sum(len(r) for g in bursts for r in _split_similar(g, _prints))
+            else:
+                out[kind] = None  # feature prints are computed on the first Bursts visit
+        else:
+            out[kind] = len(photos)
+    return out
+
+
+@app.get("/cleanup/{kind}")
+def cleanup(kind: str, threshold: float = 0.01) -> dict:
+    """Run a cleanup pass and return its candidate photos (newest-first)."""
+    photos = _candidates(kind, threshold)
     if kind == "clusters":
-        photos.sort(key=lambda p: common.make_aware(p.date))
-        bursts = common.group_by_time(photos, CLUSTER_WINDOW_S, 2)
+        bursts = _time_bursts(photos)
         try:
             prints = _feature_prints([p for g in bursts for p in g])
         except (subprocess.CalledProcessError, OSError) as e:
