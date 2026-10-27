@@ -39,8 +39,6 @@ CLEANUP_ALBUM_NAMES = frozenset(
         "Cluster Keepers",
         "Similar Photos - Keepers",
         "Similar Photos - Review Me",
-        "Edited Copies - Keepers",
-        "Edited Copies - Review Me",
         "Documents - Review Me",
     }
 )

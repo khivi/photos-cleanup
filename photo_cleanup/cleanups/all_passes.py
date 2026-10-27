@@ -8,7 +8,6 @@ from photo_cleanup import cli
 from photo_cleanup.cleanups import (
     clusters,
     documents,
-    edited,
     heic_estimate,
     low_quality,
     screenshots,
@@ -19,7 +18,6 @@ PASSES = [
     ("Screenshots", screenshots.main),
     ("Low quality", low_quality.main),
     ("Burst clusters", clusters.main),
-    ("Edited copies", edited.main),
     ("Documents", documents.main),
     ("Similar photos", similar.main),
 ]
