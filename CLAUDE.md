@@ -1,7 +1,7 @@
 # photos-cleanup
 
-Tauri (Rust) shell + React webview + Python FastAPI sidecar for reviewing and
-clearing unwanted photos in the macOS Photos library. The app never deletes; it
+Local Python FastAPI server + React browser UI for reviewing and clearing
+unwanted photos in the macOS Photos library. The app never deletes; it
 moves flagged photos into a "Delete Me" album and the user deletes there.
 
 ## One codebase — the engine is vendored
@@ -20,15 +20,15 @@ belongs only here.
 
 ## Layout
 
-- `photo_cleanup/` — vendored engine (`common.py` is what the sidecar uses)
-- `sidecar/server.py` — FastAPI sidecar wrapping the engine; `sidecar/test_server.py` mocks PhotosDB so tests run without Full Disk Access
-- `src/` — React UI; `src-tauri/` — Rust shell that spawns the sidecar on a free port
-- `scripts/build-sidecar.sh` — PyInstaller freeze for the bundled `.app`
+- `photo_cleanup/` — vendored engine (`common.py` is what the server uses)
+- `sidecar/server.py` — FastAPI server wrapping the engine; serves the built UI (`dist/`) plus the API on 127.0.0.1:8765 and opens the browser. Same-origin only, no CORS: any website could otherwise call the API. `sidecar/test_server.py` mocks PhotosDB so tests run without Full Disk Access
+- `src/` — React UI; in dev, Vite proxies API paths to :8765
 
 ## Dev
 
 ```bash
 uv sync && pnpm install
-pnpm tauri dev
-uv run pytest -q     # sidecar tests
+uv run python sidecar/server.py --no-browser & pnpm dev   # dev with hot reload
+pnpm build && uv run python sidecar/server.py            # serve the built UI
+uv run pytest -q     # server tests
 ```

@@ -1,5 +1,4 @@
 import { type CSSProperties, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { FixedSizeGrid } from "react-window";
 import "./App.css";
 
@@ -27,7 +26,6 @@ function useWindowSize() {
 }
 
 function App() {
-  const [port, setPort] = useState<number | null>(null);
   const [view, setView] = useState<View>("all");
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [deleted, setDeleted] = useState<Photo[]>([]); // queued-for-deletion this session
@@ -38,16 +36,13 @@ function App() {
   const [status, setStatus] = useState<string | null>(null);
   const { width, height } = useWindowSize();
 
-  // Boot: get the sidecar port, wait for it, load the full library.
+  // Boot: wait for the same-origin server to answer, then load the full library.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const p = await invoke<number>("sidecar_port");
-      if (cancelled) return;
-      setPort(p);
       for (let i = 0; i < 120 && !cancelled; i++) {
         try {
-          const r = await fetch(`http://127.0.0.1:${p}/photos`);
+          const r = await fetch("/photos");
           if (r.ok) {
             const data = await r.json();
             if (!cancelled) {
@@ -69,7 +64,6 @@ function App() {
   }, []);
 
   async function loadView(v: View) {
-    if (port == null) return;
     setStatus(null);
     // "deleted" is a client-side view of what we queued this session — no fetch.
     if (v === "deleted") {
@@ -79,7 +73,7 @@ function App() {
     setLoading(true);
     try {
       const path = v === "all" ? "/photos" : `/cleanup/${v}`;
-      const r = await fetch(`http://127.0.0.1:${port}${path}`);
+      const r = await fetch(path);
       const data = await r.json();
       setPhotos(data.photos);
       setView(v);
@@ -106,7 +100,7 @@ function App() {
   }
 
   async function commit() {
-    if (port == null || !CLEANUP_VIEWS.includes(view)) return;
+    if (!CLEANUP_VIEWS.includes(view)) return;
     const doomed = photos.filter((p) => decisions[p.uuid] === "delete");
     const uuids = doomed.map((p) => p.uuid);
     if (uuids.length === 0) return;
@@ -117,7 +111,7 @@ function App() {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 90_000);
     try {
-      const r = await fetch(`http://127.0.0.1:${port}/commit`, {
+      const r = await fetch("/commit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind: view, uuids }),
@@ -280,7 +274,7 @@ function App() {
                     }}
                   >
                     <img
-                      src={`http://127.0.0.1:${port}/thumb/${ph.uuid}`}
+                      src={`/thumb/${ph.uuid}`}
                       loading="lazy"
                       title={ph.filename}
                       style={{

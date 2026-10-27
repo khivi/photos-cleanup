@@ -25,12 +25,26 @@ class FakeDB:
 
 
 def test_health():
-    assert TestClient(server.app).get("/health").json() == {"ok": True}
+    assert TestClient(server.app, base_url="http://127.0.0.1").get("/health").json() == {"ok": True}
+
+
+def test_no_cors_headers():
+    r = TestClient(server.app, base_url="http://127.0.0.1").get(
+        "/health", headers={"Origin": "https://evil.example"}
+    )
+    assert "access-control-allow-origin" not in r.headers
+
+
+def test_rejects_foreign_host():
+    r = TestClient(server.app, base_url="http://127.0.0.1").get(
+        "/health", headers={"Host": "evil.example"}
+    )
+    assert r.status_code == 400
 
 
 def test_stats(monkeypatch):
     monkeypatch.setattr(server, "db", lambda: FakeDB())
-    data = TestClient(server.app).get("/stats").json()
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/stats").json()
     assert data["count"] == 3
     assert data["size_gb"] == 3.0
 
@@ -38,7 +52,7 @@ def test_stats(monkeypatch):
 def test_photos_returns_all(monkeypatch):
     items = [FakePhoto("a"), FakePhoto("b"), FakePhoto("c")]
     monkeypatch.setattr(server, "_index", lambda: (items, {p.uuid: p for p in items}))
-    data = TestClient(server.app).get("/photos").json()
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/photos").json()
     assert data["total"] == 3
     assert [p["uuid"] for p in data["photos"]] == ["a", "b", "c"]
 
@@ -48,7 +62,7 @@ def test_thumb_serves_and_404(monkeypatch, tmp_path):
     f.write_bytes(b"\xff\xd8\xff")  # jpeg magic bytes
     items = [FakePhoto("a", deriv=[str(f)])]
     monkeypatch.setattr(server, "_index", lambda: (items, {p.uuid: p for p in items}))
-    client = TestClient(server.app)
+    client = TestClient(server.app, base_url="http://127.0.0.1")
     assert client.get("/thumb/a").status_code == 200
     assert client.get("/thumb/missing").status_code == 404
 
@@ -63,7 +77,7 @@ def _patch_engine(monkeypatch, candidates):
 
 def test_cleanup_screenshots(monkeypatch):
     _patch_engine(monkeypatch, [FakePhoto("a"), FakePhoto("b")])
-    data = TestClient(server.app).get("/cleanup/screenshots").json()
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/screenshots").json()
     assert data["count"] == 2
     assert {p["uuid"] for p in data["photos"]} == {"a", "b"}
 
@@ -72,13 +86,19 @@ def test_cleanup_low_quality_filters_by_score(monkeypatch):
     _patch_engine(monkeypatch, [FakePhoto("a"), FakePhoto("b"), FakePhoto("c")])
     scores = {"a": 0.005, "b": 0.5, "c": None}  # c is unscored -> excluded
     monkeypatch.setattr(server.common, "get_photo_score", lambda p: scores[p.uuid])
-    data = TestClient(server.app).get("/cleanup/low-quality?threshold=0.01").json()
+    data = (
+        TestClient(server.app, base_url="http://127.0.0.1")
+        .get("/cleanup/low-quality?threshold=0.01")
+        .json()
+    )
     assert [p["uuid"] for p in data["photos"]] == ["a"]
 
 
 def test_cleanup_unknown_404(monkeypatch):
     _patch_engine(monkeypatch, [])
-    assert TestClient(server.app).get("/cleanup/bogus").status_code == 404
+    assert (
+        TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/bogus").status_code == 404
+    )
 
 
 def test_commit_adds_to_pass_album(monkeypatch):
@@ -90,7 +110,9 @@ def test_commit_adds_to_pass_album(monkeypatch):
         called.update(n=len(photos), album=album, dry_run=dry_run, assume_yes=assume_yes)
 
     monkeypatch.setattr(server.common, "add_to_album", fake_add)
-    r = TestClient(server.app).post("/commit", json={"kind": "screenshots", "uuids": ["a", "b"]})
+    r = TestClient(server.app, base_url="http://127.0.0.1").post(
+        "/commit", json={"kind": "screenshots", "uuids": ["a", "b"]}
+    )
     assert r.json() == {"added": 2, "album": "Screenshots - Delete Me"}
     assert called == {
         "n": 2,
@@ -102,12 +124,16 @@ def test_commit_adds_to_pass_album(monkeypatch):
 
 def test_commit_unknown_kind_404(monkeypatch):
     monkeypatch.setattr(server, "_index", lambda: ([], {}))
-    r = TestClient(server.app).post("/commit", json={"kind": "bogus", "uuids": ["a"]})
+    r = TestClient(server.app, base_url="http://127.0.0.1").post(
+        "/commit", json={"kind": "bogus", "uuids": ["a"]}
+    )
     assert r.status_code == 404
 
 
 def test_commit_no_matching_400(monkeypatch):
     monkeypatch.setattr(server, "_index", lambda: ([], {}))
     monkeypatch.setattr(server.common, "add_to_album", lambda *a, **k: None)
-    r = TestClient(server.app).post("/commit", json={"kind": "screenshots", "uuids": ["missing"]})
+    r = TestClient(server.app, base_url="http://127.0.0.1").post(
+        "/commit", json={"kind": "screenshots", "uuids": ["missing"]}
+    )
     assert r.status_code == 400

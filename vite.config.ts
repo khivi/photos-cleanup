@@ -1,13 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+// Dev proxy to the FastAPI server: `uv run python sidecar/server.py --no-browser`
+const api = "http://127.0.0.1:8765";
+const routes = ["/health", "/stats", "/photos", "/thumb", "/cleanup", "/commit"];
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  clearScreen: false, // don't obscure rust errors
   server: {
-    port: 1420, // tauri expects a fixed port
-    strictPort: true,
-    watch: { ignored: ["**/src-tauri/**"] },
+    proxy: Object.fromEntries(routes.map((r) => [r, api])),
   },
 });

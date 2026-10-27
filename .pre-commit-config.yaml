@@ -12,7 +12,7 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-json
-        exclude: ^tsconfig.*\.json$  # Tauri tsconfigs are JSONC (comments)
+        exclude: ^tsconfig.*\.json$  # tsconfigs are JSONC (comments)
       - id: check-toml
       - id: check-added-large-files
       - id: check-merge-conflict
@@ -32,26 +32,3 @@ repos:
     rev: v0.25
     hooks:
       - id: validate-pyproject
-
-  - repo: local
-    hooks:
-      # Rust hooks fire only on .rs changes (rare — Rust is just the sidecar shim).
-      - id: cargo-fmt
-        name: cargo fmt
-        entry: bash -c 'cd src-tauri && cargo fmt'
-        language: system
-        types: [rust]
-        pass_filenames: false
-      - id: cargo-clippy
-        name: cargo clippy
-        entry: bash -c 'cd src-tauri && cargo clippy --all-targets -- -D warnings'
-        language: system
-        types: [rust]
-        pass_filenames: false
-
-      - id: pytest
-        name: pytest (sidecar)
-        entry: uv run pytest -q
-        language: system
-        pass_filenames: false
-        always_run: true

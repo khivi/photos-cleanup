@@ -1,19 +1,10 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
     "sys_platform != 'darwin'",
-]
-
-[[package]]
-name = "altgraph"
-version = "0.17.5"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7e/f8/97fdf103f38fed6792a1601dbc16cc8aac56e7459a9fff08c812d8ae177a/altgraph-0.17.5.tar.gz", hash = "sha256:c87b395dd12fabde9c99573a9749d67da8d29ef9de0125c7f536699b4a9bc9e7", size = 48428, upload-time = "2025-11-21T20:35:50.583Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a9/ba/000a1996d4308bc65120167c21241a3b205464a2e0b58deda26ae8ac21d1/altgraph-0.17.5-py2.py3-none-any.whl", hash = "sha256:f3a22400bce1b0c701683820ac4f3b159cd301acab067c51c653e06961600597", size = 21228, upload-time = "2025-11-21T20:35:49.444Z" },
 ]
 
 [[package]]
@@ -201,13 +192,13 @@ name = "cgmetadata"
 version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-avfoundation", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-avfoundation", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
+    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-avfoundation", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-avfoundation", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
     { name = "pyobjc-framework-corelocation" },
-    { name = "pyobjc-framework-quartz", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-quartz", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
+    { name = "pyobjc-framework-quartz", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-quartz", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
     { name = "rich" },
     { name = "utitools" },
     { name = "wheel" },
@@ -488,32 +479,20 @@ wheels = [
 ]
 
 [[package]]
-name = "macholib"
-version = "1.16.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "altgraph" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/10/2f/97589876ea967487978071c9042518d28b958d87b17dceb7cdc1d881f963/macholib-1.16.4.tar.gz", hash = "sha256:f408c93ab2e995cd2c46e34fe328b130404be143469e41bc366c807448979362", size = 59427, upload-time = "2025-11-22T08:28:38.373Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c7/d1/a9f36f8ecdf0fb7c9b1e78c8d7af12b8c8754e74851ac7b94a8305540fc7/macholib-1.16.4-py2.py3-none-any.whl", hash = "sha256:da1a3fa8266e30f0ce7e97c6a54eefaae8edd1e5f86f3eb8b95457cae90265ea", size = 38117, upload-time = "2025-11-22T08:28:36.939Z" },
-]
-
-[[package]]
 name = "makelive"
 version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cgmetadata" },
     { name = "click" },
-    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-avfoundation", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-avfoundation", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
+    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-avfoundation", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-avfoundation", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
     { name = "pyobjc-framework-contacts" },
     { name = "pyobjc-framework-corelocation" },
-    { name = "pyobjc-framework-quartz", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-quartz", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
+    { name = "pyobjc-framework-quartz", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-quartz", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
     { name = "wheel" },
     { name = "wurlitzer" },
 ]
@@ -677,20 +656,20 @@ dependencies = [
     { name = "bitstring" },
     { name = "click" },
     { name = "py-applescript" },
-    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-applescriptkit", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-applescriptkit", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-applescriptobjc", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-applescriptobjc", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-avfoundation", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-avfoundation", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-coremedia", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-coremedia", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-coreservices", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-coreservices", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-quartz", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-quartz", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
+    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-applescriptkit", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-applescriptkit", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-applescriptobjc", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-applescriptobjc", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-avfoundation", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-avfoundation", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-coremedia", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-coremedia", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-coreservices", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-coreservices", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-quartz", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-quartz", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
     { name = "pyobjc-framework-scriptingbridge" },
     { name = "wheel" },
     { name = "xattr" },
@@ -723,26 +702,26 @@ dependencies = [
     { name = "pip" },
     { name = "psutil" },
     { name = "ptpython" },
-    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
-    { name = "pyobjc-framework-applescriptkit", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-applescriptkit", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
-    { name = "pyobjc-framework-applescriptobjc", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-applescriptobjc", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
-    { name = "pyobjc-framework-avfoundation", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-avfoundation", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
-    { name = "pyobjc-framework-cocoa", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-cocoa", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
-    { name = "pyobjc-framework-coreservices", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-coreservices", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
-    { name = "pyobjc-framework-metal", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-metal", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
-    { name = "pyobjc-framework-photos", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-photos", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
-    { name = "pyobjc-framework-quartz", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-quartz", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
-    { name = "pyobjc-framework-vision", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-vision", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
+    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
+    { name = "pyobjc-framework-applescriptkit", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-applescriptkit", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
+    { name = "pyobjc-framework-applescriptobjc", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-applescriptobjc", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
+    { name = "pyobjc-framework-avfoundation", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-avfoundation", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
+    { name = "pyobjc-framework-cocoa", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
+    { name = "pyobjc-framework-coreservices", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-coreservices", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
+    { name = "pyobjc-framework-metal", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-metal", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
+    { name = "pyobjc-framework-photos", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-photos", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
+    { name = "pyobjc-framework-quartz", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
+    { name = "pyobjc-framework-vision", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-vision", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
     { name = "pytimeparse2" },
     { name = "pyyaml" },
     { name = "requests" },
@@ -793,15 +772,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pefile"
-version = "2024.8.26"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/03/4f/2750f7f6f025a1507cd3b7218691671eecfd0bbebebe8b39aa0fe1d360b8/pefile-2024.8.26.tar.gz", hash = "sha256:3ff6c5d8b43e8c37bb6e6dd5085658d658a7a0bdcd20b6a07b1fcfc1c4e9d632", size = 76008, upload-time = "2024-08-26T20:58:38.155Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/54/16/12b82f791c7f50ddec566873d5bdd245baa1491bac11d15ffb98aecc8f8b/pefile-2024.8.26-py3-none-any.whl", hash = "sha256:76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f", size = 74766, upload-time = "2024-08-26T21:01:02.632Z" },
-]
-
-[[package]]
 name = "photos-cleanup"
 version = "0.1.0"
 source = { editable = "." }
@@ -815,7 +785,6 @@ dependencies = [
 dev = [
     { name = "httpx" },
     { name = "pre-commit" },
-    { name = "pyinstaller" },
     { name = "pytest" },
 ]
 
@@ -830,7 +799,6 @@ requires-dist = [
 dev = [
     { name = "httpx" },
     { name = "pre-commit", specifier = ">=3" },
-    { name = "pyinstaller", specifier = ">=6.21.0" },
     { name = "pytest", specifier = ">=7" },
 ]
 
@@ -840,14 +808,14 @@ version = "0.5.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "py-applescript" },
-    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-applescriptkit", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-applescriptkit", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-applescriptobjc", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-applescriptobjc", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-cocoa", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-cocoa", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
+    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-applescriptkit", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-applescriptkit", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-applescriptobjc", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-applescriptobjc", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-cocoa", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-cocoa", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
     { name = "tenacity" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b9/b8/55ef5e2285c8effe52d48ca053672b4a25bdc5c96e4666d187fa7deb95d3/photoscript-0.5.3.tar.gz", hash = "sha256:4d54bb99866f2450903be9f4996f311097d816e26dfae55c541f2ef58fc745dd", size = 29580, upload-time = "2025-12-22T12:52:39.951Z" }
@@ -958,12 +926,12 @@ name = "py-applescript"
 version = "1.0.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-applescriptkit", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-applescriptkit", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-applescriptobjc", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-applescriptobjc", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
+    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-applescriptkit", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-applescriptkit", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-applescriptobjc", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-applescriptobjc", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b2/13/781639401dd0e6fc11b2b6d4999ec8e951b50df2600eebee8e929b009da1/py-applescript-1.0.3.tar.gz", hash = "sha256:fa22c955fc25b3d24e03e66825b36a721897ec0d9b6ce185a4d177e2d1ecfa6b", size = 24925, upload-time = "2022-01-23T05:39:23.427Z" }
 wheels = [
@@ -1106,51 +1074,11 @@ wheels = [
 ]
 
 [[package]]
-name = "pyinstaller"
-version = "6.21.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "altgraph" },
-    { name = "macholib", marker = "sys_platform == 'darwin'" },
-    { name = "packaging" },
-    { name = "pefile", marker = "sys_platform == 'win32'" },
-    { name = "pyinstaller-hooks-contrib" },
-    { name = "pywin32-ctypes", marker = "sys_platform == 'win32'" },
-    { name = "setuptools" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/d5/4d/ec706c3fcf39e26888c35b39615ff4d5865d184069666c47492cff1fbe50/pyinstaller-6.21.0.tar.gz", hash = "sha256:bb9fab705983e393a2d1cac77d6972513057ad800215fd861dc15ff5272e98fd", size = 4061519, upload-time = "2026-06-13T14:15:06.25Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0c/4a/53cf98bf66daed012dc9cd78c8203f19a675d696f2fc12afcf8c5049a0e0/pyinstaller-6.21.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:327d132389f37912609e01be62810cf96b5aa95b613903e4b8692e0d12fb0eda", size = 1052350, upload-time = "2026-06-13T14:13:55.88Z" },
-    { url = "https://files.pythonhosted.org/packages/30/83/b591295c352ef464c50b4c6ffff1c4f771d875c9e833f578d1b9f564f6b3/pyinstaller-6.21.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:7071d4b094d5b40deeef5fa3d3b98a1b846087f7562b49209663d5f9281fe251", size = 748477, upload-time = "2026-06-13T14:14:00.327Z" },
-    { url = "https://files.pythonhosted.org/packages/3d/8f/88fff4e403873b1e22286911350e75ff00db014aa08e57045da9d4328993/pyinstaller-6.21.0-py3-none-manylinux2014_i686.whl", hash = "sha256:6b6374d652107dd4a2eeece903ff82bb4045bb5e1006c5a158a6dcdbefe84bf2", size = 760877, upload-time = "2026-06-13T14:14:04.836Z" },
-    { url = "https://files.pythonhosted.org/packages/8a/13/f0e48fbdfd1d05d948157121cea8b1b823dcb89efe6934b71fdd8bdb3f0f/pyinstaller-6.21.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:4e3108b3f02384560da70e39b8bf22b0ad597d02bd68a40d76ea91c1cfa00cad", size = 759194, upload-time = "2026-06-13T14:14:10.61Z" },
-    { url = "https://files.pythonhosted.org/packages/dd/d5/ea7878cf9924ed30d946d8288777424e6d069d94f5bde56b4d0890069664/pyinstaller-6.21.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:697532279f535ad572bda613db4f821540e235c7854ca6da4d3bf0373f4415ee", size = 754979, upload-time = "2026-06-13T14:14:15.226Z" },
-    { url = "https://files.pythonhosted.org/packages/9f/09/51b8905714b733bac66dbc041a7821372d70d888d273ae474c4037d4202d/pyinstaller-6.21.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:605169523a6b5ace39f13dfbff21add9f2bc43df99c7daf9394fefb2c45e8b6f", size = 754812, upload-time = "2026-06-13T14:14:20.264Z" },
-    { url = "https://files.pythonhosted.org/packages/4b/43/d77779439d8c6c2e27a77bcfbd1d5cc0f568ebb611bb472b11af81b5f177/pyinstaller-6.21.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:5fa56746c1e76f93634d018502301378a2d0c382553d37d8c3c34ff436c12dd1", size = 753887, upload-time = "2026-06-13T14:14:25.268Z" },
-    { url = "https://files.pythonhosted.org/packages/51/8f/c22df1f6837784ac349057ba693f08e7b1ca7a0e06f9c33c63bc6280007b/pyinstaller-6.21.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:42395ec76df8e8120c36b13339d9db8cab83e316a12839ee303cc00fc941bb74", size = 753779, upload-time = "2026-06-13T14:14:29.445Z" },
-    { url = "https://files.pythonhosted.org/packages/c9/76/1ce8a27ce62ba8cf3a87c9ce6d575610f4e55d7cb0123e7512fc3f4b921a/pyinstaller-6.21.0-py3-none-win32.whl", hash = "sha256:c6b28d30d8fd99ce162ff3aab5013ed44dbfb747566b1f01b9bed7964d7c14e9", size = 1336462, upload-time = "2026-06-13T14:14:35.785Z" },
-    { url = "https://files.pythonhosted.org/packages/c1/fa/ca1d7e5257dd8566a9dfc0dfb02f8a8075eeb53d4b2d3c579f1276759042/pyinstaller-6.21.0-py3-none-win_amd64.whl", hash = "sha256:7fae06c494ce0ebfe6bd3055c0e409def884f63af2e3705d06bd431ad9237fc7", size = 1397487, upload-time = "2026-06-13T14:14:42.328Z" },
-    { url = "https://files.pythonhosted.org/packages/dc/75/21b51523ce8d96629b71311775a0a65f5f5a872124ab0de33e5c848f8bff/pyinstaller-6.21.0-py3-none-win_arm64.whl", hash = "sha256:f13c95c9c03fb567217135919f93815c305813126780b0ed6e0123cb8acaf025", size = 1346094, upload-time = "2026-06-13T14:14:48.914Z" },
-]
-
-[[package]]
-name = "pyinstaller-hooks-contrib"
-version = "2026.6"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "packaging" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/94/5b/c9fe0db5e83ee1c39b2258fa21d23b15e1a60786b6c5990ee5074ead8bb6/pyinstaller_hooks_contrib-2026.6.tar.gz", hash = "sha256:bef5002c32f4f50bd55b005da12cff64eca8783e7eaf86a06a62410164bab725", size = 173354, upload-time = "2026-06-08T22:37:16.152Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/31/f2d7343d8ed5f7c4678377886f6ce533e6eaaa131b252ce950114c2a7efa/pyinstaller_hooks_contrib-2026.6-py3-none-any.whl", hash = "sha256:fd13b8ac126b35361175edacd41a0d97080b75dd5f4b594ecefefff969509dd3", size = 457159, upload-time = "2026-06-08T22:37:14.722Z" },
-]
-
-[[package]]
 name = "pyobjc-core"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/48/d9/a13566ce8914746557b9e8637a5abe1caae86ed202b0fb072029626b8bb1/pyobjc-core-9.2.tar.gz", hash = "sha256:d734b9291fec91ff4e3ae38b9c6839debf02b79c07314476e87da8e90b2c68c3", size = 923758, upload-time = "2023-06-07T08:33:03.348Z" }
 wheels = [
@@ -1163,7 +1091,7 @@ name = "pyobjc-core"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b4/b1/729f7458a63758bd21716648a8abcd9a0c8f2d2e9897763c8a1a1c7fd31b/pyobjc_core-12.2.1.tar.gz", hash = "sha256:7a7b9b018402342cf32bf1956366896350fbe5c0478cb3ef59778f77abed7f07", size = 1063383, upload-time = "2026-06-19T16:19:39.357Z" }
 wheels = [
@@ -1182,7 +1110,7 @@ name = "pyobjc-framework-applescriptkit"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1198,7 +1126,7 @@ name = "pyobjc-framework-applescriptkit"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1214,7 +1142,7 @@ name = "pyobjc-framework-applescriptobjc"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1230,7 +1158,7 @@ name = "pyobjc-framework-applescriptobjc"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1246,7 +1174,7 @@ name = "pyobjc-framework-avfoundation"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1267,7 +1195,7 @@ name = "pyobjc-framework-avfoundation"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1293,7 +1221,7 @@ name = "pyobjc-framework-cocoa"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1309,7 +1237,7 @@ name = "pyobjc-framework-cocoa"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1331,10 +1259,10 @@ name = "pyobjc-framework-contacts"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-cocoa", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-cocoa", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
+    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-cocoa", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-cocoa", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b6/e0/3af081a26f545c39e79101653f80047965266ab9ccc8b432130801a00dc7/pyobjc-framework-Contacts-9.2.tar.gz", hash = "sha256:1e5ae6a612cae95c010eb5ccf6c2d70a97faf25c7d62b4146fc51424d7fc4b60", size = 68082, upload-time = "2023-06-07T09:14:50.935Z" }
 wheels = [
@@ -1348,7 +1276,7 @@ name = "pyobjc-framework-coreaudio"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1365,7 +1293,7 @@ name = "pyobjc-framework-coreaudio"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1388,10 +1316,10 @@ name = "pyobjc-framework-corelocation"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-cocoa", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-cocoa", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
+    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-cocoa", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-cocoa", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ce/f4/e2a190a76bca21a435b59d467f9d1b53e5f6225a2a773accba3d2bb46077/pyobjc-framework-CoreLocation-9.2.tar.gz", hash = "sha256:a6a59e6d1297f84c99dfa9f4ac3927af2fc851b6a1999617f5c159571f885c43", size = 88391, upload-time = "2023-06-07T09:17:43.72Z" }
 wheels = [
@@ -1405,7 +1333,7 @@ name = "pyobjc-framework-coremedia"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1422,7 +1350,7 @@ name = "pyobjc-framework-coremedia"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1445,7 +1373,7 @@ name = "pyobjc-framework-coreml"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1463,7 +1391,7 @@ name = "pyobjc-framework-coreml"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1486,7 +1414,7 @@ name = "pyobjc-framework-coreservices"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1504,7 +1432,7 @@ name = "pyobjc-framework-coreservices"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1528,7 +1456,7 @@ name = "pyobjc-framework-fsevents"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1546,7 +1474,7 @@ name = "pyobjc-framework-fsevents"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1569,7 +1497,7 @@ name = "pyobjc-framework-metal"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1587,7 +1515,7 @@ name = "pyobjc-framework-metal"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1610,7 +1538,7 @@ name = "pyobjc-framework-photos"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1628,7 +1556,7 @@ name = "pyobjc-framework-photos"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1651,7 +1579,7 @@ name = "pyobjc-framework-quartz"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1668,7 +1596,7 @@ name = "pyobjc-framework-quartz"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1691,10 +1619,10 @@ name = "pyobjc-framework-scriptingbridge"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
-    { name = "pyobjc-framework-cocoa", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0'" },
-    { name = "pyobjc-framework-cocoa", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22.0'" },
+    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
+    { name = "pyobjc-framework-cocoa", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22'" },
+    { name = "pyobjc-framework-cocoa", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or platform_release >= '22'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/bc/20/3fa0549df9ec90015d2f666438f51454aa309e935707ac6f7d90ccac3eaa/pyobjc-framework-ScriptingBridge-9.2.tar.gz", hash = "sha256:48adc2a2b27f8f699f8d9e849c04b0a05afae8044d0435bc0765cdb79f42c051", size = 21354, upload-time = "2023-06-07T10:07:46.995Z" }
 wheels = [
@@ -1708,7 +1636,7 @@ name = "pyobjc-framework-uniformtypeidentifiers"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1724,7 +1652,7 @@ name = "pyobjc-framework-uniformtypeidentifiers"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1740,7 +1668,7 @@ name = "pyobjc-framework-vision"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" } },
@@ -1760,7 +1688,7 @@ name = "pyobjc-framework-vision"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')",
+    "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')",
 ]
 dependencies = [
     { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" } },
@@ -1825,15 +1753,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/19/10/cc63fecd69905eb4d300fe71bd580e4a631483e9f53fdcb8c0ad345ce832/pytimeparse2-1.7.1.tar.gz", hash = "sha256:98668cdcba4890e1789e432e8ea0059ccf72402f13f5d52be15bdfaeb3a8b253", size = 10431, upload-time = "2023-05-11T21:40:55.774Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/17/9e/85abf91ef5df452f56498927affdb7128194d15644084f6c6722477c305b/pytimeparse2-1.7.1-py3-none-any.whl", hash = "sha256:a162ea6a7707fd0bb82dd99556efb783935f51885c8bdced0fce3fffe85ab002", size = 6136, upload-time = "2023-05-11T21:40:46.051Z" },
-]
-
-[[package]]
-name = "pywin32-ctypes"
-version = "0.2.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/85/9f/01a1a99704853cb63f253eea009390c88e7131c67e66a0a02099a8c917cb/pywin32-ctypes-0.2.3.tar.gz", hash = "sha256:d162dc04946d704503b2edc4d55f3dba5c1d539ead017afa00142c38b9885755", size = 29471, upload-time = "2024-08-14T10:15:34.626Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/de/3d/8161f7711c017e01ac9f008dfddd9410dff3674334c233bde66e7ba65bbf/pywin32_ctypes-0.2.3-py3-none-any.whl", hash = "sha256:8a1513379d709975552d202d942d9837758905c8d01eb82b8bcc30918929e7b8", size = 30756, upload-time = "2024-08-14T10:15:33.187Z" },
 ]
 
 [[package]]
@@ -1929,15 +1848,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/33/27/8139d912017d8d885b44143235959ea7db679ad4bde8dd4e6d99b3e35517/rich-theme-manager-0.11.0.tar.gz", hash = "sha256:3bc1effa4b6c42f72994b73c8b3c391b1c6e803deccc2fc3932da31b00f1a112", size = 17416, upload-time = "2022-05-01T15:09:30.997Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/68/ed/bd13b916738781c860fe97fa7b0db73281d93f7989dd4f566c9f99846a93/rich_theme_manager-0.11.0-py3-none-any.whl", hash = "sha256:b9155233076eb4f9fc888ef8cf7755a3cd8efa3bfa33cee5137fc00000117d8e", size = 14881, upload-time = "2022-05-01T15:09:32.273Z" },
-]
-
-[[package]]
-name = "setuptools"
-version = "83.0.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/34/26/f5d29e25ffdb535afef2d35cdb55b325298f96debd670da4c325e08d70f4/setuptools-83.0.0.tar.gz", hash = "sha256:025bccbbf0fa05b6192bc64ae1e7b16e001fd6d6d4d5de03c97b1c1ade523bef", size = 1154254, upload-time = "2026-07-04T15:31:22.699Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/5d/40/e1e72872c6354b306daef1703549e8e83b4d43cfea356311bf722a043752/setuptools-83.0.0-py3-none-any.whl", hash = "sha256:29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3", size = 1008090, upload-time = "2026-07-04T15:31:20.885Z" },
 ]
 
 [[package]]
@@ -2078,12 +1988,12 @@ name = "utitools"
 version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
-    { name = "pyobjc-framework-coreservices", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-coreservices", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
-    { name = "pyobjc-framework-uniformtypeidentifiers", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release >= '20.0' and platform_release < '22.0' and sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-uniformtypeidentifiers", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and platform_release >= '20.0' and sys_platform == 'darwin') or (platform_release >= '22.0' and sys_platform == 'darwin')" },
+    { name = "pyobjc-core", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-core", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
+    { name = "pyobjc-framework-coreservices", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-coreservices", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
+    { name = "pyobjc-framework-uniformtypeidentifiers", version = "9.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' and platform_release >= '20' and platform_release < '22' and sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-uniformtypeidentifiers", version = "12.2.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and platform_release >= '20' and platform_release < '22' and sys_platform == 'darwin') or (platform_release >= '22' and sys_platform == 'darwin')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1f/85/ef3741a4ac3472a34b15cf8871eb77dd426a5900ebd2e6be9cf449cbf102/utitools-0.5.0.tar.gz", hash = "sha256:5db9e2b3f85982f6844ae4009130c82431332540f066fcf4fe63f31ab54a7d7c", size = 28631, upload-time = "2026-04-18T14:15:37.697Z" }
 wheels = [

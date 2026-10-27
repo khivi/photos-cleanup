@@ -1,7 +1,7 @@
 [project]
 name = "photos-cleanup"
 version = "0.1.0"
-description = "macOS Photos cleanup app: Tauri shell + FastAPI sidecar + vendored photo_cleanup engine."
+description = "macOS Photos cleanup app: local FastAPI server + browser UI + vendored photo_cleanup engine."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi",
@@ -23,7 +23,6 @@ dev = [
     "pytest>=7",
     "httpx",          # required by fastapi TestClient
     "pre-commit>=3",
-    "pyinstaller>=6.21.0",
 ]
 
 [tool.pytest.ini_options]

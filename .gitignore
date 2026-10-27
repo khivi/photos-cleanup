@@ -2,11 +2,6 @@
 node_modules/
 dist/
 
-# Rust / Tauri
-src-tauri/target/
-# PyInstaller-frozen sidecar (build artifact, ~30MB)
-src-tauri/binaries/
-
 # Python / uv
 .venv/
 __pycache__/

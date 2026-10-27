@@ -1,14 +1,12 @@
 # TODO
 
 ## Packaging
-- [ ] **Local `.app` (in progress)** — PyInstaller sidecar + Tauri `externalBin`, ad-hoc signed. Runs on this Mac; permissions may need re-granting on rebuild.
-
-## Distribution: Developer ID + notarized direct download (PRIMARY PATH)
-Chosen path (spike 2026-07-21). Works with the existing PyInstaller sidecar unchanged — no sandbox. Needs the $99/yr Apple Developer membership (also covers Developer ID).
-- [ ] **Shareable build** — Developer ID sign the `.app` + sidecar, then notarize (`notarytool`) + staple. Needed to run on other Macs without Gatekeeper friction, and so TCC grants (Full Disk Access, Automation) survive rebuilds. Add Hardened Runtime entitlements (`com.apple.security.automation.apple-events`, likely `disable-library-validation` for PyInstaller dylibs). Distribute as `.dmg`/`.zip` from the site.
+Tauri + PyInstaller `.app` dropped 2026-10-27: the app is now a local FastAPI server serving the React UI to the browser (see README). No `.app` means nothing to sign or notarize. Full Disk Access and Photos automation go to whichever terminal runs the server.
+- [ ] **Installable package** — put the built `dist/` inside the wheel (hatch `force-include`) and package `sidecar/` with a `[project.scripts]` entry point. Then `uv tool install git+https://github.com/khivi/photos-cleanup` works.
+- [ ] **Homebrew tap (optional, after the above)** — formula in `khivi/homebrew-tap` using `virtualenv_install_with_resources`; regenerate resources with `brew update-python-resources`. homebrew-core is unlikely to accept it.
 
 ## Native SwiftUI rewrite — DECIDED, gated on learning SwiftUI (2026-07-22)
-Chosen end-state: rebuild as one native **SwiftUI + PhotoKit + Vision** app — drop Tauri, React, the Python sidecar, and osxphotos entirely. Opens the App Store, swaps Full Disk Access for a normal Photos permission, makes album writes native (`PHAssetCollectionChangeRequest`, no AppleScript), single signed binary. Not starting yet — learning SwiftUI first. Evidence lives in `spike/` (run against the real 6.6k-photo library):
+Chosen end-state: rebuild as one native **SwiftUI + PhotoKit + Vision** app — drop the browser UI, the Python server, and osxphotos entirely. Opens the App Store, swaps Full Disk Access for a normal Photos permission, makes album writes native (`PHAssetCollectionChangeRequest`, no AppleScript), single signed binary. Not starting yet — learning SwiftUI first. Evidence lives in `spike/` (run against the real 6.6k-photo library):
 - **low-quality survives natively** — `VNCalculateImageAestheticsScoresRequest.overallScore` vs osxphotos `score.overall`: Spearman **rho 0.91**, worst-decile overlap 70%. Near-identical ranking; a native pass just needs its own threshold.
 - **screenshots/documents get a free native signal** — Vision's `isUtility` flag fired on 19% of photos (screenshots/receipts/docs).
 - **similar survives and upgrades** — osxphotos `.fingerprint` is a 28-char content fingerprint, not perceptual: it only finds near-identical dupes (3 clusters in the whole library; 0 of 1.1M random pairs > 50%). Vision feature-print distance catches those exact dupes (0.0–0.35) with a clean margin to random pairs (0.70+), and adds the graded visual similarity osxphotos never had.
@@ -20,7 +18,7 @@ Dev workflow when we start: install Xcode, keep it open on a second display pure
 - [x] **Xcode installed (2026-07-22)** — step one done. Next (khivi, keyboard): make a throwaway macOS SwiftUI app in Xcode, toggle the Canvas preview, drill `Text`/`VStack`/`HStack`/`LazyVGrid`/`Image(systemName:)` until the layout reflex sticks. Then signal "start" and Claude scaffolds the real single-target SwiftUI + PhotoKit project.
 
 ## Distribution: Mac App Store — BLOCKED (sandbox kills the PyInstaller sidecar)
-Investigated + spiked 2026-07-21. Not viable without a rewrite. Evidence from the spike (real sidecar, ad-hoc signed with `app-sandbox` + `personal-information.photos-library` + `temporary-exception.apple-events` for `com.apple.Photos`):
+Investigated + spiked 2026-07-21 against the former Tauri + PyInstaller build; the osxphotos walls below still apply to the Python server. Not viable without a rewrite. Evidence from the spike (real sidecar, ad-hoc signed with `app-sandbox` + `personal-information.photos-library` + `temporary-exception.apple-events` for `com.apple.Photos`):
 - Unsandboxed baseline reads fine: 9220 photos / 21.8 GB in ~6s.
 - **onefile** in a sandboxed `.app`: dies at PyInstaller bootloader — `semctl: Operation not permitted`. Sandbox denies the SysV semaphore onefile needs. Python never starts.
 - **onedir**: does NOT hit the semaphore (different bootstrap) but couldn't be cleanly verified — needs a properly structured `.app` (exec in `MacOS/`, dylibs in `Frameworks/`, `.dist-info` dirs cleaned for `codesign --deep`). In-place ad-hoc run SIGTRAPs (133) at sandbox init.
@@ -51,10 +49,10 @@ Full audit of the vendored engine (`./photo_cleanup`, all passes) vs PhotoKit:
 Common thread (updated post-spike): every "Apple already computed this" value (aesthetic score, scene labels, perceptual fingerprint) lives in the private sqlite and is **not** in PhotoKit — but Vision re-derives all three on-device and, per the spikes, reproduces the rankings/grouping the passes actually depend on (it won't byte-match Apple's, and doesn't need to). **clusters** keeps its time-grouping and regains score-based keeper ranking via the Vision aesthetics score. Upside stacks: the album **write** path also goes native, killing the Apple Events reviewer wall.
 
 ## CI
-- [ ] **GitHub Actions build** — matrix over the two Mac targets (`aarch64-apple-darwin`, `x86_64-apple-darwin`), producing a universal `.app`/`.dmg`. NOTE: macOS-only app (osxphotos / Photos.app / AppleScript) — no Windows/Linux targets are possible. Needs signing secrets for the shareable path.
+- [ ] **GitHub Actions** — macOS runner: `uv run pytest -q` + `pnpm build`. macOS-only app (osxphotos / Photos.app / AppleScript), so no Windows/Linux targets.
 
 ## App
-- [ ] **`/reload` endpoint** — clear the sidecar's db()/_index() caches to re-read the library mid-session without an app restart (also noted in sidecar/server.py).
+- [ ] **`/reload` endpoint** — clear the server's db()/_index() caches to re-read the library mid-session without a server restart (also noted in sidecar/server.py).
 - [ ] **Live "To be deleted"** — read the delete/review albums back from Photos so the tab survives restarts (currently session-scoped, client-side).
 - [ ] **More passes** — clusters / similar / edited / documents; the grouped ones need a "keep best per group" review UI.
 - [ ] **"Keep photos in albums" toggle** — persisted setting (default on) that surfaces the *existing* default: candidates already skip any photo in a user-created album (`is_in_user_album`). "Off" needs custom candidate logic to *include* album photos. Decide how iCloud Shared Albums count — osxphotos may report them outside `photo.albums`.

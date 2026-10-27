@@ -1,6 +1,6 @@
-"""Local HTTP sidecar for the Tauri shell. Wraps the photo_cleanup engine.
+"""Local server: serves the built UI (./dist) and the API on 127.0.0.1.
 
-The Tauri app spawns this on 127.0.0.1 and the webview talks to it directly.
+Wraps the photo_cleanup engine; the UI is same-origin, so no CORS.
 ponytail: single cached PhotosDB + photo index — the load is slow (seconds on a
 big library) so we do it once; add a /reload endpoint if the library changes.
 
@@ -11,11 +11,15 @@ from __future__ import annotations
 
 import argparse
 import functools
+import threading
+import webbrowser
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from photo_cleanup import common
@@ -26,9 +30,9 @@ ALBUMS = {
     "low-quality": "Low Quality - Review Me",
 }
 
-app = FastAPI(title="photo-cleanup sidecar")
-# ponytail: allow-all CORS — this only ever listens on 127.0.0.1 for the webview.
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app = FastAPI(title="photos-cleanup")
+# Blocks DNS rebinding: an attacker domain resolved to 127.0.0.1 would otherwise be same-origin.
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
 
 _MIN = datetime.min.replace(tzinfo=UTC)
 
@@ -128,12 +132,23 @@ def commit(req: CommitReq) -> dict:
     return {"added": len(photos), "album": album}
 
 
+# Mounted last so the API routes above win; absent in dev (Vite serves the UI).
+DIST = Path(__file__).resolve().parent.parent / "dist"
+if DIST.is_dir():
+    app.mount("/", StaticFiles(directory=DIST, html=True), name="ui")
+
+
 def main() -> None:
     import uvicorn
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args()
+    url = f"http://127.0.0.1:{args.port}/"
+    print(url)
+    if not args.no_browser:
+        threading.Timer(1.0, webbrowser.open, args=[url]).start()
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
 
 
