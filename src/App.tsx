@@ -212,7 +212,11 @@ function App() {
   const canCommit = flagged > 0 || kept > 0;
   const columnCount = Math.max(1, Math.floor(width / CELL));
   const rowCount = Math.ceil(displayed.length / columnCount);
-  const gridHeight = height - HEADER_H - (status ? 30 : 0);
+  const banner =
+    view === "deleted"
+      ? "Nothing is deleted yet. These photos were moved this session to the pass’s “Delete Me” / “Review Me” album — open it in Photos, select all, and delete. This list resets on reload."
+      : status;
+  const gridHeight = height - HEADER_H - (banner ? 30 : 0);
 
   const Tab = ({ v, label }: { v: View; label: string }) => (
     <button
@@ -308,9 +312,9 @@ function App() {
           </button>
         )}
       </header>
-      {status && (
+      {banner && (
         <div style={{ padding: "6px 12px", background: "#eef", fontSize: 13 }}>
-          {status}
+          {banner}
         </div>
       )}
       <div style={{ flex: 1, overflow: "hidden" }}>
