@@ -17,6 +17,8 @@ Net: nothing is lost in the rewrite; two passes improve. This overturns the "dat
 
 Dev workflow when we start: install Xcode, keep it open on a second display purely as a live preview canvas — do all editing and building from Claude Code. Once the layout reflex is there (~two weeks, not two months), drop to xcodegen + Inject for hot-reload and stop opening Xcode.
 
+- [x] **Xcode installed (2026-07-22)** — step one done. Next (khivi, keyboard): make a throwaway macOS SwiftUI app in Xcode, toggle the Canvas preview, drill `Text`/`VStack`/`HStack`/`LazyVGrid`/`Image(systemName:)` until the layout reflex sticks. Then signal "start" and Claude scaffolds the real single-target SwiftUI + PhotoKit project.
+
 ## Distribution: Mac App Store — BLOCKED (sandbox kills the PyInstaller sidecar)
 Investigated + spiked 2026-07-21. Not viable without a rewrite. Evidence from the spike (real sidecar, ad-hoc signed with `app-sandbox` + `personal-information.photos-library` + `temporary-exception.apple-events` for `com.apple.Photos`):
 - Unsandboxed baseline reads fine: 9220 photos / 21.8 GB in ~6s.
