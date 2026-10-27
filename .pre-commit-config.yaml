@@ -59,10 +59,12 @@ repos:
         types_or: [ts, tsx]
         pass_filenames: false
 
-      # Nothing else compiles the helper before the server runs it.
+      # Nothing else compiles the helpers before the server runs them. One file per swiftc
+      # call: each helper is a standalone script, and given several files swiftc only allows
+      # top-level code in main.swift.
       - id: swift-typecheck
         name: swiftc -typecheck
-        entry: swiftc -typecheck
+        entry: bash -c 'for f in "$@"; do swiftc -typecheck "$f" || exit 1; done' --
         language: system
         types: [swift]
         exclude: ^spike/
