@@ -1,6 +1,6 @@
 [project]
 name = "macos-photos-cleanup"
-version = "0.1.0"
+version = "0.2.0"
 description = "Review and clear unwanted photos in your macOS Photos library from a local browser UI. Never deletes: flagged photos go to a Delete Me album."
 readme = "README.md"
 license = "MIT"
