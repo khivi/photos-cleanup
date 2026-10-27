@@ -97,6 +97,15 @@ def _verdicts() -> dict[str, dict]:
     return out
 
 
+def _pass_verdict(kind: str, v: dict | None) -> dict | None:
+    """The verdict as a pass should use it."""
+    # Real screenshots have their own pass, so in Utility "screenshot" is always a misread
+    # camera photo (a hand, a dashboard); never preselect those for delete.
+    if v is not None and kind == "utility" and v["kind"] == "screenshot" and not v["keep"]:
+        return {**v, "keep": True}
+    return v
+
+
 def _parse_verdict(line: str) -> tuple[str, dict | None]:
     """One verdict.swift output line -> (uuid, verdict); None for errors (retried next run)."""
     uuid, _, rest = line.partition("\t")
@@ -374,7 +383,9 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
     return {
         "kind": kind,
         "count": len(photos),
-        "photos": [{**_meta(p), "verdict": verdicts.get(p.uuid)} for p in photos],
+        "photos": [
+            {**_meta(p), "verdict": _pass_verdict(kind, verdicts.get(p.uuid))} for p in photos
+        ],
         "classify": classify,
     }
 
@@ -395,7 +406,7 @@ def _log_decisions(kind: str, decided: list[tuple[str, str]]) -> None:
             }
         )
         for u, d in decided
-        if (v := verdicts.get(u))
+        if (v := _pass_verdict(kind, verdicts.get(u)))
     ]
     if lines:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)

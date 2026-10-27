@@ -391,3 +391,15 @@ def test_counts_only_where_known(monkeypatch):
     monkeypatch.setattr(server, "_prints", {"a": [0.0], "b": [0.1], "c": [9.0]})
     data = client.get("/counts").json()
     assert data["utility"] == 1 and data["clusters"] == 2
+
+
+def test_utility_never_preselects_a_misread_screenshot_for_delete(monkeypatch):
+    photos = [FakePhoto(u, deriv=["x"]) for u in "ab"]
+    shot = {"keep": False, "kind": "screenshot", "reason": "A hand with a ring"}
+    receipt = {"keep": False, "kind": "receipt", "reason": "Coffee receipt"}
+    _patch_engine(monkeypatch, photos, {"a": shot, "b": receipt})
+    client = TestClient(server.app, base_url="http://127.0.0.1")
+    got = {p["uuid"]: p["verdict"]["keep"] for p in client.get("/cleanup/utility").json()["photos"]}
+    assert got == {"a": True, "b": False}
+    shots = client.get("/cleanup/screenshots").json()["photos"]  # the Screenshots pass is untouched
+    assert {p["uuid"]: p["verdict"]["keep"] for p in shots} == {"a": False, "b": False}
