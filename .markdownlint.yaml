@@ -1,0 +1,14 @@
+# markdownlint config — relaxations mirror the Cockpit repo.
+# Rule reference: https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+default: true
+
+# MD013 line-length — long prose paragraphs and bullets; wrapping belongs in $EDITOR.
+MD013: false
+
+# MD041 first-line-h1 — SKILL.md frontmatter precedes the H1.
+MD041: false
+
+# MD024 multiple-headings-same-content — allow repeats under different parents.
+MD024:
+  siblings_only: true

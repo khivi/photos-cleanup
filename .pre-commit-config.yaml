@@ -1,4 +1,5 @@
-# Python conventions mirror the Cockpit repo (ruff + ruff-format + validate-pyproject).
+# Conventions mirror the Cockpit repo. pre-push hooks need `pre-commit install` (installs both types).
+default_install_hook_types: [pre-commit, pre-push]
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.20.1
@@ -15,7 +16,11 @@ repos:
         exclude: ^tsconfig.*\.json$  # tsconfigs are JSONC (comments)
       - id: check-toml
       - id: check-added-large-files
+      - id: check-case-conflict
       - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
       - id: detect-private-key
       - id: debug-statements
 
@@ -32,3 +37,48 @@ repos:
     rev: v0.25
     hooks:
       - id: validate-pyproject
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.43.0
+    hooks:
+      - id: markdownlint
+        args: ['--config', '.markdownlint.yaml']
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
+        args: ['--config', '.codespellrc']
+
+  - repo: local
+    hooks:
+      - id: tsc
+        name: tsc (UI type check)
+        entry: pnpm exec tsc --noEmit
+        language: system
+        types_or: [ts, tsx]
+        pass_filenames: false
+
+      # Nothing else compiles the helper before the server runs it.
+      - id: swift-typecheck
+        name: swiftc -typecheck
+        entry: swiftc -typecheck
+        language: system
+        types: [swift]
+        exclude: ^spike/
+
+      - id: pytest
+        name: pytest
+        entry: uv run pytest -q
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: uv-audit
+        name: uv audit (dependency vulnerabilities)
+        entry: uv audit
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-push]
