@@ -1,5 +1,5 @@
-import { type CSSProperties, useEffect, useRef, useState } from "react";
-import { FixedSizeGrid, FixedSizeList } from "react-window";
+import { type CSSProperties, type ReactElement, useEffect, useRef, useState } from "react";
+import { type CellComponentProps, Grid, List, type RowComponentProps } from "react-window";
 import "./App.css";
 
 type Verdict = { keep: boolean; kind: string; reason: string };
@@ -38,6 +38,34 @@ function useWindowSize() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
   return size;
+}
+
+// react-window v2 takes cell/row components, not render functions. They live at
+// module level: defined inside App they'd be new each render and remount every cell.
+type CellFn = (ph: Photo, style: CSSProperties) => ReactElement;
+
+function GridCell({
+  columnIndex,
+  rowIndex,
+  style,
+  displayed,
+  columnCount,
+  cell,
+}: CellComponentProps<{ displayed: Photo[]; columnCount: number; cell: CellFn }>) {
+  const idx = rowIndex * columnCount + columnIndex;
+  return idx < displayed.length ? cell(displayed[idx], style) : null;
+}
+
+function GroupRow({ index, style, groups, cell }: RowComponentProps<{ groups: Photo[][]; cell: CellFn }>) {
+  return (
+    <div style={{ ...style, display: "flex", overflowX: "auto" }}>
+      {groups[index].map((ph) => (
+        <div key={ph.uuid} style={{ flex: "none", width: CELL, height: CELL }}>
+          {cell(ph, { width: "100%", height: "100%" })}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function App() {
@@ -454,40 +482,25 @@ function App() {
           </div>
         )}
         {!loading && width > 0 && view === "clusters" && (
-          <FixedSizeList
-            itemCount={groups.length}
-            itemSize={CELL}
-            width={width}
-            height={gridHeight}
-          >
-            {({ index, style }) => (
-              <div style={{ ...style, display: "flex", overflowX: "auto" }}>
-                {groups[index].map((ph) => (
-                  <div key={ph.uuid} style={{ flex: "none", width: CELL, height: CELL }}>
-                    {cell(ph, { width: "100%", height: "100%" })}
-                  </div>
-                ))}
-              </div>
-            )}
-          </FixedSizeList>
+          <List
+            rowComponent={GroupRow}
+            rowProps={{ groups, cell }}
+            rowCount={groups.length}
+            rowHeight={CELL}
+            style={{ width, height: gridHeight }}
+          />
         )}
         {!loading && width > 0 && view !== "clusters" && (
-          <FixedSizeGrid
+          <Grid
             key={view}
+            cellComponent={GridCell}
+            cellProps={{ displayed, columnCount, cell }}
             columnCount={columnCount}
             rowCount={rowCount}
             columnWidth={CELL}
             rowHeight={CELL}
-            width={width}
-            height={gridHeight}
-          >
-            {({ columnIndex, rowIndex, style }) => {
-              const idx = rowIndex * columnCount + columnIndex;
-              if (idx >= displayed.length) return null;
-              const ph = displayed[idx];
-              return cell(ph, style);
-            }}
-          </FixedSizeGrid>
+            style={{ width, height: gridHeight }}
+          />
         )}
       </div>
     </div>
