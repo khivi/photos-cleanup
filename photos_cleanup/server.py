@@ -9,12 +9,15 @@ The engine (photo_cleanup) is vendored in-repo — see CLAUDE.md.
 
 from __future__ import annotations
 
+import base64
 import functools
 import hashlib
 import json
+import math
 import subprocess
 import tempfile
 import threading
+from array import array
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,7 +30,11 @@ from pydantic import BaseModel
 from photo_cleanup import common
 from photo_cleanup.cleanups.clusters import _score_for_sort
 
-CLUSTER_WINDOW_S, CLUSTER_MIN_SIZE = 60, 3  # the clusters cleanup's defaults
+CLUSTER_WINDOW_S = 60  # the clusters cleanup's default
+# Feature-print L2 distance below which two neighbouring shots count as repeats. Calibrated
+# by eye on 40 real bursts: pairs <= 0.44 were the same shot; from 0.46 they were different
+# photos (report pages, a different person, different medicine labels).
+SIMILAR_MAX_DIST = 0.45
 
 # Per-pass album names (engine convention: end with "Delete Me" / "Review Me").
 ALBUMS = {
@@ -50,8 +57,9 @@ VERDICT_KINDS = {"screenshots", "utility"}
 UI_DIR = Path(__file__).with_name("ui")
 CACHE_DIR = Path.home() / "Library/Caches/photos-cleanup"
 VERDICT_SRC = Path(__file__).with_name("verdict.swift")
-# Keyed to the helper's source, so a prompt or kind-list change re-judges everything.
+FEATUREPRINT_SRC = Path(__file__).with_name("featureprint.swift")
 DECISIONS_LOG = "decisions.jsonl"  # user's final keep/delete per committed verdict photo
+# Keyed to the helper's source, so a prompt or kind-list change re-judges everything.
 VERDICT_CACHE = f"verdicts-{hashlib.sha256(VERDICT_SRC.read_bytes()).hexdigest()[:8]}.jsonl"
 
 app = FastAPI(title="photos-cleanup")
@@ -101,20 +109,58 @@ def _image_path(p) -> str | None:
     return p.path or (p.path_derivatives[0] if p.path_derivatives else None)
 
 
-def _verdict_bin() -> Path:
-    exe = CACHE_DIR / "verdict"
-    if not exe.exists() or exe.stat().st_mtime < VERDICT_SRC.stat().st_mtime:
+def _swift_bin(src: Path) -> Path:
+    exe = CACHE_DIR / src.stem
+    if not exe.exists() or exe.stat().st_mtime < src.stat().st_mtime:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            ["swiftc", "-O", str(VERDICT_SRC), "-o", str(exe)], check=True, capture_output=True
-        )
+        subprocess.run(["swiftc", "-O", str(src), "-o", str(exe)], check=True, capture_output=True)
     return exe
+
+
+# ponytail: in-memory only; ~1.3k prints take ~10s, so a restart recomputes them.
+_prints: dict[str, array | None] = {}  # None: a utility image, never grouped
+
+
+def _feature_prints(photos) -> dict[str, array | None]:
+    """uuid -> Vision feature print (None for utility images), computed for uncached photos."""
+    todo = [p for p in photos if p.uuid not in _prints]
+    # Smallest-first derivative: fast, and what SIMILAR_MAX_DIST was calibrated on.
+    lines = [
+        f"{p.uuid}\t{path}\n"
+        for p in todo
+        if (path := (p.path_derivatives[0] if p.path_derivatives else p.path))
+    ]
+    if lines:
+        out = subprocess.run(
+            [_swift_bin(FEATUREPRINT_SRC)], input="".join(lines), capture_output=True, text=True
+        )
+        for line in out.stdout.splitlines():
+            uuid, kind, *data = line.split("\t", 2)
+            if kind == "UTILITY":
+                _prints[uuid] = None
+            elif kind in ("1", "2"):
+                _prints[uuid] = array("f" if kind == "1" else "d", base64.b64decode(data[0]))
+    return _prints
+
+
+def _split_similar(group: list, prints: dict[str, array | None]) -> list[list]:
+    """Split a time-sorted burst wherever neighbouring shots stop looking alike."""
+    runs, run = [], [group[0]]
+    for a, b in zip(group, group[1:], strict=False):
+        pa, pb = prints.get(a.uuid), prints.get(b.uuid)
+        if pa is not None and pb is not None and math.dist(pa, pb) < SIMILAR_MAX_DIST:
+            run.append(b)
+        else:
+            runs.append(run)
+            run = [b]
+    runs.append(run)
+    return [r for r in runs if len(r) >= 2]
 
 
 def _run_classifier(photos) -> None:
     verdicts = _verdicts()
     try:
-        exe = _verdict_bin()
+        exe = _swift_bin(VERDICT_SRC)
         # Temp files, not pipes, for stdin/stderr: a full pipe would deadlock the child.
         with (
             tempfile.TemporaryFile("w+") as inp,
@@ -233,7 +279,19 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
     photos = [p for p in photos if p.uuid not in _committed and filed.isdisjoint(p.albums)]
     if kind == "clusters":
         photos.sort(key=lambda p: common.make_aware(p.date))
-        groups = common.group_by_time(photos, CLUSTER_WINDOW_S, CLUSTER_MIN_SIZE)
+        bursts = common.group_by_time(photos, CLUSTER_WINDOW_S, 2)
+        try:
+            prints = _feature_prints([p for g in bursts for p in g])
+        except (subprocess.CalledProcessError, OSError) as e:
+            # Time alone groups different photos (a run of labels, report pages); show none.
+            err = e.stderr.decode()[-300:] if isinstance(e, subprocess.CalledProcessError) else e
+            return {
+                "kind": kind,
+                "count": 0,
+                "groups": [],
+                "classify": {"pending": 0, "error": str(err)},
+            }
+        groups = [run for g in bursts for run in _split_similar(g, prints)]
         out = []
         for g in reversed(groups):  # newest group first
             best = max(g, key=_score_for_sort)  # first max wins ties: earliest shot

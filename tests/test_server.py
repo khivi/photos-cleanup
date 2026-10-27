@@ -119,12 +119,43 @@ def test_cleanup_clusters_groups_bursts_with_best(monkeypatch):
     _patch_engine(monkeypatch, photos)
     scores = {"a": 0.1, "b": 0.9, "c": 0.5, "d": 0.2, "e": 0.3, "f": 0.8, "g": None}
     monkeypatch.setattr(server.common, "get_photo_score", lambda p: scores.get(p.uuid))
+    monkeypatch.setattr(server, "_feature_prints", lambda ps: {p.uuid: [0.0] for p in ps})
     data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/clusters").json()
     assert [(g["best"], [p["uuid"] for p in g["photos"]]) for g in data["groups"]] == [
         ("f", ["d", "e", "f", "g"]),  # newest first; unscored g never wins
         ("b", ["a", "b", "c"]),
     ]
     assert data["count"] == 7
+
+
+def test_cleanup_clusters_splits_bursts_that_look_different(monkeypatch):
+    # One 40s burst: two repeats of one shot, then two repeats of another (e.g. labels).
+    t0 = datetime(2024, 1, 1, tzinfo=UTC)
+    photos = [FakePhoto(u) for u in "abcdefg"]
+    for i, p in enumerate(photos):
+        p.date = t0 + timedelta(seconds=10 * i)
+    _patch_engine(monkeypatch, photos)
+    monkeypatch.setattr(server.common, "get_photo_score", lambda p: 0.5)
+    # e: a one-off; f, g: utility images (document pages look alike), never grouped.
+    prints = {"a": [0.0], "b": [0.1], "c": [2.0], "d": [2.1], "e": [5.0], "f": None, "g": None}
+    monkeypatch.setattr(server, "_feature_prints", lambda ps: prints)
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/clusters").json()
+    assert [[p["uuid"] for p in g["photos"]] for g in data["groups"]] == [["c", "d"], ["a", "b"]]
+
+
+def test_cleanup_clusters_shows_none_without_feature_prints(monkeypatch):
+    t0 = datetime(2024, 1, 1, tzinfo=UTC)
+    photos = [FakePhoto(u) for u in "abc"]
+    for i, p in enumerate(photos):
+        p.date = t0 + timedelta(seconds=i)
+    _patch_engine(monkeypatch, photos)
+
+    def fail(ps):
+        raise OSError("swiftc not found")
+
+    monkeypatch.setattr(server, "_feature_prints", fail)
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/clusters").json()
+    assert data["groups"] == [] and "swiftc" in data["classify"]["error"]
 
 
 def test_cleanup_low_quality_filters_by_score(monkeypatch):

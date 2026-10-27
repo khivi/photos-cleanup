@@ -376,9 +376,10 @@ function App() {
               Classifying… {classify.pending} left
             </span>
           )}
-          {VERDICT_VIEWS.includes(view) && !loading && classify.error && (
+          {!loading && classify.error && (
             <span style={{ fontWeight: 400, fontSize: 12, color: "crimson", marginRight: 10 }}>
-              AI verdicts unavailable: {classify.error}
+              {view === "clusters" ? "Similarity check unavailable" : "AI verdicts unavailable"}:{" "}
+              {classify.error}
             </span>
           )}
           {loading
