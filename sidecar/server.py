@@ -32,13 +32,17 @@ from photo_cleanup import common
 ALBUMS = {
     "screenshots": "Screenshots - Delete Me",
     "low-quality": "Low Quality - Review Me",
+    "utility": "Utility - Delete Me",
 }
 # Not in common.CLEANUP_ALBUM_NAMES, so they count as user albums and the candidate
 # filter skips their photos on every later run.
 KEEP_ALBUMS = {
     "screenshots": "Screenshots - Keep",
     "low-quality": "Low Quality - Keep",
+    "utility": "Utility - Keep",
 }
+# Passes judged by the Foundation Models classifier (see verdict.swift).
+VERDICT_KINDS = {"screenshots", "utility"}
 
 CACHE_DIR = Path.home() / "Library/Caches/photos-cleanup"
 VERDICT_SRC = Path(__file__).with_name("verdict.swift")
@@ -201,6 +205,10 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
     ignore = common.load_ignore_albums(None)
     if kind == "screenshots":
         photos, _ = common.get_candidate_photos(photosdb, ignore, only_screenshots=True)
+    elif kind == "utility":
+        # Screenshots have their own pass; the classifier's Vision step filters the rest.
+        photos, _ = common.get_candidate_photos(photosdb, ignore)
+        photos = [p for p in photos if _image_path(p)]
     elif kind == "low-quality":
         photos, _ = common.get_candidate_photos(photosdb, ignore)
         photos = [
@@ -214,9 +222,14 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
     photos.sort(key=lambda p: common.make_aware(p.date) if p.date else _MIN, reverse=True)
     verdicts: dict[str, dict] = {}
     classify = {"pending": 0, "error": None}
-    if kind == "screenshots":
+    if kind in VERDICT_KINDS:
         _start_classifier(photos)
         verdicts, classify = _verdicts(), dict(_classify)
+    if kind == "utility":
+        # "picture" = Vision said not a utility image; unjudged photos appear once classified.
+        photos = [
+            p for p in photos if verdicts.get(p.uuid, {"kind": "picture"})["kind"] != "picture"
+        ]
     return {
         "kind": kind,
         "count": len(photos),

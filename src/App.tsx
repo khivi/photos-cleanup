@@ -5,16 +5,17 @@ import "./App.css";
 type Verdict = { keep: boolean; kind: string; reason: string };
 type Photo = { uuid: string; filename: string; is_video: boolean; verdict?: Verdict | null };
 type Classify = { pending: number; error: string | null };
-type View = "all" | "screenshots" | "low-quality" | "deleted";
+type View = "all" | "screenshots" | "utility" | "low-quality" | "deleted";
 type Decision = "keep" | "delete";
-const CLEANUP_VIEWS: View[] = ["screenshots", "low-quality"];
+const CLEANUP_VIEWS: View[] = ["screenshots", "utility", "low-quality"];
+const VERDICT_VIEWS: View[] = ["screenshots", "utility"]; // judged by the on-device model
 
 const CELL = 170; // px per thumbnail cell
 const HEADER_H = 46; // toolbar height in px
 const POLL_MS = 5000; // verdict refresh while the server is classifying
 
 function initialDecision(v: View, p: Photo): Decision {
-  if (v !== "screenshots") return "delete";
+  if (!VERDICT_VIEWS.includes(v)) return "delete";
   return p.verdict && !p.verdict.keep ? "delete" : "keep";
 }
 
@@ -75,25 +76,31 @@ function App() {
     };
   }, []);
 
-  // Poll for verdicts while the server classifies screenshots in the background.
-  const polling = view === "screenshots" && classify.pending > 0;
+  // Poll for verdicts while the server classifies in the background.
+  const polling = VERDICT_VIEWS.includes(view) && classify.pending > 0;
   useEffect(() => {
     if (!polling) return;
     let cancelled = false;
     const timer = setInterval(async () => {
       try {
-        const r = await fetch("/cleanup/screenshots");
+        const r = await fetch(`/cleanup/${view}`);
         if (!r.ok) return;
         const data = await r.json();
         if (cancelled) return;
         const fresh = new Map<string, Photo>(data.photos.map((p: Photo) => [p.uuid, p]));
-        setPhotos((prev) =>
-          prev.map((p) => (fresh.has(p.uuid) ? { ...p, verdict: fresh.get(p.uuid)!.verdict } : p)),
-        );
+        // Utility candidates appear as they're classified, so merge new ones in.
+        setPhotos((prev) => {
+          const have = new Set(prev.map((p) => p.uuid));
+          const added = data.photos.filter((p: Photo) => !have.has(p.uuid));
+          return [
+            ...prev.map((p) => (fresh.has(p.uuid) ? { ...p, verdict: fresh.get(p.uuid)!.verdict } : p)),
+            ...added,
+          ];
+        });
         setDecisions((prev) => {
           const next = { ...prev };
           for (const [id, p] of fresh)
-            if (id in prev && !touchedRef.current.has(id)) next[id] = initialDecision("screenshots", p);
+            if (!touchedRef.current.has(id)) next[id] = initialDecision(view, p);
           return next;
         });
         setClassify(data.classify);
@@ -105,7 +112,7 @@ function App() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [polling]);
+  }, [polling, view]);
 
   async function loadView(v: View) {
     setStatus(null);
@@ -258,6 +265,7 @@ function App() {
       >
         <Tab v="all" label="All" />
         <Tab v="screenshots" label="Screenshots" />
+        <Tab v="utility" label="Utility" />
         <Tab v="low-quality" label="Low quality" />
         <Tab
           v="deleted"
@@ -276,12 +284,12 @@ function App() {
           </>
         )}
         <span style={{ marginLeft: "auto", fontWeight: 600 }}>
-          {view === "screenshots" && !loading && classify.pending > 0 && (
+          {VERDICT_VIEWS.includes(view) && !loading && classify.pending > 0 && (
             <span style={{ fontWeight: 400, fontSize: 12, color: "#666", marginRight: 10 }}>
               Classifying… {classify.pending} left
             </span>
           )}
-          {view === "screenshots" && !loading && classify.error && (
+          {VERDICT_VIEWS.includes(view) && !loading && classify.error && (
             <span style={{ fontWeight: 400, fontSize: 12, color: "crimson", marginRight: 10 }}>
               AI verdicts unavailable: {classify.error}
             </span>

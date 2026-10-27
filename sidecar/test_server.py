@@ -7,7 +7,7 @@ from sidecar import server
 
 
 class FakePhoto:
-    def __init__(self, uuid="x", size=0, deriv=None, albums=()):
+    def __init__(self, uuid="x", size=0, deriv=None, albums=(), path="/img.jpg"):
         self.uuid = uuid
         self.albums = list(albums)
         self.original_filename = f"{uuid}.jpg"
@@ -17,6 +17,7 @@ class FakePhoto:
         self.ismovie = False
         self.original_filesize = size
         self.path_derivatives = deriv or []
+        self.path = path
 
 
 class FakeDB:
@@ -86,6 +87,19 @@ def test_cleanup_screenshots_attaches_verdicts(monkeypatch):
     assert data["count"] == 2
     assert {p["uuid"]: p["verdict"] for p in data["photos"]} == {"a": verdict, "b": None}
     assert data["classify"] == {"pending": 0, "error": None}
+
+
+def test_cleanup_utility_shows_only_classified_non_pictures(monkeypatch):
+    receipt = {"keep": False, "kind": "receipt", "reason": "Paid"}
+    picture = {"keep": True, "kind": "picture", "reason": "Not a utility image"}
+    _patch_engine(
+        monkeypatch,
+        [FakePhoto("a"), FakePhoto("b"), FakePhoto("c"), FakePhoto("noimg", path=None)],
+        {"a": receipt, "b": picture},  # c not classified yet
+    )
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/utility").json()
+    assert [p["uuid"] for p in data["photos"]] == ["a"]
+    assert data["photos"][0]["verdict"] == receipt
 
 
 def test_cleanup_low_quality_filters_by_score(monkeypatch):
