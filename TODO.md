@@ -11,22 +11,20 @@ Not pursuing:
 
 ## Packaging
 
-The installable package is done: Homebrew tap, `uv tool install macos-photos-cleanup`, `pipx`. Release steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release). Remaining one-time setup:
+The installable package is done: Homebrew tap, `uv tool install macos-photos-cleanup`, `pipx`. Release steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release). Both GitHub repos exist, `HOMEBREW_TAP_TOKEN` is set and private vulnerability reporting is on. Remaining one-time setup:
 
-- [ ] Create the GitHub repos `khivi/photos-cleanup` and `khivi/homebrew-photos-cleanup`.
-- [ ] Add the `HOMEBREW_TAP_TOKEN` secret: a PAT with Contents write on `khivi/homebrew-photos-cleanup` and this repo.
 - [ ] Add a PyPI pending trusted publisher: project `macos-photos-cleanup`, owner `khivi`, repo `photos-cleanup`, workflow `publish.yml`, environment `pypi`.
-- [ ] Enable private vulnerability reporting on the repo.
 
 ## CI
 
-The CI workflow exists (`.github/workflows/`).
+The CI workflow exists (`.github/workflows/`) and passes on macOS runners for pull requests.
 
-- [ ] Confirm the first CI run passes on a macOS runner.
+- [ ] Confirm the first `master` push run passes (queued for a macOS runner on 2026-10-27).
+- [ ] **Triage the first Dependabot batch** (PRs #1–#9). One run failed. The major bumps need care: TypeScript 5 → 7, `@vitejs/plugin-react` 4 → 5, `actions/setup-node` 6 → 7, `pnpm/action-setup` 4 → 6.
 
 ## App
 
-- [ ] **Measure screenshot verdicts against real choices** — `f1751a9` (summary before `keep`, greedy, new kinds) matches 96/102 filed screenshots, but those filings mostly accepted the old preselected verdicts, so it's a consistency check, not accuracy. Log which photos the user toggles before commit to get a real disagreement rate. Known miss: a medicine-box photo gets delete; adding "medical or health information" to the keep list didn't fix it and flipped another photo. Tried and dropped: asking for facts (`timeSensitive`/`reusableInfo`) and deciding in code — 66/101, neither fact separated kept from deleted. Editing `photos_cleanup/verdict.swift` re-judges everything (the cache file is keyed to its hash).
+- [ ] **A second verdict pass doesn't start while another classifies** — `_start_classifier` returns early if a run is active, so opening Utility while Screenshots is classifying never starts Utility; polling stops when the first run ends and the user must reopen the tab. Queue the second run, or run one classifier over both passes' photos.
+- [ ] **Measure verdicts against real choices** — `/commit` now logs the user's final decision against each verdict (`decisions.jsonl`, `GET /verdict-stats`). After real use of Screenshots and Utility, read the agreement rate and tune `photos_cleanup/verdict.swift`. Baseline: `f1751a9` (summary before `keep`, greedy, new kinds) matched 96/102 filed screenshots, but those filings mostly accepted the old preselected verdicts. Known miss: a medicine-box photo gets delete; adding "medical or health information" to the keep list didn't fix it and flipped another photo. Tried and dropped: asking for facts (`timeSensitive`/`reusableInfo`) and deciding in code — 66/101. Editing `verdict.swift` re-judges everything (the cache file is keyed to its hash).
 - [ ] **Recheck kept photos when the on-device model improves** — a pass's "Keep" album is the record of what was kept. Load it (hidden from candidates today), re-classify bypassing the verdict cache (keyed to `verdict.swift`'s hash, so an OS model update alone doesn't invalidate it — key on the OS build too), show only new delete verdicts, and on commit move them Keep → Delete Me (needs album-removal code). Wait for an actual model update first.
-- [ ] **More passes** — clusters / similar / documents; the grouped ones need a "keep best per group" review UI.
 - [ ] **"Keep photos in albums" toggle** — persisted setting (default on) that surfaces the *existing* default: candidates already skip any photo in a user-created album (`is_in_user_album`). "Off" needs custom candidate logic to *include* album photos. Decide how iCloud Shared Albums count — osxphotos may report them outside `photo.albums`.
