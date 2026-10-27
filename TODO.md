@@ -11,16 +11,13 @@ Not pursuing:
 
 ## Packaging
 
-The installable package is done: Homebrew tap, `uv tool install macos-photos-cleanup`, `pipx`. Release steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release). Both GitHub repos exist, `HOMEBREW_TAP_TOKEN` is set and private vulnerability reporting is on. Remaining one-time setup:
+Released on PyPI (`macos-photos-cleanup`) and the Homebrew tap; 0.2.0 is current. Release steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release): bump `version` in `pyproject.toml` on master.
 
-- [ ] Add a PyPI pending trusted publisher: project `macos-photos-cleanup`, owner `khivi`, repo `photos-cleanup`, workflow `publish.yml`, environment `pypi`.
+- [ ] **Give the `COCKPIT_GITHUB_API_TOKEN` PAT access to this repo and `khivi/homebrew-photos-cleanup`** (Contents: read and write). It's the fine-grained token shared with cockpit (fnox profile `cockpit`). Without it, `tag.yml` can't push the tag and `bump-tap` can't update the formula. 0.1.0 and 0.2.0 were tagged and bumped by hand.
 
 ## CI
 
-The CI workflow exists (`.github/workflows/`) and passes on macOS runners for pull requests.
-
-- [ ] Confirm the first `master` push run passes (queued for a macOS runner on 2026-10-27).
-- [ ] **Triage the first Dependabot batch** (PRs #1–#9). One run failed. The major bumps need care: TypeScript 5 → 7, `@vitejs/plugin-react` 4 → 5, `actions/setup-node` 6 → 7, `pnpm/action-setup` 4 → 6.
+`ci.yml` passes on macOS runners for master and pull requests. Dependabot opens monthly PRs with a 7-day cooldown.
 
 ## App
 
