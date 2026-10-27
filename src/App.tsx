@@ -10,14 +10,13 @@ type Photo = {
   verdict?: Verdict | null;
   best?: boolean; // clusters: the engine's pick of the group
 };
-type Classify = { pending: number; error: string | null };
+type Classify = { pending: number; total?: number; error: string | null };
 type View = "all" | "screenshots" | "utility" | "clusters" | "low-quality" | "deleted";
 type Decision = "keep" | "delete";
 const CLEANUP_VIEWS: View[] = ["screenshots", "utility", "clusters", "low-quality"];
 const VERDICT_VIEWS: View[] = ["screenshots", "utility"]; // judged by the on-device model
 
 const CELL = 170; // px per thumbnail cell
-const HEADER_H = 46; // toolbar height in px
 const POLL_MS = 5000; // verdict refresh while the server is classifying
 
 function initialDecision(v: View, p: Photo): Decision {
@@ -57,6 +56,16 @@ function App() {
   const [status, setStatus] = useState<string | null>(null);
   const [counts, setCounts] = useState<Partial<Record<View, number | null>>>({});
   const { width, height } = useWindowSize();
+  // The toolbar wraps on narrow windows; the grid sizes itself from its measured height.
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerH, setHeaderH] = useState(46);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHeaderH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Tab counts change after a load, a commit, or a classification run finishing.
   useEffect(() => {
@@ -249,7 +258,7 @@ function App() {
     view === "deleted"
       ? "Nothing is deleted yet. These photos were moved this session to the pass’s “Delete Me” / “Review Me” album — open it in Photos, select all, and delete. This list resets on reload."
       : status;
-  const gridHeight = height - HEADER_H - (banner ? 30 : 0);
+  const gridHeight = height - headerH - (banner ? 30 : 0);
 
   const Tab = ({ v, label }: { v: View; label: string }) => {
     const n = v === "deleted" ? deleted.length || null : counts[v];
@@ -264,6 +273,7 @@ function App() {
         background: view === v ? "#0f0f0f" : "#fff",
         color: view === v ? "#fff" : "#0f0f0f",
         cursor: "pointer",
+        whiteSpace: "nowrap",
       }}
     >
       {n == null ? label : `${label} (${n.toLocaleString()})`}
@@ -272,6 +282,7 @@ function App() {
   };
 
   const bulkBtn = (color: string): CSSProperties => ({
+    whiteSpace: "nowrap",
     padding: "4px 10px",
     borderRadius: 6,
     border: `1px solid ${color}`,
@@ -354,8 +365,10 @@ function App() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <header
+        ref={headerRef}
         style={{
           display: "flex",
+          flexWrap: "wrap",
           gap: 8,
           alignItems: "center",
           padding: "8px 12px",
@@ -374,7 +387,7 @@ function App() {
         {inCleanup && !loading && (
           <>
             <span style={{ width: 1, height: 22, background: "#ddd", margin: "0 2px" }} />
-            <span style={{ fontSize: 12, color: "#666" }}>Select all:</span>
+            <span style={{ fontSize: 12, color: "#666", whiteSpace: "nowrap" }}>Select all:</span>
             <button onClick={() => setAll("keep")} style={bulkBtn("#2a2")}>
               ✓ Keep
             </button>
@@ -383,10 +396,17 @@ function App() {
             </button>
           </>
         )}
-        <span style={{ marginLeft: "auto", fontWeight: 600 }}>
+        <span style={{ marginLeft: "auto", fontWeight: 600, whiteSpace: "nowrap" }}>
           {VERDICT_VIEWS.includes(view) && !loading && classify.pending > 0 && (
             <span style={{ fontWeight: 400, fontSize: 12, color: "#666", marginRight: 10 }}>
-              Classifying… {classify.pending} left
+              <progress
+                title="On-device AI is judging photos; verdicts appear as they arrive"
+                value={(classify.total ?? 0) - classify.pending}
+                max={classify.total || classify.pending}
+                style={{ width: 120, verticalAlign: "middle", marginRight: 6 }}
+              />
+              {((classify.total ?? 0) - classify.pending).toLocaleString()}/
+              {(classify.total || classify.pending).toLocaleString()}
             </span>
           )}
           {!loading && classify.error && (
@@ -415,9 +435,10 @@ function App() {
               color: "#fff",
               fontWeight: 600,
               cursor: canCommit ? "pointer" : "default",
+              whiteSpace: "nowrap",
             }}
           >
-            {committing ? "Moving…" : `Commit: ${flagged} → Delete Me · ${kept} → Keep`}
+            {committing ? "Moving…" : `Commit: ${flagged} delete · ${kept} keep`}
           </button>
         )}
       </header>

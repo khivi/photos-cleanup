@@ -76,7 +76,7 @@ def db():
 
 # The cached PhotosDB never sees album changes, so committed photos are tracked here.
 _committed: set[str] = set()
-_classify: dict = {"pending": 0, "error": None}
+_classify: dict = {"pending": 0, "total": 0, "error": None}  # total: this run, for progress
 _classify_lock = threading.Lock()
 _classifier: threading.Thread | None = None
 _queue: list = []  # photos waiting for the classifier thread, across passes
@@ -214,7 +214,7 @@ def _start_classifier(photos) -> None:
     global _classifier
     with _classify_lock:
         if _verdicts_off:
-            _classify.update(pending=0, error=_verdicts_off)
+            _classify.update(pending=0, total=0, error=_verdicts_off)
             return
         verdicts = _verdicts()
         todo = [
@@ -224,9 +224,10 @@ def _start_classifier(photos) -> None:
         ]
         if not todo:
             return
+        total = len(todo) + (_classify["total"] if _inflight else 0)
         _queue.extend(todo)
         _inflight.update(p.uuid for p in todo)
-        _classify.update(pending=len(_inflight), error=None)
+        _classify.update(pending=len(_inflight), total=total, error=None)
         if _classifier is None:
             _classifier = threading.Thread(target=_drain_queue, daemon=True)
             _classifier.start()
