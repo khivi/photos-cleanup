@@ -25,12 +25,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from photo_cleanup import common
+from photo_cleanup.cleanups.clusters import _score_for_sort
+
+CLUSTER_WINDOW_S, CLUSTER_MIN_SIZE = 60, 3  # the clusters cleanup's defaults
 
 # Per-pass album names (engine convention: end with "Delete Me" / "Review Me").
 ALBUMS = {
     "screenshots": "Screenshots - Delete Me",
     "low-quality": "Low Quality - Review Me",
     "utility": "Utility - Delete Me",
+    "clusters": "Bursts - Delete Me",
 }
 # Not in common.CLEANUP_ALBUM_NAMES, so they count as user albums and the candidate
 # filter skips their photos on every later run.
@@ -38,6 +42,7 @@ KEEP_ALBUMS = {
     "screenshots": "Screenshots - Keep",
     "low-quality": "Low Quality - Keep",
     "utility": "Utility - Keep",
+    "clusters": "Bursts - Keep",
 }
 # Passes judged by the Foundation Models classifier (see verdict.swift).
 VERDICT_KINDS = {"screenshots", "utility"}
@@ -214,6 +219,8 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
         # Screenshots have their own pass; the classifier's Vision step filters the rest.
         photos, _ = common.get_candidate_photos(photosdb, ignore)
         photos = [p for p in photos if _image_path(p)]
+    elif kind == "clusters":
+        photos, _ = common.get_candidate_photos(photosdb, ignore, require_valid_date=True)
     elif kind == "low-quality":
         photos, _ = common.get_candidate_photos(photosdb, ignore)
         photos = [
@@ -224,6 +231,19 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
     # Album membership comes from the startup snapshot; _committed covers this session's commits.
     filed = {ALBUMS[kind], KEEP_ALBUMS[kind]}
     photos = [p for p in photos if p.uuid not in _committed and filed.isdisjoint(p.albums)]
+    if kind == "clusters":
+        photos.sort(key=lambda p: common.make_aware(p.date))
+        groups = common.group_by_time(photos, CLUSTER_WINDOW_S, CLUSTER_MIN_SIZE)
+        out = []
+        for g in reversed(groups):  # newest group first
+            best = max(g, key=_score_for_sort)  # first max wins ties: earliest shot
+            out.append({"photos": [_meta(p) for p in g], "best": best.uuid})
+        return {
+            "kind": kind,
+            "count": sum(len(g["photos"]) for g in out),
+            "groups": out,
+            "classify": {"pending": 0, "error": None},
+        }
     photos.sort(key=lambda p: common.make_aware(p.date) if p.date else _MIN, reverse=True)
     verdicts: dict[str, dict] = {}
     classify = {"pending": 0, "error": None}

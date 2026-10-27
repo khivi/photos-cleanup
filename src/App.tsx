@@ -1,13 +1,19 @@
 import { type CSSProperties, useEffect, useRef, useState } from "react";
-import { FixedSizeGrid } from "react-window";
+import { FixedSizeGrid, FixedSizeList } from "react-window";
 import "./App.css";
 
 type Verdict = { keep: boolean; kind: string; reason: string };
-type Photo = { uuid: string; filename: string; is_video: boolean; verdict?: Verdict | null };
+type Photo = {
+  uuid: string;
+  filename: string;
+  is_video: boolean;
+  verdict?: Verdict | null;
+  best?: boolean; // clusters: the engine's pick of the group
+};
 type Classify = { pending: number; error: string | null };
-type View = "all" | "screenshots" | "utility" | "low-quality" | "deleted";
+type View = "all" | "screenshots" | "utility" | "clusters" | "low-quality" | "deleted";
 type Decision = "keep" | "delete";
-const CLEANUP_VIEWS: View[] = ["screenshots", "utility", "low-quality"];
+const CLEANUP_VIEWS: View[] = ["screenshots", "utility", "clusters", "low-quality"];
 const VERDICT_VIEWS: View[] = ["screenshots", "utility"]; // judged by the on-device model
 
 const CELL = 170; // px per thumbnail cell
@@ -15,6 +21,7 @@ const HEADER_H = 46; // toolbar height in px
 const POLL_MS = 5000; // verdict refresh while the server is classifying
 
 function initialDecision(v: View, p: Photo): Decision {
+  if (v === "clusters") return p.best ? "keep" : "delete";
   if (!VERDICT_VIEWS.includes(v)) return "delete";
   return p.verdict && !p.verdict.keep ? "delete" : "keep";
 }
@@ -38,6 +45,7 @@ function App() {
   const [view, setView] = useState<View>("all");
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [deleted, setDeleted] = useState<Photo[]>([]); // queued-for-deletion this session
+  const [groups, setGroups] = useState<Photo[][]>([]); // clusters view: one row per burst
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [touched, setTouched] = useState<Set<string>>(new Set()); // decided explicitly by the user
   const touchedRef = useRef(touched);
@@ -126,6 +134,13 @@ function App() {
       const path = v === "all" ? "/photos" : `/cleanup/${v}`;
       const r = await fetch(path);
       const data = await r.json();
+      if (v === "clusters") {
+        const gs: Photo[][] = data.groups.map((g: { photos: Photo[]; best: string }) =>
+          g.photos.map((p) => ({ ...p, best: p.uuid === g.best })),
+        );
+        data.photos = gs.flat();
+        setGroups(gs);
+      }
       setPhotos(data.photos);
       setView(v);
       // Cleanup candidates start per initialDecision; user toggles.
@@ -156,7 +171,7 @@ function App() {
 
   const doomed = photos.filter((p) => decisions[p.uuid] === "delete");
   const keepers = photos.filter(
-    (p) => decisions[p.uuid] === "keep" && (touched.has(p.uuid) || p.verdict),
+    (p) => decisions[p.uuid] === "keep" && (touched.has(p.uuid) || p.verdict || p.best),
   );
 
   async function commit() {
@@ -187,6 +202,7 @@ function App() {
         return [...doomed.filter((p) => !seen.has(p.uuid)), ...prev];
       });
       setPhotos((prev) => prev.filter((p) => !gone.has(p.uuid)));
+      setGroups((prev) => prev.map((g) => g.filter((p) => !gone.has(p.uuid))).filter((g) => g.length));
       setDecisions((prev) => {
         const next = { ...prev };
         for (const id of gone) delete next[id];
@@ -252,6 +268,76 @@ function App() {
     cursor: "pointer",
   });
 
+  const cell = (ph: Photo, style: CSSProperties) => {
+    const isDeletedView = view === "deleted";
+    const willDelete = inCleanup && decisions[ph.uuid] === "delete";
+    const dim = willDelete || isDeletedView;
+    return (
+      <div style={{ ...style, padding: 4, boxSizing: "border-box" }}>
+        <div
+          onClick={inCleanup ? () => toggle(ph.uuid) : undefined}
+          style={{
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            cursor: inCleanup ? "pointer" : "default",
+          }}
+        >
+          <img
+            src={`/thumb/${ph.uuid}`}
+            loading="lazy"
+            title={ph.verdict ? `${ph.filename} — ${ph.verdict.kind}: ${ph.verdict.reason}` : ph.filename}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              borderRadius: 4,
+              background: "#eee",
+              opacity: dim ? 0.5 : 1,
+            }}
+          />
+          {(inCleanup || isDeletedView) && (
+            <span
+              style={{
+                position: "absolute",
+                top: 6,
+                left: 6,
+                padding: "2px 6px",
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#fff",
+                background: dim ? "#d33" : "#2a2",
+              }}
+            >
+              {isDeletedView
+                ? "✗ Delete Me"
+                : willDelete
+                  ? "✗ Delete"
+                  : "✓ Keep"}
+            </span>
+          )}
+          {inCleanup && ph.verdict && (
+            <span
+              style={{
+                position: "absolute",
+                bottom: 6,
+                left: 6,
+                padding: "1px 5px",
+                borderRadius: 4,
+                fontSize: 11,
+                color: "#fff",
+                background: "rgba(0,0,0,0.6)",
+              }}
+            >
+              {ph.verdict.kind}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <header
@@ -266,6 +352,7 @@ function App() {
         <Tab v="all" label="All" />
         <Tab v="screenshots" label="Screenshots" />
         <Tab v="utility" label="Utility" />
+        <Tab v="clusters" label="Bursts" />
         <Tab v="low-quality" label="Low quality" />
         <Tab
           v="deleted"
@@ -331,7 +418,25 @@ function App() {
             Nothing left to review. Photos already filed in this pass’s albums are hidden.
           </div>
         )}
-        {!loading && width > 0 && (
+        {!loading && width > 0 && view === "clusters" && (
+          <FixedSizeList
+            itemCount={groups.length}
+            itemSize={CELL}
+            width={width}
+            height={gridHeight}
+          >
+            {({ index, style }) => (
+              <div style={{ ...style, display: "flex", overflowX: "auto" }}>
+                {groups[index].map((ph) => (
+                  <div key={ph.uuid} style={{ flex: "none", width: CELL, height: CELL }}>
+                    {cell(ph, { width: "100%", height: "100%" })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </FixedSizeList>
+        )}
+        {!loading && width > 0 && view !== "clusters" && (
           <FixedSizeGrid
             key={view}
             columnCount={columnCount}
@@ -345,73 +450,7 @@ function App() {
               const idx = rowIndex * columnCount + columnIndex;
               if (idx >= displayed.length) return null;
               const ph = displayed[idx];
-              const isDeletedView = view === "deleted";
-              const willDelete = inCleanup && decisions[ph.uuid] === "delete";
-              const dim = willDelete || isDeletedView;
-              return (
-                <div style={{ ...style, padding: 4, boxSizing: "border-box" }}>
-                  <div
-                    onClick={inCleanup ? () => toggle(ph.uuid) : undefined}
-                    style={{
-                      position: "relative",
-                      width: "100%",
-                      height: "100%",
-                      cursor: inCleanup ? "pointer" : "default",
-                    }}
-                  >
-                    <img
-                      src={`/thumb/${ph.uuid}`}
-                      loading="lazy"
-                      title={ph.verdict ? `${ph.filename} — ${ph.verdict.kind}: ${ph.verdict.reason}` : ph.filename}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        borderRadius: 4,
-                        background: "#eee",
-                        opacity: dim ? 0.5 : 1,
-                      }}
-                    />
-                    {(inCleanup || isDeletedView) && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: 6,
-                          left: 6,
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: "#fff",
-                          background: dim ? "#d33" : "#2a2",
-                        }}
-                      >
-                        {isDeletedView
-                          ? "✗ Delete Me"
-                          : willDelete
-                            ? "✗ Delete"
-                            : "✓ Keep"}
-                      </span>
-                    )}
-                    {inCleanup && ph.verdict && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          bottom: 6,
-                          left: 6,
-                          padding: "1px 5px",
-                          borderRadius: 4,
-                          fontSize: 11,
-                          color: "#fff",
-                          background: "rgba(0,0,0,0.6)",
-                        }}
-                      >
-                        {ph.verdict.kind}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
+              return cell(ph, style);
             }}
           </FixedSizeGrid>
         )}

@@ -4,6 +4,7 @@ Photos library (no TCC / Full Disk Access needed in CI)."""
 import json
 import socket
 import subprocess
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -105,6 +106,25 @@ def test_cleanup_utility_shows_only_classified_non_pictures(monkeypatch):
     data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/utility").json()
     assert [p["uuid"] for p in data["photos"]] == ["a"]
     assert data["photos"][0]["verdict"] == receipt
+
+
+def test_cleanup_clusters_groups_bursts_with_best(monkeypatch):
+    t0 = datetime(2024, 1, 1, tzinfo=UTC)
+    secs = {"a": 0, "b": 10, "c": 20, "far": 500, "d": 1000, "e": 1010, "f": 1020, "g": 1030}
+    photos = [FakePhoto(u) for u in secs]
+    for p in photos:
+        p.date = t0 + timedelta(seconds=secs[p.uuid])
+    photos.append(FakePhoto("filed", albums=["Bursts - Keep"]))
+    photos[-1].date = t0 + timedelta(seconds=1040)
+    _patch_engine(monkeypatch, photos)
+    scores = {"a": 0.1, "b": 0.9, "c": 0.5, "d": 0.2, "e": 0.3, "f": 0.8, "g": None}
+    monkeypatch.setattr(server.common, "get_photo_score", lambda p: scores.get(p.uuid))
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/clusters").json()
+    assert [(g["best"], [p["uuid"] for p in g["photos"]]) for g in data["groups"]] == [
+        ("f", ["d", "e", "f", "g"]),  # newest first; unscored g never wins
+        ("b", ["a", "b", "c"]),
+    ]
+    assert data["count"] == 7
 
 
 def test_cleanup_low_quality_filters_by_score(monkeypatch):
