@@ -9,7 +9,7 @@ moves flagged photos into a "Delete Me" album and the user deletes there.
 All code lives in this one repo, built from one `pyproject.toml`. The
 photo-scanning engine (`photo_cleanup`) is **vendored at `./photo_cleanup`** and
 is the source of truth. The top-level pyproject builds and installs it
-(`[tool.hatch.build.targets.wheel] packages = ["photo_cleanup"]`); there is no
+(`[tool.hatch.build.targets.wheel] packages = ["photo_cleanup", "photos_cleanup"]`); there is no
 separate engine package and no external path dependency.
 
 `../../photo-cleanup` is **reference-only** — the upstream repo the engine was
@@ -21,14 +21,17 @@ belongs only here.
 ## Layout
 
 - `photo_cleanup/` — vendored engine (`common.py` is what the server uses)
-- `sidecar/server.py` — FastAPI server wrapping the engine; serves the built UI (`dist/`) plus the API on 127.0.0.1:8765 and opens the browser. Same-origin only, no CORS: any website could otherwise call the API. `sidecar/test_server.py` mocks PhotosDB so tests run without Full Disk Access
+- `photos_cleanup/cli.py` — `photos-cleanup` entry point. Startup checks (macOS, UI built, port, library, Full Disk Access) fail fast with clear messages. Keep it free of osxphotos imports so `--version`/`--help` stay fast and `brew test` works in its sandbox
+- `photos_cleanup/server.py` — FastAPI server wrapping the engine; serves the built UI (`photos_cleanup/ui/`, gitignored) plus the API on 127.0.0.1:8765. Same-origin only, no CORS: any website could otherwise call the API. `photos_cleanup/verdict.swift` is the on-device verdict helper
+- `tests/test_server.py` — mocks PhotosDB so tests run without Full Disk Access
 - `src/` — React UI; in dev, Vite proxies API paths to :8765
+- Public docs: `README.md`, `CONTRIBUTING.md` (dev and release), `SECURITY.md`
 
 ## Dev
 
 ```bash
 uv sync && pnpm install
-uv run python sidecar/server.py --no-browser & pnpm dev   # dev with hot reload
-pnpm build && uv run python sidecar/server.py            # serve the built UI
-uv run pytest -q     # server tests
+pnpm build && uv run photos-cleanup      # serve the built UI
+uv run photos-cleanup --dev & pnpm dev   # hot reload
+uv run pytest -q                         # server tests
 ```

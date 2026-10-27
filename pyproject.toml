@@ -1,22 +1,47 @@
 [project]
-name = "photos-cleanup"
+name = "macos-photos-cleanup"
 version = "0.1.0"
-description = "macOS Photos cleanup app: local FastAPI server + browser UI + vendored photo_cleanup engine."
+description = "Review and clear unwanted photos in your macOS Photos library from a local browser UI. Never deletes: flagged photos go to a Delete Me album."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "khivi" }]
 requires-python = ">=3.11"
+classifiers = [
+    "Environment :: Web Environment",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics",
+]
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "osxphotos>=0.68",  # the engine (photo_cleanup, vendored below) reads the library
 ]
 
+[project.urls]
+Homepage = "https://github.com/khivi/photos-cleanup"
+Issues = "https://github.com/khivi/photos-cleanup/issues"
+
+# PyPI name differs from the command: "photo-cleanup" on PyPI is an unrelated tool
+# that deletes files, one typo away from "photos-cleanup".
+[project.scripts]
+photos-cleanup = "photos_cleanup.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# One codebase: the vendored engine lives at ./photo_cleanup and installs from this
-# same pyproject (no separate package, no external path dep).
+# One codebase: the vendored engine (./photo_cleanup) and the server (./photos_cleanup)
+# install from this same pyproject. The UI is built by `pnpm build` into
+# photos_cleanup/ui, which is gitignored, so it ships as an artifact.
 [tool.hatch.build.targets.wheel]
-packages = ["photo_cleanup"]
+packages = ["photo_cleanup", "photos_cleanup"]
+artifacts = ["photos_cleanup/ui/"]
+
+[tool.hatch.build.targets.sdist]
+include = ["photo_cleanup/", "photos_cleanup/", "README.md", "LICENSE"]
+artifacts = ["photos_cleanup/ui/"]
 
 [dependency-groups]
 dev = [
@@ -26,7 +51,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["sidecar"]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100

@@ -1,4 +1,4 @@
-"""Local server: serves the built UI (./dist) and the API on 127.0.0.1.
+"""Local server: serves the built UI (./ui) and the API on 127.0.0.1.
 
 Wraps the photo_cleanup engine; the UI is same-origin, so no CORS.
 ponytail: single cached PhotosDB + photo index — the load is slow (seconds on a
@@ -9,14 +9,12 @@ The engine (photo_cleanup) is vendored in-repo — see CLAUDE.md.
 
 from __future__ import annotations
 
-import argparse
 import functools
 import hashlib
 import json
 import subprocess
 import tempfile
 import threading
-import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -44,6 +42,7 @@ KEEP_ALBUMS = {
 # Passes judged by the Foundation Models classifier (see verdict.swift).
 VERDICT_KINDS = {"screenshots", "utility"}
 
+UI_DIR = Path(__file__).with_name("ui")
 CACHE_DIR = Path.home() / "Library/Caches/photos-cleanup"
 VERDICT_SRC = Path(__file__).with_name("verdict.swift")
 # Keyed to the helper's source, so a prompt or kind-list change re-judges everything.
@@ -67,6 +66,8 @@ _committed: set[str] = set()
 _classify: dict = {"pending": 0, "error": None}
 _classify_lock = threading.Lock()
 _classifier: threading.Thread | None = None
+# Set at startup when the classifier can't run here; shown in the UI instead of verdicts.
+_verdicts_off: str | None = None
 
 
 @functools.lru_cache(maxsize=1)
@@ -141,6 +142,9 @@ def _run_classifier(photos) -> None:
 def _start_classifier(photos) -> None:
     global _classifier
     with _classify_lock:
+        if _verdicts_off:
+            _classify.update(pending=0, error=_verdicts_off)
+            return
         if _classifier is not None and _classifier.is_alive():
             return
         todo = [p for p in photos if p.uuid not in _verdicts() and _image_path(p)]
@@ -307,25 +311,6 @@ def commit(req: CommitReq) -> dict:
     return {"added": len(doomed), "album": album, "kept": len(kept), "keep_album": keep_album}
 
 
-# Mounted last so the API routes above win; absent in dev (Vite serves the UI).
-DIST = Path(__file__).resolve().parent.parent / "dist"
-if DIST.is_dir():
-    app.mount("/", StaticFiles(directory=DIST, html=True), name="ui")
-
-
-def main() -> None:
-    import uvicorn
-
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--no-browser", action="store_true")
-    args = ap.parse_args()
-    url = f"http://127.0.0.1:{args.port}/"
-    print(url)
-    if not args.no_browser:
-        threading.Timer(1.0, webbrowser.open, args=[url]).start()
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
-
-
-if __name__ == "__main__":
-    main()
+# Mounted last so the API routes above win; absent in a source checkout until `pnpm build`.
+if UI_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=UI_DIR, html=True), name="ui")

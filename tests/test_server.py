@@ -1,11 +1,14 @@
-"""Sidecar tests. The engine's PhotosDB is mocked so these run without a real
+"""Server tests. The engine's PhotosDB is mocked so these run without a real
 Photos library (no TCC / Full Disk Access needed in CI)."""
 
 import json
+import socket
+import subprocess
 
+import pytest
 from fastapi.testclient import TestClient
 
-from sidecar import server
+from photos_cleanup import cli, server
 
 
 class FakePhoto:
@@ -213,3 +216,64 @@ def test_commit_logs_decisions_and_verdict_stats(monkeypatch, tmp_path):
         ("b", False, "keep"),
     ]
     assert client.get("/verdict-stats").json() == {"screenshots": {"agree": 1, "total": 2}}
+
+
+def _main(monkeypatch, *argv):
+    monkeypatch.setattr(cli.sys, "argv", ["photos-cleanup", *argv])
+    return cli.main()
+
+
+def test_main_refuses_non_macos(monkeypatch, capsys):
+    monkeypatch.setattr(cli.sys, "platform", "linux")
+    with pytest.raises(SystemExit) as e:
+        _main(monkeypatch)
+    assert e.value.code == 1
+    assert "macOS only" in capsys.readouterr().err
+
+
+def test_main_refuses_missing_ui(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(cli.sys, "platform", "darwin")
+    monkeypatch.setattr(cli, "UI_DIR", tmp_path / "ui")
+    with pytest.raises(SystemExit) as e:
+        _main(monkeypatch)
+    assert e.value.code == 1
+    assert "pnpm build" in capsys.readouterr().err
+
+
+def test_check_port_free_returns():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    cli._check_port(port, f"http://127.0.0.1:{port}/", open_browser=False)
+
+
+def test_check_port_foreign_program_exits_1(capsys):
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        s.listen()
+        port = s.getsockname()[1]
+        with pytest.raises(SystemExit) as e:
+            cli._check_port(port, f"http://127.0.0.1:{port}/", open_browser=False)
+    assert e.value.code == 1
+    assert "in use by another program" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("mac", "swiftc_rc", "expect"),
+    [("26.4", 0, "macOS 27"), ("27.0.1", 1, "xcode-select --install"), ("27.0.1", 0, None)],
+)
+def test_verdicts_unavailable(monkeypatch, mac, swiftc_rc, expect):
+    monkeypatch.setattr(cli.platform, "mac_ver", lambda: (mac, ("", "", ""), "arm64"))
+    monkeypatch.setattr(cli.shutil, "which", lambda name: "/usr/bin/xcrun")
+    monkeypatch.setattr(
+        cli.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, swiftc_rc)
+    )
+    why = cli._verdicts_unavailable()
+    assert why is None if expect is None else expect in why
+
+
+def test_verdicts_off_reported_without_spawning(monkeypatch):
+    monkeypatch.setattr(server, "_verdicts_off", "needs macOS 27")
+    monkeypatch.setattr(server, "_classify", {"pending": 0, "error": None})
+    server._start_classifier([FakePhoto("a")])
+    assert server._classify == {"pending": 0, "error": "needs macOS 27"}

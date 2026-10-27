@@ -1,8 +1,10 @@
 # Node / frontend
 node_modules/
-dist/
+# `pnpm build` output, shipped in the wheel as a hatch artifact
+photos_cleanup/ui/
 
 # Python / uv
+dist/
 .venv/
 __pycache__/
 .pytest_cache/
