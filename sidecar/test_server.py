@@ -1,6 +1,8 @@
 """Sidecar tests. The engine's PhotosDB is mocked so these run without a real
 Photos library (no TCC / Full Disk Access needed in CI)."""
 
+import json
+
 from fastapi.testclient import TestClient
 
 from sidecar import server
@@ -189,3 +191,25 @@ def test_commit_no_matching_400(monkeypatch):
         "/commit", json={"kind": "screenshots", "uuids": ["missing"], "keep": ["gone"]}
     )
     assert r.status_code == 400
+
+
+def test_commit_logs_decisions_and_verdict_stats(monkeypatch, tmp_path):
+    items = [FakePhoto("a"), FakePhoto("b"), FakePhoto("c")]
+    monkeypatch.setattr(server, "_index", lambda: (items, {p.uuid: p for p in items}))
+    verdicts = {
+        "a": {"keep": False, "kind": "receipt", "reason": ""},  # user deletes: agree
+        "b": {"keep": False, "kind": "ticket", "reason": ""},  # user keeps: override
+    }  # c has no verdict: not logged
+    _patch_engine(monkeypatch, items, verdicts)
+    monkeypatch.setattr(server, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(server.common, "add_to_album", lambda *a, **k: None)
+    client = TestClient(server.app, base_url="http://127.0.0.1")
+    assert client.get("/verdict-stats").json() == {}
+    client.post("/commit", json={"kind": "screenshots", "uuids": ["a", "c"], "keep": ["b"]})
+    client.post("/commit", json={"kind": "low-quality", "uuids": ["a"]})  # not a verdict pass
+    rows = [json.loads(line) for line in (tmp_path / "decisions.jsonl").read_text().splitlines()]
+    assert [(r["uuid"], r["verdict_keep"], r["decision"]) for r in rows] == [
+        ("a", False, "delete"),
+        ("b", False, "keep"),
+    ]
+    assert client.get("/verdict-stats").json() == {"screenshots": {"agree": 1, "total": 2}}

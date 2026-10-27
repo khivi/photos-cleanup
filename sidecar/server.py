@@ -47,6 +47,7 @@ VERDICT_KINDS = {"screenshots", "utility"}
 CACHE_DIR = Path.home() / "Library/Caches/photos-cleanup"
 VERDICT_SRC = Path(__file__).with_name("verdict.swift")
 # Keyed to the helper's source, so a prompt or kind-list change re-judges everything.
+DECISIONS_LOG = "decisions.jsonl"  # user's final keep/delete per committed verdict photo
 VERDICT_CACHE = f"verdicts-{hashlib.sha256(VERDICT_SRC.read_bytes()).hexdigest()[:8]}.jsonl"
 
 app = FastAPI(title="photos-cleanup")
@@ -238,6 +239,43 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
     }
 
 
+def _log_decisions(kind: str, decided: list[tuple[str, str]]) -> None:
+    """Append one line per committed photo that has a model verdict, to measure its accuracy."""
+    verdicts = _verdicts()
+    now = datetime.now(UTC).isoformat()
+    lines = [
+        json.dumps(
+            {
+                "uuid": u,
+                "kind": kind,
+                "verdict_kind": v["kind"],
+                "verdict_keep": v["keep"],
+                "decision": d,
+                "ts": now,
+            }
+        )
+        for u, d in decided
+        if (v := verdicts.get(u))
+    ]
+    if lines:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        with (CACHE_DIR / DECISIONS_LOG).open("a") as f:
+            f.write("\n".join(lines) + "\n")
+
+
+@app.get("/verdict-stats")
+def verdict_stats() -> dict:
+    """Per pass: how many committed photos matched the model's verdict."""
+    out: dict[str, dict] = {}
+    f = CACHE_DIR / DECISIONS_LOG
+    for line in f.read_text().splitlines() if f.exists() else []:
+        r = json.loads(line)
+        s = out.setdefault(r["kind"], {"agree": 0, "total": 0})
+        s["total"] += 1
+        s["agree"] += r["verdict_keep"] == (r["decision"] == "keep")
+    return out
+
+
 class CommitReq(BaseModel):
     kind: str
     uuids: list[str] = []
@@ -261,6 +299,11 @@ def commit(req: CommitReq) -> dict:
             # would drop earlier commits from the album.
             common.add_to_album(photos, name, assume_yes=True, replace=False)
     _committed.update(p.uuid for p in doomed + kept)
+    if req.kind in VERDICT_KINDS:
+        _log_decisions(
+            req.kind,
+            [(p.uuid, "delete") for p in doomed] + [(p.uuid, "keep") for p in kept],
+        )
     return {"added": len(doomed), "album": album, "kept": len(kept), "keep_album": keep_album}
 
 
