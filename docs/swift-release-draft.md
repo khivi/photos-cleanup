@@ -155,7 +155,8 @@ jobs:
             || test -f "$bin/photos-cleanup_PhotosCleanup.bundle/Contents/Resources/ui/dist/index.html"
           lipo -archs "$bin/photos-cleanup"
           out="photos-cleanup-$V-macos-universal.tar.gz"
-          tar -czf "$out" -C "$bin" photos-cleanup photos-cleanup_PhotosCleanup.bundle
+          # Every bundle: Hummingbird's NIO dependencies look up their own via Bundle.module.
+          (cd "$bin" && tar -czf "$OLDPWD/$out" photos-cleanup *.bundle)
           echo "tarball=$out" >> "$GITHUB_OUTPUT"
           "$bin/photos-cleanup" --version | grep -q "$V"
 
@@ -214,7 +215,7 @@ class PhotosCleanup < Formula
     # Keep the binary and the SwiftPM resource bundle side by side: the
     # generated Bundle.module looks for photos-cleanup_PhotosCleanup.bundle
     # next to the executable.
-    libexec.install "photos-cleanup", "photos-cleanup_PhotosCleanup.bundle"
+    libexec.install "photos-cleanup", *Dir["*.bundle"]
     # A wrapper that execs the real libexec path (not a symlink), so
     # Bundle.main resolves to libexec rather than bin.
     bin.write_exec_script libexec/"photos-cleanup"
