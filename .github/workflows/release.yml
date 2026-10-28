@@ -25,7 +25,9 @@ concurrency:
 
 jobs:
   release:
-    runs-on: macos-latest
+    # xcode-27 (preview) has the macOS 27 SDK; on macos-latest the binary would
+    # ship without Foundation Models verdicts.
+    runs-on: xcode-27
     permissions:
       contents: write # create the tag and Release with GITHUB_TOKEN
     steps:
@@ -89,6 +91,8 @@ jobs:
           test -f "$bin/photos-cleanup_PhotosCleanup.bundle/ui/dist/index.html" \
             || test -f "$bin/photos-cleanup_PhotosCleanup.bundle/Contents/Resources/ui/dist/index.html"
           lipo -archs "$bin/photos-cleanup"
+          # Never ship a build without AI verdicts (an SDK older than macOS 27).
+          strings "$bin/photos-cleanup" | grep -q "photo library and decide whether each is still worth keeping"
           out="photos-cleanup-$V-macos-universal.tar.gz"
           # Every bundle: Hummingbird's NIO dependencies look up their own via Bundle.module.
           (cd "$bin" && tar -czf "$OLDPWD/$out" photos-cleanup *.bundle)

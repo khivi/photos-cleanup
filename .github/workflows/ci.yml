@@ -14,7 +14,13 @@ concurrency:
 
 jobs:
   ci:
-    runs-on: macos-latest
+    # macos-latest lacks the macOS 27 SDK, so it builds the no-verdicts fallback;
+    # xcode-27 (preview) compiles the Foundation Models code the release ships.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-latest, xcode-27]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
 
@@ -39,3 +45,7 @@ jobs:
 
       - run: swift build
       - run: swift test
+
+      - name: AI verdicts compiled in
+        if: matrix.runner == 'xcode-27'
+        run: strings .build/debug/photos-cleanup | grep -q "photo library and decide whether each is still worth keeping"
