@@ -291,13 +291,6 @@ def health() -> dict:
     return {"ok": True}
 
 
-@app.get("/stats")
-def stats() -> dict:
-    photos = db().photos()
-    total_bytes = sum(p.original_filesize or 0 for p in photos)
-    return {"count": len(photos), "size_gb": round(total_bytes / 1024**3, 1)}
-
-
 @app.get("/photos")
 def photos() -> dict:
     items, _ = _index()

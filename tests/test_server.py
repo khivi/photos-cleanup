@@ -26,12 +26,6 @@ class FakePhoto:
         self.path = path
 
 
-class FakeDB:
-    def photos(self):
-        # 1 GiB + unscored(None) + 2 GiB -> count 3, size 3.0 GB
-        return [FakePhoto(size=1024**3), FakePhoto(size=None), FakePhoto(size=2 * 1024**3)]
-
-
 def test_health():
     assert TestClient(server.app, base_url="http://127.0.0.1").get("/health").json() == {"ok": True}
 
@@ -48,13 +42,6 @@ def test_rejects_foreign_host():
         "/health", headers={"Host": "evil.example"}
     )
     assert r.status_code == 400
-
-
-def test_stats(monkeypatch):
-    monkeypatch.setattr(server, "db", lambda: FakeDB())
-    data = TestClient(server.app, base_url="http://127.0.0.1").get("/stats").json()
-    assert data["count"] == 3
-    assert data["size_gb"] == 3.0
 
 
 def test_photos_returns_all(monkeypatch):

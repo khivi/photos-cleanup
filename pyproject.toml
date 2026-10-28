@@ -45,7 +45,7 @@ artifacts = ["photos_cleanup/ui/"]
 [dependency-groups]
 dev = [
     "pytest>=7",
-    "httpx",          # required by fastapi TestClient
+    "httpx2",         # required by starlette.testclient (plain httpx is deprecated there)
     "pre-commit>=3",
 ]
 

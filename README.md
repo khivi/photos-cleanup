@@ -80,7 +80,7 @@ That path is slower on large commits.
 ## Usage
 
 1. Run `photos-cleanup`. Your browser opens at `http://127.0.0.1:8765/`.
-2. Pick a cleanup pass. The passes are screenshots, utility photos (receipts, tickets), and low quality.
+2. Pick a cleanup pass. The passes are screenshots, utility photos (receipts, tickets), bursts (repeated shots of one scene), and low quality.
 3. Review the thumbnail grid. Mark each photo keep or delete.
 4. Commit. Photos marked delete go into the pass's "Delete Me" album ("Review Me" for low quality). Keepers go into its "Keep" album.
 5. Open that album in Photos. Check it, then delete the photos there.
