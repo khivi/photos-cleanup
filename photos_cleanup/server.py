@@ -167,7 +167,8 @@ def _drain_vision() -> None:
                 _vision_thread = None  # under the lock, so a racing request starts a new one
                 return
             # Stays queued until saved, so a request meanwhile doesn't queue it again.
-            batch = _vision_queue[:100]
+            # Small batches (~0.25s): thumbnails share the helper and wait for each batch.
+            batch = _vision_queue[:20]
         try:
             results = library.photokit.call({"op": "vision", "uuids": batch})["results"]
         except (library.PhotoKitError, OSError, subprocess.CalledProcessError) as e:
