@@ -3,7 +3,7 @@ name: tag
 # When a commit to master changes the version, push `v<version>` and cut its
 # GitHub Release. The tag fires publish.yml (PyPI, then the Homebrew tap bump).
 #
-# The tag is pushed with COCKPIT_GITHUB_API_TOKEN, not GITHUB_TOKEN: a ref pushed by
+# The tag is pushed with HOMEBREW_TAP_TOKEN, not GITHUB_TOKEN: a ref pushed by
 # GITHUB_TOKEN does not trigger other workflows (GitHub's recursion guard), so
 # publish.yml would silently never run. The PAT needs Contents: write on this
 # repo and on khivi/homebrew-photos-cleanup (bump-tap in publish.yml uses it).
@@ -28,11 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          token: ${{ secrets.COCKPIT_GITHUB_API_TOKEN }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       - name: Push v<version> tag and cut its Release, if missing
         env:
-          GH_TOKEN: ${{ secrets.COCKPIT_GITHUB_API_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           v="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')"
 

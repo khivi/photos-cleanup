@@ -13,7 +13,7 @@ name: publish
 #   3. Owner: khivi   Repository: photos-cleanup   Workflow: publish.yml   Environment: pypi
 # PyPI creates the project on the first successful publish.
 #
-# Repo secret COCKPIT_GITHUB_API_TOKEN: the fine-grained PAT shared with cockpit
+# Repo secret HOMEBREW_TAP_TOKEN: the fine-grained PAT shared with cockpit
 # (fnox profile `cockpit`). Its repository access must include this repo and
 # khivi/homebrew-photos-cleanup with Contents: write (also used by tag.yml).
 
@@ -109,4 +109,4 @@ jobs:
           download-url: ${{ steps.sdist.outputs.url }}
           create-branch: false
         env:
-          COMMITTER_TOKEN: ${{ secrets.COCKPIT_GITHUB_API_TOKEN }}
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
