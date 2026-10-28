@@ -170,13 +170,13 @@ After such a change, rename the constant to force a recompute. Old files stay in
 | Swift | SwiftPM, Swift 6 from the Xcode Command Line Tools, Hummingbird, swift-testing (`swift test`) |
 | TypeScript | `pnpm`, Vite (build), `tsc` |
 | Checks | pre-commit: linters, a Swift package build, gitleaks, markdownlint, codespell |
-| Release | GitHub Actions on macOS runners and a Homebrew tap. See [TODO.md](TODO.md#packaging-and-ci) for the pending switch to `swift build`. |
+| Release | GitHub Actions on macOS runners and a Homebrew tap. |
 
 ## Decisions
 
 | Decision | Reason |
 |---|---|
-| Browser UI and a local server, not a native app | It is quick to build and runs from one command. The native SwiftUI rewrite was dropped on 2026-10-27. |
+| Browser UI and a local server, for now | It is quick to build and runs from one command. A native SwiftUI app is next (2026-10-28): the grid spike showed PhotoKit thumbnails scroll smoothly for the whole library. |
 | Swift server instead of Python | Vision, PhotoKit and Foundation Models are Swift APIs. In one process, the helper processes, their JSON protocol, `swiftc` on first use and the PyPI/uv packaging all go away. |
 | Core has no web framework | A native app could reuse it. The tests drive it with fakes, without HTTP. |
 | PhotoKit, not osxphotos | PhotoKit is Apple's supported API. It needs Photos access instead of Full Disk Access, and it writes albums directly. |

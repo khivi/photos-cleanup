@@ -8,10 +8,11 @@ The Python server, the Swift helper processes and the PyPI package are gone.
 osxphotos and Full Disk Access were dropped on 2026-10-28.
 See [ARCHITECTURE.md](ARCHITECTURE.md).
 
+Next: **native SwiftUI app** (reopened 2026-10-28). The grid spike (`spike/grid_probe.swift`, `feea7cb`, `5542d42`) scrolled all 7,383 assets smoothly with `.highQualityFormat` plus `startCachingImages` ~30 rows ahead. It imports `PhotosCleanupCore` unchanged; the server and React UI go once it reaches parity. Earlier decision against it (2026-07-22): commit `8320785`.
+
 Not pursuing:
 
-- **Native SwiftUI app** (decided 2026-07-22). `PhotosCleanupCore` has no web framework, so a native app could import it later. The reasoning and the PhotoKit audit are in commit `8320785`.
-- **Mac App Store.** It needs a sandboxed app bundle, and a server driven from a browser isn't one.
+- **Mac App Store.** It needs a sandboxed app bundle; revisit once the native app exists.
 
 ## Packaging and CI
 
