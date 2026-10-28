@@ -10,6 +10,12 @@ name: release
 # Repo secret HOMEBREW_TAP_TOKEN (the fine-grained PAT shared with cockpit)
 # is used only for the tap bump. It needs Contents: write on
 # khivi/homebrew-photos-cleanup.
+#
+# The binary is signed with Developer ID (hardened runtime) and notarized, so a
+# copy downloaded from the Releases page passes Gatekeeper. Repo secrets, all
+# from fnox profile `cockpit`: MACOS_CERT_P12 (base64 .p12, Developer ID
+# Application: Amit Khivesara (3WD7XPJ5M5)), MACOS_CERT_PASSWORD, and the App
+# Store Connect API key NOTARY_KEY_P8 (base64), NOTARY_KEY_ID, NOTARY_ISSUER_ID.
 
 on:
   push:
@@ -79,6 +85,52 @@ jobs:
         if: steps.ver.outputs.skip == 'false'
         run: swift build -c release --arch arm64 --arch x86_64
 
+      - name: Sign and notarize the binary
+        if: steps.ver.outputs.skip == 'false'
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          bin="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
+          k="$RUNNER_TEMP/signing"
+          mkdir -p "$k"
+          kc="$k/ci.keychain-db"
+          kcpw="$(uuidgen)"
+          printf %s "$MACOS_CERT_P12" | base64 -d > "$k/cert.p12"
+          printf %s "$NOTARY_KEY_P8" | base64 -d > "$k/key.p8"
+          security create-keychain -p "$kcpw" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$kcpw" "$kc"
+          security import "$k/cert.p12" -k "$kc" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "$kcpw" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+
+          codesign --force --options runtime --timestamp --keychain "$kc" \
+            --identifier com.khivi.photos-cleanup \
+            --sign "Developer ID Application: Amit Khivesara (3WD7XPJ5M5)" "$bin/photos-cleanup"
+          codesign --verify --strict "$bin/photos-cleanup"
+
+          # A bare binary can't carry a stapled ticket; Gatekeeper looks it up online.
+          ditto -c -k "$bin/photos-cleanup" "$k/notarize.zip"
+          xcrun notarytool submit "$k/notarize.zip" --wait --output-format json \
+            --key "$k/key.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" > "$k/result.json"
+          cat "$k/result.json"
+          if [ "$(jq -r .status "$k/result.json")" != "Accepted" ]; then
+            xcrun notarytool log "$(jq -r .id "$k/result.json")" \
+              --key "$k/key.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" || true
+            echo "::error::notarization was not accepted"
+            exit 1
+          fi
+
+      - name: Remove signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing/ci.keychain-db" 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/signing"
+
       - name: Package tarball
         if: steps.ver.outputs.skip == 'false'
         id: pkg
@@ -91,6 +143,7 @@ jobs:
           test -f "$bin/photos-cleanup_PhotosCleanup.bundle/ui/dist/index.html" \
             || test -f "$bin/photos-cleanup_PhotosCleanup.bundle/Contents/Resources/ui/dist/index.html"
           lipo -archs "$bin/photos-cleanup"
+          codesign -dv "$bin/photos-cleanup" 2>&1 | grep -q "TeamIdentifier=3WD7XPJ5M5"
           # Never ship a build without AI verdicts (an SDK older than macOS 27).
           strings "$bin/photos-cleanup" | grep -q "photo library and decide whether each is still worth keeping"
           out="photos-cleanup-$V-macos-universal.tar.gz"
