@@ -5,7 +5,7 @@ import Hummingbird
 import PhotosCleanupCore
 import PhotosCleanupServer
 
-let version = "0.3.0"
+let version = "0.3.1"
 let photosSettings = "x-apple.systempreferences:com.apple.preference.security?Privacy_Photos"
 
 func die(_ message: String) -> Never {
