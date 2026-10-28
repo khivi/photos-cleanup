@@ -4,6 +4,7 @@
 //   grid_probe               open the window; scroll by hand, close it to print the summary
 //   grid_probe --autoscroll  scroll top to bottom by itself, print the summary and quit
 //   --mode opportunistic|fast|hq  PHImageRequestOptions.deliveryMode (default opportunistic)
+//   --preload      startCachingImages for the rows ahead of the visible ones
 // Build (embeds the Info.plist PhotoKit requires for its permission prompt):
 //   swiftc -O -parse-as-library spike/grid_probe.swift -o /tmp/grid_probe \
 //     -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker spike/photokit_Info.plist
@@ -19,7 +20,9 @@
 //                  arrives synchronously on the main thread, then gets replaced
 //   fast            93s, 1 hitch (248ms), peak 53MB, thumbnail p95 4ms: smooth but visibly pixelated
 //   hq             130s, 458 hitches (worst 117ms), peak 147MB, thumbnail p95 12ms: sharp
-// Verdict: native is viable; hq looks right and holds ~40fps under a sustained fling.
+//   hq --preload    93s, 1 hitch (84ms), peak 309MB, thumbnail p95 4ms: sharp and smooth
+// Verdict: native is viable. Use hq plus startCachingImages ~30 rows ahead (`near`); the cache
+// costs ~150MB more and makes hq as smooth as fast. Off-main decoding is not needed.
 import AppKit
 import Photos
 import SwiftUI
@@ -27,6 +30,7 @@ import SwiftUI
 let cell: CGFloat = 170
 let autoscroll = CommandLine.arguments.contains("--autoscroll")
 let mode = CommandLine.arguments.drop { $0 != "--mode" }.dropFirst().first ?? "opportunistic"
+let preload = CommandLine.arguments.contains("--preload")
 let launched = ContinuousClock.now  // globals are lazy: touched in GridProbe.init to pin it to launch
 
 func seconds(_ d: Duration) -> Double {
@@ -78,7 +82,7 @@ final class Stats {
     func summary() {
         let ms = latencies.map { $0 * 1000 }
         let fm = finals.map { $0 * 1000 }
-        print("mode \(mode)")
+        print("mode \(mode)\(preload ? " +preload" : "")")
         print(String(format: "full-quality %d; latency ms p50 %.0f p95 %.0f max %.0f; first image synchronous %d",
                      finals.count, pct(fm, 0.5), pct(fm, 0.95), fm.max() ?? 0, syncFirst))
         print(String(format: "first thumbnail %.2fs after launch", firstThumb ?? -1))
@@ -88,6 +92,17 @@ final class Stats {
         print(String(format: "memory now %.0fMB, peak %.0fMB", footprintMB(), peakMB))
     }
 }
+
+func thumbOptions() -> PHImageRequestOptions {
+    let opts = PHImageRequestOptions()
+    opts.deliveryMode = mode == "fast" ? .fastFormat : mode == "hq" ? .highQualityFormat : .opportunistic
+    opts.resizeMode = .fast
+    opts.isNetworkAccessAllowed = false
+    return opts
+}
+
+@MainActor let thumbSize = CGSize(width: cell * (NSScreen.main?.backingScaleFactor ?? 2),
+                                  height: cell * (NSScreen.main?.backingScaleFactor ?? 2))
 
 @MainActor
 final class Library: ObservableObject {
@@ -106,11 +121,34 @@ final class Library: ObservableObject {
         print(String(format: "fetch %d assets: %.2fs", all.count, seconds(ContinuousClock.now - t)))
         assets = all
     }
+
+    // Window of assets being cached: ~30 rows ahead of the lowest visible cell, ~15 behind.
+    // Must use the same size and options as requestImage, or the cache never hits.
+    private var cached = 0..<0
+    private let ahead = 240, behind = 120
+
+    func near(_ i: Int) {
+        guard preload, let assets, i + ahead / 2 > cached.upperBound || i - behind / 2 < cached.lowerBound else { return }
+        let want = max(0, i - behind)..<min(assets.count, i + ahead)
+        let add = IndexSet(integersIn: want).subtracting(IndexSet(integersIn: cached))
+        let drop = IndexSet(integersIn: cached).subtracting(IndexSet(integersIn: want))
+        if !add.isEmpty {
+            manager.startCachingImages(for: assets.objects(at: add), targetSize: thumbSize,
+                                       contentMode: .aspectFill, options: thumbOptions())
+        }
+        if !drop.isEmpty {
+            manager.stopCachingImages(for: assets.objects(at: drop), targetSize: thumbSize,
+                                      contentMode: .aspectFill, options: thumbOptions())
+        }
+        cached = want
+    }
 }
 
 struct Thumb: View {
+    let index: Int
     let asset: PHAsset
-    let manager: PHCachingImageManager
+    let lib: Library
+    private var manager: PHCachingImageManager { lib.manager }
     @State private var image: NSImage?
 
     var body: some View {
@@ -120,24 +158,21 @@ struct Thumb: View {
         }
         .frame(width: cell, height: cell)
         .clipped()
-        .onAppear(perform: request)
+        .onAppear {
+            lib.near(index)
+            request()
+        }
         .onDisappear(perform: cancel)
     }
 
     @State private var requestID: PHImageRequestID?
 
     private func request() {
-        let opts = PHImageRequestOptions()
-        opts.deliveryMode = mode == "fast" ? .fastFormat : mode == "hq" ? .highQualityFormat : .opportunistic
-        opts.resizeMode = .fast
-        opts.isNetworkAccessAllowed = false
         let start = ContinuousClock.now
         var first = true, inCall = true
-        let scale = NSScreen.main?.backingScaleFactor ?? 2
         Stats.shared.requested += 1
         requestID = manager.requestImage(
-            for: asset, targetSize: CGSize(width: cell * scale, height: cell * scale),
-            contentMode: .aspectFill, options: opts
+            for: asset, targetSize: thumbSize, contentMode: .aspectFill, options: thumbOptions()
         ) { img, info in
             MainActor.assumeIsolated {
                 guard let img else { return }
@@ -176,7 +211,7 @@ struct Grid: View {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: cell, maximum: cell), spacing: 4)], spacing: 4) {
                         ForEach(0..<assets.count, id: \.self) { i in
-                            Thumb(asset: assets.object(at: i), manager: lib.manager)
+                            Thumb(index: i, asset: assets.object(at: i), lib: lib)
                         }
                     }
                     .padding(4)
