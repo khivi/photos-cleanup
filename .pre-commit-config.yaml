@@ -67,7 +67,16 @@ repos:
         entry: bash -c 'for f in "$@"; do swiftc -typecheck "$f" || exit 1; done' --
         language: system
         types: [swift]
-        exclude: ^spike/
+        # The Swift package's files only compile together; swift-build checks them.
+        exclude: ^(spike|Sources|Tests|tests)/|^Package\.swift$
+
+      # The Swift package (server, Core, tests) builds as a whole.
+      - id: swift-build
+        name: swift build (with tests)
+        entry: swift build --build-tests
+        language: system
+        files: ^(Sources|Tests|tests)/.*\.swift$|^Package\.(swift|resolved)$
+        pass_filenames: false
 
       - id: pytest
         name: pytest

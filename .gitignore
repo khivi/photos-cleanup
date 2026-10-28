@@ -1,3 +1,6 @@
+# Swift
+.build/
+
 # Node / frontend
 node_modules/
 # `pnpm build` output, shipped in the wheel as a hatch artifact
