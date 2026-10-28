@@ -47,7 +47,13 @@ while let arg = args.popFirst() {
 setvbuf(stdout, nil, _IOLBF, 0)  // progress lines reach logs and pipes promptly
 let url = "http://127.0.0.1:\(port)/"
 
-let uiDir = Bundle.module.url(forResource: "ui", withExtension: nil)?.appendingPathComponent("dist")
+// The UI ships in SwiftPM's resource bundle beside the real binary. Found by hand, not via
+// Bundle.module, which traps when the bundle is missing instead of letting the check below
+// explain it.
+let resources = Bundle.main.executableURL?.resolvingSymlinksInPath().deletingLastPathComponent()
+    .appendingPathComponent("photos-cleanup_PhotosCleanup.bundle")
+let uiDir = resources.flatMap { Bundle(url: $0)?.url(forResource: "ui", withExtension: nil) }?
+    .appendingPathComponent("dist")
 if !dev, !(uiDir.map { FileManager.default.fileExists(atPath: $0.appendingPathComponent("index.html").path) } ?? false) {
     die("the web UI is missing. In a source checkout, run `pnpm build` (or use --dev).")
 }
