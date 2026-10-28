@@ -15,9 +15,9 @@ Not pursuing:
 
 ## Packaging and CI
 
-- [ ] **Switch the GitHub workflows and the Homebrew formula from PyPI and uv to `swift build`.** Both still target the Python package. A draft is in `docs/swift-release-draft.md`. The release steps in [CONTRIBUTING.md](CONTRIBUTING.md#release) assume the switch.
+Homebrew is the only install path: `khivi/homebrew-photos-cleanup` installs the prebuilt universal tarball from each GitHub Release (v0.3.0 is the first). The PyPI project `macos-photos-cleanup` is archived (2026-10-28). Release steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release).
 
-`ci.yml` ran `uv` and `pytest` on macOS runners. It must run `pnpm build` and `swift test`. Dependabot opens monthly PRs with a 7-day cooldown.
+`ci.yml` runs `pnpm build`, `swift build` and `swift test` on `macos-latest` (no macOS 27 SDK: the no-verdicts fallback) and `xcode-27` (preview runner: verdicts compiled in). Dependabot opens monthly PRs with a 7-day cooldown.
 
 ## App
 

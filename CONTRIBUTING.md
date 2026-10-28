@@ -60,7 +60,8 @@ The commit hook runs the linters and builds the Swift package.
 ## Release
 
 1. Change `version` in `Sources/PhotosCleanup/main.swift` on `master`.
-2. CI tags `v<version>` and creates a GitHub Release.
-3. Update the Homebrew tap formula to build the new tag.
+2. `release.yml` builds a universal binary on the `xcode-27` runner. It fails if AI verdicts are not compiled in.
+3. It creates the GitHub Release `v<version>` with the tarball attached.
+4. It sets the new `url` and `sha256` in the formula in `khivi/homebrew-photos-cleanup`.
 
-CI and the formula still target the old PyPI release. See [TODO.md](TODO.md#packaging-and-ci).
+Don't edit the formula's `url` by hand before a release. The bump step skips a formula already at the new version, which leaves its `sha256` stale.
