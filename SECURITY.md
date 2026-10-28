@@ -9,7 +9,7 @@ Do not open a public issue for a vulnerability.
 ## Supported versions
 
 Only the latest release gets fixes.
-Upgrade with `brew upgrade photos-cleanup` or `uv tool upgrade macos-photos-cleanup`.
+Upgrade with `brew upgrade photos-cleanup`.
 
 ## Security model
 
