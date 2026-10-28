@@ -16,21 +16,24 @@ The app skips favorites and photos that are already in your own albums.
 ## Privacy
 
 Everything runs on your Mac.
-The app reads your library with [osxphotos](https://github.com/RhetTbull/osxphotos).
-Verdicts for screenshots and utility photos come from Apple's on-device Vision and Foundation Models.
-A small Swift helper, `photos_cleanup/verdict.swift`, runs them.
-The app compiles the helper with `swiftc` on first use.
-It caches the helper and the verdicts in `~/Library/Caches/photos-cleanup`.
+The app reads and files photos through PhotoKit, Apple's Photos API.
+It finds bursts and low-quality photos with Apple's on-device Vision.
+Verdicts for screenshots and utility photos come from Apple's on-device Foundation Models.
+Small Swift helpers in `photos_cleanup/` do this work.
+The app compiles them with `swiftc` on first use.
+It caches the helpers, thumbnails, analysis and verdicts in `~/Library/Caches/photos-cleanup`.
+Delete that folder to clear them.
 The app makes no network calls and sends no telemetry.
 
 ## Requirements
 
 - macOS
 - Python 3.11 or later, for the `uv` and `pipx` installs
-- Full Disk Access for your terminal app, so the app can read the library
-- Optional, for AI verdicts: macOS 27 or later with Apple Intelligence on, and the Xcode Command Line Tools
+- The Xcode Command Line Tools: run `xcode-select --install` (Homebrew already needs them)
+- Photos access for your terminal app (see Permissions)
+- Optional, for AI verdicts: macOS 27 or later with Apple Intelligence on
 
-Without the optional items, all passes still work.
+Without AI verdicts, all passes still work.
 Screenshots then start as "keep", and the UI says why.
 
 ## Install
@@ -53,29 +56,14 @@ To upgrade, run `brew upgrade photos-cleanup` or `uv tool upgrade macos-photos-c
 
 ## Permissions
 
-The app needs two macOS permissions.
+The app needs one macOS permission: Photos access, with Full Access.
+macOS grants it to the terminal app that runs `photos-cleanup`.
 
-### Full Disk Access
+1. Run `photos-cleanup`. The first time, macOS asks if your terminal may access your Photos.
+2. Click Allow Full Access.
 
-The app needs this to read the Photos library. Grant it to the terminal app that runs `photos-cleanup`.
-
-1. Open System Settings > Privacy & Security > Full Disk Access.
-2. Turn on your terminal app.
-3. Quit the terminal app and open it again.
-4. Run `photos-cleanup` again.
-
-If access is off, the app opens this settings pane and names the terminal app.
-
-### Photos
-
-The app files photos into albums through PhotoKit, Apple's Photos API.
-On your first commit, macOS asks if your terminal may access your Photos.
-Click Allow.
 To change this later, open System Settings > Privacy & Security > Photos.
-
-Without Xcode's command-line tools (`xcode-select --install`), the app falls back to AppleScript.
-Then macOS asks instead if your terminal may control Photos.
-That path is slower on large commits.
+If access is off, the app opens this settings pane and names the terminal app.
 
 ## Usage
 
@@ -110,10 +98,10 @@ The app checks your setup at startup. It stops with a message if a check fails.
 | `the web UI is missing.` | You run a source checkout. Run `pnpm build`, or use `--dev`. Installed packages include the UI. |
 | `port N is in use by another program.` | Pick another port with `--port`. |
 | `Already running at ...` | The app is already running. It reopens your browser and exits. |
-| `no Photos library found.` | Open the Photos app once, then run the command again. |
-| `can't read your Photos library: Full Disk Access is off.` | Follow the steps in Permissions. |
-| `can't read the Photos library at ...` | Check the path in the message. Make sure the library is not damaged. |
-| `couldn't load the Photos library: ...` | The library may be damaged or too new for osxphotos. Run `brew upgrade photos-cleanup` or `uv tool upgrade macos-photos-cleanup`. |
+| `needs the Xcode Command Line Tools` | Run `xcode-select --install`, then run the command again. |
+| `can't read your Photos library: Photos access is ...` | Follow the steps in Permissions. |
+| `couldn't start the Photos helper: ...` | The Swift helper failed to build or run. Run `xcode-select --install`, then try again. |
+| `couldn't load the Photos library: ...` | Open the Photos app once to check the library, then run the command again. |
 
 ### AI verdicts unavailable
 
@@ -121,7 +109,6 @@ The app prints a note when it cannot run AI verdicts.
 The note gives the reason. Everything else still works.
 
 - "need macOS 27 or later with Apple Intelligence on": update macOS and turn on Apple Intelligence.
-- "need the Xcode Command Line Tools": run `xcode-select --install`.
 
 ## Development
 

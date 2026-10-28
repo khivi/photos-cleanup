@@ -5,7 +5,6 @@ import "./App.css";
 type Verdict = { keep: boolean; kind: string; reason: string };
 type Photo = {
   uuid: string;
-  filename: string;
   is_video: boolean;
   verdict?: Verdict | null;
   best?: boolean; // clusters: the highest-scored photo of the group
@@ -17,7 +16,12 @@ const CLEANUP_VIEWS: View[] = ["screenshots", "utility", "clusters", "low-qualit
 const VERDICT_VIEWS: View[] = ["screenshots", "utility"]; // judged by the on-device model
 
 const CELL = 170; // px per thumbnail cell
-const POLL_MS = 5000; // verdict refresh while the server is classifying
+const POLL_MS = 5000; // refresh while the server analyses or classifies in the background
+
+/** Burst rows from /cleanup/clusters, each photo flagged with whether it's its group's best. */
+function groupsOf(data: { groups: { photos: Photo[]; best: string }[] }): Photo[][] {
+  return data.groups.map((g) => g.photos.map((p) => ({ ...p, best: p.uuid === g.best })));
+}
 
 function initialDecision(v: View, p: Photo): Decision {
   if (v === "clusters") return p.best ? "keep" : "delete";
@@ -131,8 +135,8 @@ function App() {
     };
   }, []);
 
-  // Poll for verdicts while the server classifies in the background.
-  const polling = VERDICT_VIEWS.includes(view) && classify.pending > 0;
+  // Poll while the server analyses (Vision) or classifies (verdicts) in the background.
+  const polling = CLEANUP_VIEWS.includes(view) && classify.pending > 0;
   useEffect(() => {
     if (!polling) return;
     let cancelled = false;
@@ -142,9 +146,16 @@ function App() {
         if (!r.ok) return;
         const data = await r.json();
         if (cancelled) return;
+        if (view === "clusters") {
+          // Bursts regroup as more photos are analysed, so take the new rows wholesale.
+          const gs = groupsOf(data);
+          setGroups(gs);
+          data.photos = gs.flat();
+        }
         const fresh = new Map<string, Photo>(data.photos.map((p: Photo) => [p.uuid, p]));
-        // Utility candidates appear as they're classified, so merge new ones in.
-        setPhotos((prev) => {
+        // Candidates appear as they're analysed or classified, so merge new ones in.
+        if (view === "clusters") setPhotos(data.photos);
+        else setPhotos((prev) => {
           const have = new Set(prev.map((p) => p.uuid));
           const added = data.photos.filter((p: Photo) => !have.has(p.uuid));
           return [
@@ -182,9 +193,7 @@ function App() {
       const r = await fetch(path);
       const data = await r.json();
       if (v === "clusters") {
-        const gs: Photo[][] = data.groups.map((g: { photos: Photo[]; best: string }) =>
-          g.photos.map((p) => ({ ...p, best: p.uuid === g.best })),
-        );
+        const gs = groupsOf(data);
         data.photos = gs.flat();
         setGroups(gs);
       }
@@ -341,7 +350,7 @@ function App() {
           <img
             src={`/thumb/${ph.uuid}`}
             loading="lazy"
-            title={ph.verdict ? `${ph.filename} — ${ph.verdict.kind}: ${ph.verdict.reason}` : ph.filename}
+            title={ph.verdict ? `${ph.verdict.kind}: ${ph.verdict.reason}` : undefined}
             style={{
               width: "100%",
               height: "100%",
@@ -428,10 +437,10 @@ function App() {
           </>
         )}
         <span style={{ marginLeft: "auto", fontWeight: 600, whiteSpace: "nowrap" }}>
-          {VERDICT_VIEWS.includes(view) && !loading && classify.pending > 0 && (
+          {inCleanup && !loading && classify.pending > 0 && (
             <span style={{ fontWeight: 400, fontSize: 12, color: "#666", marginRight: 10 }}>
               <progress
-                title="On-device AI is judging photos; verdicts appear as they arrive"
+                title="Analysing photos on this Mac; results appear as they arrive"
                 value={(classify.total ?? 0) - classify.pending}
                 max={classify.total || classify.pending}
                 style={{ width: 120, verticalAlign: "middle", marginRight: 6 }}

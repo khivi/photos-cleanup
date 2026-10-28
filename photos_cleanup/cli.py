@@ -1,7 +1,7 @@
 """`photos-cleanup` entry point: checks the environment, then starts the server.
 
-Kept free of osxphotos imports so --version, --help and the "macOS only" check work
-anywhere, fast; the server module (and osxphotos) loads only once checks pass.
+Kept light so --version, --help and the "macOS only" check work anywhere, fast; the
+server module loads only once checks pass.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 UI_DIR = Path(__file__).with_name("ui")
-FDA_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+PHOTOS_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_Photos"
 
 
 def _version() -> str:
@@ -55,27 +55,35 @@ def _check_port(port: int, url: str, open_browser: bool) -> None:
     raise SystemExit(0)
 
 
-def _check_library() -> None:
-    """Fail before serving if the Photos library is missing or unreadable."""
-    from osxphotos.utils import get_last_library_path
+def _has_swiftc() -> bool:
+    return bool(shutil.which("xcrun")) and (
+        subprocess.run(["xcrun", "--find", "swiftc"], capture_output=True).returncode == 0
+    )
 
-    lib = get_last_library_path()
-    if not lib:
-        _die("no Photos library found. Open the Photos app once, then try again.")
+
+def _check_library() -> None:
+    """Fail before serving if the Photos library can't be read: needs Swift and Photos access."""
+    if not _has_swiftc():
+        _die(
+            "needs the Xcode Command Line Tools to read your Photos library.\n"
+            "  Run: xcode-select --install"
+        )
+    from photos_cleanup import library
+
     try:
-        with open(Path(lib) / "database" / "Photos.sqlite", "rb") as f:
-            f.read(1)
-    except PermissionError:
+        print("Checking Photos access (macOS may ask once)…")
+        status = library.photokit.call({"op": "auth"})["status"]
+    except (library.PhotoKitError, subprocess.CalledProcessError, OSError) as e:
+        _die(f"couldn't start the Photos helper: {e}")
+    if status != "authorized":
         app_name = os.environ.get("TERM_PROGRAM", "your terminal app")
         if sys.stdin.isatty():
-            subprocess.run(["open", FDA_SETTINGS], check=False)
+            subprocess.run(["open", PHOTOS_SETTINGS], check=False)
         _die(
-            "can't read your Photos library: Full Disk Access is off.\n"
-            f"  In System Settings > Privacy & Security > Full Disk Access, turn on {app_name}.\n"
-            "  Then quit and reopen it, and run photos-cleanup again."
+            f"can't read your Photos library: Photos access is {status}.\n"
+            f"  In System Settings > Privacy & Security > Photos, turn on {app_name}\n"
+            '  with "Full Access", then run photos-cleanup again.'
         )
-    except OSError as e:
-        _die(f"can't read the Photos library at {lib}: {e}")
 
 
 def _verdicts_unavailable() -> str | None:
@@ -83,11 +91,6 @@ def _verdicts_unavailable() -> str | None:
     major = int(platform.mac_ver()[0].split(".")[0] or 0)
     if major < 27:
         return "screenshot verdicts need macOS 27 or later with Apple Intelligence on"
-    has_swiftc = shutil.which("xcrun") and (
-        subprocess.run(["xcrun", "--find", "swiftc"], capture_output=True).returncode == 0
-    )
-    if not has_swiftc:
-        return "screenshot verdicts need the Xcode Command Line Tools: run xcode-select --install"
     return None
 
 
@@ -123,9 +126,14 @@ def main() -> None:
     start = time.monotonic()
     try:
         n = len(server._index()[0])
-    except Exception as e:  # osxphotos raises many types on an unsupported or damaged library
+    except Exception as e:
         _die(f"couldn't load the Photos library: {e}")
     print(f"{n:,} photos loaded in {time.monotonic() - start:.1f}s.")
+    # Bursts, Low quality and Utility all need the Vision analysis; start it now.
+    stills = [p for p in server._index()[0] if not p.ismovie and not p.screenshot]
+    progress = server._start_vision(stills)
+    if progress["pending"]:
+        print(f"Analysing {progress['pending']:,} photos in the background; cached afterwards.")
     print(f"Open {url} — press Ctrl-C to stop.")
 
     import uvicorn

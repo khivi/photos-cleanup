@@ -16,7 +16,6 @@ classifiers = [
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
-    "osxphotos>=0.68",  # reads the library (photos_cleanup/library.py)
 ]
 
 [project.urls]

@@ -1,8 +1,8 @@
 """Local server: serves the built UI (./ui) and the API on 127.0.0.1.
 
-Library reads go through library.py (osxphotos); the UI is same-origin, so no CORS.
-ponytail: single cached PhotosDB + photo index — the load is slow (seconds on a
-big library) so we do it once; restart the server to pick up library changes.
+Every library access goes through library.py (PhotoKit); the UI is same-origin, so no CORS.
+ponytail: the photo list is read once at startup; restart the server to pick up library
+changes.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import functools
 import hashlib
 import json
 import math
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -32,6 +33,10 @@ CLUSTER_WINDOW_S = 60
 # by eye on 40 real bursts: pairs <= 0.44 were the same shot; from 0.46 they were different
 # photos (report pages, a different person, different medicine labels).
 SIMILAR_MAX_DIST = 0.45
+# Vision aesthetics score at or below which a photo is suggested as low quality. Set by eye
+# on the real library: <= -0.75 was almost all accidental shots (black frames, pocket blur,
+# a finger over the lens); from about -0.7 up, dark or soft photos of people creep in.
+LOW_QUALITY_MAX = -0.75
 
 # Per-pass album names (engine convention: end with "Delete Me" / "Review Me").
 ALBUMS = {
@@ -52,14 +57,14 @@ KEEP_ALBUMS = {
 VERDICT_KINDS = {"screenshots", "utility"}
 
 UI_DIR = Path(__file__).with_name("ui")
-CACHE_DIR = Path.home() / "Library/Caches/photos-cleanup"
+CACHE_DIR = library.CACHE_DIR
 VERDICT_SRC = Path(__file__).with_name("verdict.swift")
-FEATUREPRINT_SRC = Path(__file__).with_name("featureprint.swift")
-ALBUMS_SRC = Path(__file__).with_name("albums.swift")
-INFO_PLIST = Path(__file__).with_name("Info.plist")  # PhotoKit's permission prompt needs it
 DECISIONS_LOG = "decisions.jsonl"  # user's final keep/delete per committed verdict photo
 # Keyed to the helper's source, so a prompt or kind-list change re-judges everything.
 VERDICT_CACHE = f"verdicts-{hashlib.sha256(VERDICT_SRC.read_bytes()).hexdigest()[:8]}.jsonl"
+# Keyed to the PhotoKit helper's source: its image sizes shape the prints and scores.
+VISION_CACHE = f"vision-{hashlib.sha256(library.PHOTOKIT_SRC.read_bytes()).hexdigest()[:8]}.jsonl"
+THUMB_DIR = CACHE_DIR / "thumbs"
 
 app = FastAPI(title="photos-cleanup")
 # Blocks DNS rebinding: an attacker domain resolved to 127.0.0.1 would otherwise be same-origin.
@@ -69,11 +74,11 @@ _MIN = datetime.min.replace(tzinfo=UTC)
 
 
 @functools.lru_cache(maxsize=1)
-def db():
-    return library.get_photosdb()
+def _all_photos() -> list:
+    return library.load_photos()
 
 
-# The cached PhotosDB never sees album changes, so committed photos are tracked here.
+# The photo list is read once and never sees album changes, so commits are tracked here.
 _committed: set[str] = set()
 _classify: dict = {"pending": 0, "total": 0, "error": None}  # total: this run, for progress
 _classify_lock = threading.Lock()
@@ -115,74 +120,107 @@ def _parse_verdict(line: str) -> tuple[str, dict | None]:
     return uuid, {"keep": keep == "1", "kind": kind, "reason": reason}
 
 
-def _image_path(p) -> str | None:
-    return p.path or (p.path_derivatives[0] if p.path_derivatives else None)
-
-
-def _swift_bin(src: Path, plist: Path | None = None) -> Path:
-    exe = CACHE_DIR / src.stem
-    if not exe.exists() or exe.stat().st_mtime < src.stat().st_mtime:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        embed = ["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist"]
-        extra = [*embed, "-Xlinker", str(plist)] if plist else []
-        subprocess.run(
-            ["swiftc", "-O", str(src), "-o", str(exe), *extra], check=True, capture_output=True
-        )
-    return exe
-
-
 def _add_to_album(photos, album: str) -> None:
-    """Append photos to an album through PhotoKit (albums.swift): one call, no Apple Events."""
+    """Append photos to an album through PhotoKit: one call, no Apple Events."""
     try:
-        exe = _swift_bin(ALBUMS_SRC, INFO_PLIST)
-    except (subprocess.CalledProcessError, OSError):
-        # No Swift toolchain: the AppleScript path is slow and needs Automation access, but works.
-        library.add_to_album_applescript(photos, album)
-        return
-    out = subprocess.run(
-        [exe, album], input="".join(f"{p.uuid}\n" for p in photos), capture_output=True, text=True
-    )
-    if out.returncode == 3:
-        raise HTTPException(
-            status_code=403,
-            detail="Photos access is off. Turn it on for your terminal app in System Settings "
-            "> Privacy & Security > Photos, then commit again.",
-        )
-    if out.returncode != 0:
-        raise HTTPException(status_code=500, detail=f"Adding to album failed: {out.stderr[-300:]}")
+        library.photokit.call({"op": "add", "album": album, "uuids": [p.uuid for p in photos]})
+    except library.PhotoKitError as e:
+        if "access" in str(e):
+            raise HTTPException(
+                status_code=403,
+                detail="Photos access is off. Turn it on for your terminal app in System "
+                "Settings > Privacy & Security > Photos, then commit again.",
+            ) from e
+        raise HTTPException(status_code=500, detail=f"Adding to album failed: {e}") from e
 
 
-# ponytail: in-memory only; ~1.3k prints take ~10s, so a restart recomputes them.
-_prints: dict[str, array | None] = {}  # None: a utility image, never grouped
+# Vision analysis (feature print, isUtility, aesthetics score) for every candidate, computed
+# once in the background and cached on disk. Bursts, Low quality and Utility all read it.
+_vision_lock = threading.Lock()
+_vision_state: dict = {"pending": 0, "total": 0, "error": None}
+_vision_queue: list[str] = []
+_vision_thread: threading.Thread | None = None
 
 
-def _feature_prints(photos) -> dict[str, array | None]:
-    """uuid -> Vision feature print (None for utility images), computed for uncached photos."""
-    todo = [p for p in photos if p.uuid not in _prints]
-    # Smallest-first derivative: fast, and what SIMILAR_MAX_DIST was calibrated on.
-    lines = [
-        f"{p.uuid}\t{path}\n"
-        for p in todo
-        if (path := (p.path_derivatives[0] if p.path_derivatives else p.path))
-    ]
-    if lines:
-        out = subprocess.run(
-            [_swift_bin(FEATUREPRINT_SRC)], input="".join(lines), capture_output=True, text=True
-        )
-        for line in out.stdout.splitlines():
-            uuid, kind, *data = line.split("\t", 2)
-            if kind == "UTILITY":
-                _prints[uuid] = None
-            elif kind in ("1", "2"):
-                _prints[uuid] = array("f" if kind == "1" else "d", base64.b64decode(data[0]))
-    return _prints
+@functools.lru_cache(maxsize=1)
+def _vision() -> dict[str, dict | None]:
+    """uuid -> {"print": array, "utility": bool, "score": float}; None: no local image."""
+    f = CACHE_DIR / VISION_CACHE
+    out: dict[str, dict | None] = {}
+    for line in f.read_text().splitlines() if f.exists() else []:
+        out.update(_parse_vision(json.loads(line)))
+    return out
 
 
-def _split_similar(group: list, prints: dict[str, array | None]) -> list[list]:
-    """Split a time-sorted burst wherever neighbouring shots stop looking alike."""
+def _parse_vision(r: dict) -> dict[str, dict | None]:
+    if "error" in r:
+        return {r["uuid"]: None}
+    vec = array("f" if r["ptype"] == 1 else "d", base64.b64decode(r["print"]))
+    return {r["uuid"]: {"print": vec, "utility": r["utility"], "score": r["score"]}}
+
+
+def _drain_vision() -> None:
+    global _vision_thread
+    while True:
+        with _vision_lock:
+            if not _vision_queue:
+                _vision_thread = None  # under the lock, so a racing request starts a new one
+                return
+            # Stays queued until saved, so a request meanwhile doesn't queue it again.
+            batch = _vision_queue[:100]
+        try:
+            results = library.photokit.call({"op": "vision", "uuids": batch})["results"]
+        except (library.PhotoKitError, OSError, subprocess.CalledProcessError) as e:
+            with _vision_lock:
+                _vision_state.update(error=str(e), pending=0)
+                _vision_queue.clear()
+                _vision_thread = None
+            return
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        with (CACHE_DIR / VISION_CACHE).open("a") as f:
+            f.write("".join(json.dumps(r) + "\n" for r in results))
+        with _vision_lock:
+            for r in results:
+                _vision().update(_parse_vision(r))
+            del _vision_queue[: len(batch)]
+            _vision_state["pending"] = len(_vision_queue)
+
+
+def _start_vision(photos) -> dict:
+    """Queue photos not yet analysed; returns the analysis progress for the UI."""
+    global _vision_thread
+    with _vision_lock:
+        done, queued = _vision(), set(_vision_queue)
+        todo = [p.uuid for p in photos if p.uuid not in done and p.uuid not in queued]
+        if todo:
+            total = len(todo) + (_vision_state["total"] if _vision_queue else 0)
+            _vision_queue.extend(todo)
+            _vision_state.update(pending=len(_vision_queue), total=total, error=None)
+            if _vision_thread is None:
+                _vision_thread = threading.Thread(target=_drain_vision, daemon=True)
+                _vision_thread.start()
+        return dict(_vision_state)
+
+
+def _vision_score(p) -> float:
+    """Aesthetics score; photos not analysed sort last, never out-ranking a real score."""
+    v = _vision().get(p.uuid)
+    return v["score"] if v else -2.0
+
+
+def _split_similar(group: list, vision: dict[str, dict | None]) -> list[list]:
+    """Split a time-sorted burst wherever neighbouring shots stop looking alike.
+
+    Utility images (documents, labels) never join: different pages look alike to prints.
+    """
+
+    def vec(p):
+        v = vision.get(p.uuid)
+        return v["print"] if v and not v["utility"] else None
+
     runs, run = [], [group[0]]
     for a, b in zip(group, group[1:], strict=False):
-        pa, pb = prints.get(a.uuid), prints.get(b.uuid)
+        pa, pb = vec(a), vec(b)
         if pa is not None and pb is not None and math.dist(pa, pb) < SIMILAR_MAX_DIST:
             run.append(b)
         else:
@@ -194,17 +232,26 @@ def _split_similar(group: list, prints: dict[str, array | None]) -> list[list]:
 
 def _run_classifier(photos) -> None:
     verdicts = _verdicts()
+    img_dir = Path(tempfile.mkdtemp(prefix="photos-cleanup-verdict-"))
     try:
-        exe = _swift_bin(VERDICT_SRC)
+        exe = library.swift_bin(VERDICT_SRC)
         # Temp files, not pipes, for stdin/stderr: a full pipe would deadlock the child.
         with (
             tempfile.TemporaryFile("w+") as inp,
             tempfile.TemporaryFile("w+") as err,
             (CACHE_DIR / VERDICT_CACHE).open("a") as cache,
         ):
+            img_dir.mkdir(parents=True, exist_ok=True)
             for p in photos:
+                path = img_dir / f"{p.uuid}.jpg"
+                try:
+                    library.photokit.call(
+                        {"op": "image", "uuid": p.uuid, "size": 1024, "path": str(path)}
+                    )
+                except library.PhotoKitError:
+                    continue  # no local image: left unjudged, retried on a later visit
                 date = p.date.date().isoformat() if p.date else "unknown"
-                inp.write(f"{p.uuid}\t{_image_path(p)}\t{date}\n")
+                inp.write(f"{p.uuid}\t{path}\t{date}\n")
             inp.seek(0)
             proc = subprocess.Popen([exe], stdin=inp, stdout=subprocess.PIPE, stderr=err, text=True)
             for line in proc.stdout:
@@ -221,9 +268,10 @@ def _run_classifier(photos) -> None:
                 _classify["error"] = err.read().strip()[-300:] or f"exit {proc.returncode}"
     except subprocess.CalledProcessError as e:
         _classify["error"] = f"swiftc failed: {e.stderr.decode()[-300:]}"
-    except OSError as e:
+    except (OSError, library.PhotoKitError) as e:
         _classify["error"] = str(e)
     finally:
+        shutil.rmtree(img_dir, ignore_errors=True)
         with _classify_lock:
             _inflight.difference_update(p.uuid for p in photos)  # ERR lines: retried next visit
             _classify["pending"] = len(_inflight)
@@ -250,11 +298,7 @@ def _start_classifier(photos) -> None:
             _classify.update(pending=0, total=0, error=_verdicts_off)
             return
         verdicts = _verdicts()
-        todo = [
-            p
-            for p in photos
-            if p.uuid not in verdicts and p.uuid not in _inflight and _image_path(p)
-        ]
+        todo = [p for p in photos if p.uuid not in verdicts and p.uuid not in _inflight]
         if not todo:
             return
         total = len(todo) + (_classify["total"] if _inflight else 0)
@@ -269,7 +313,7 @@ def _start_classifier(photos) -> None:
 @functools.lru_cache(maxsize=1)
 def _index():
     """Newest-first photo list + uuid lookup, built once."""
-    photos = db().photos()
+    photos = list(_all_photos())
     photos.sort(key=lambda p: library.make_aware(p.date) if p.date else _MIN, reverse=True)
     return photos, {p.uuid: p for p in photos}
 
@@ -277,12 +321,10 @@ def _index():
 def _meta(p) -> dict:
     return {
         "uuid": p.uuid,
-        "filename": p.original_filename,
         "width": p.width,
         "height": p.height,
         "date": p.date.isoformat() if p.date else None,
         "is_video": p.ismovie,
-        "size": p.original_filesize,
     }
 
 
@@ -299,36 +341,46 @@ def photos() -> dict:
 
 @app.get("/thumb/{uuid}")
 def thumb(uuid: str):
-    _, by_uuid = _index()
-    p = by_uuid.get(uuid)
-    if p is None or not p.path_derivatives:
+    # Only known UUIDs reach the file path below, so the URL can't name another file.
+    if uuid not in _index()[1]:
         raise HTTPException(status_code=404)
-    # path_derivatives[-1] is the smallest derivative — right size for a grid thumb.
-    return FileResponse(p.path_derivatives[-1])
+    path = THUMB_DIR / f"{uuid}.jpg"
+    if not path.exists():
+        THUMB_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            # 340px: the 170px grid cell on a 2x display.
+            library.photokit.call({"op": "image", "uuid": uuid, "size": 340, "path": str(path)})
+        except library.PhotoKitError as e:
+            raise HTTPException(status_code=404) from e
+    return FileResponse(path)
 
 
-def _candidates(kind: str, threshold: float = 0.01) -> list:
+def _candidates(kind: str) -> list:
     """A pass's photos, before any model judgement, minus those already filed."""
-    photosdb = db()
+    photos = _all_photos()
     ignore = library.load_ignore_albums()
     if kind == "screenshots":
-        photos = library.get_candidate_photos(photosdb, ignore, only_screenshots=True)
-    elif kind == "utility":
-        # Screenshots have their own pass; the classifier's Vision step filters the rest.
-        photos = library.get_candidate_photos(photosdb, ignore)
-        photos = [p for p in photos if _image_path(p)]
+        photos = library.get_candidate_photos(photos, ignore, only_screenshots=True)
+    elif kind in ("utility", "low-quality"):
+        photos = library.get_candidate_photos(photos, ignore)
     elif kind == "clusters":
-        photos = library.get_candidate_photos(photosdb, ignore, require_valid_date=True)
-    elif kind == "low-quality":
-        photos = library.get_candidate_photos(photosdb, ignore)
-        photos = [
-            p for p in photos if (s := library.get_photo_score(p)) is not None and s <= threshold
-        ]
+        photos = library.get_candidate_photos(photos, ignore, require_valid_date=True)
     else:
         raise HTTPException(status_code=404, detail="unknown cleanup kind")
     # Album membership comes from the startup snapshot; _committed covers this session's commits.
     filed = {ALBUMS[kind], KEEP_ALBUMS[kind]}
     return [p for p in photos if p.uuid not in _committed and filed.isdisjoint(p.albums)]
+
+
+def _analysed(kind: str, photos, threshold: float = LOW_QUALITY_MAX) -> tuple[list, dict]:
+    """Narrow Utility and Low quality by the Vision analysis done so far, and its progress."""
+    progress = _start_vision(photos)
+    vision = _vision()
+    if kind == "utility":
+        photos = [p for p in photos if (v := vision.get(p.uuid)) and v["utility"]]
+    elif kind == "low-quality":
+        photos = [p for p in photos if (v := vision.get(p.uuid)) and v["score"] <= threshold]
+    return photos, progress
 
 
 def _time_bursts(photos) -> list[list]:
@@ -343,57 +395,55 @@ def counts() -> dict:
     verdicts = _verdicts()
     for kind in ALBUMS:
         photos = _candidates(kind)
-        if kind == "utility":
+        if kind == "screenshots":
+            out[kind] = len(photos)
+            continue
+        vision_done = all(p.uuid in _vision() for p in photos)
+        photos, _ = _analysed(kind, photos)
+        if not vision_done:
+            out[kind] = None  # the background Vision analysis is still running
+        elif kind == "utility":
             judged = [verdicts[p.uuid] for p in photos if p.uuid in verdicts]
             done = len(judged) == len(photos)
             out[kind] = sum(v["kind"] != "picture" for v in judged) if done else None
         elif kind == "clusters":
-            bursts = _time_bursts(photos)
-            if all(p.uuid in _prints for g in bursts for p in g):
-                out[kind] = sum(len(r) for g in bursts for r in _split_similar(g, _prints))
-            else:
-                out[kind] = None  # feature prints are computed on the first Bursts visit
+            out[kind] = sum(
+                len(r) for g in _time_bursts(photos) for r in _split_similar(g, _vision())
+            )
         else:
             out[kind] = len(photos)
     return out
 
 
 @app.get("/cleanup/{kind}")
-def cleanup(kind: str, threshold: float = 0.01) -> dict:
+def cleanup(kind: str, threshold: float = LOW_QUALITY_MAX) -> dict:
     """Run a cleanup pass and return its candidate photos (newest-first)."""
-    photos = _candidates(kind, threshold)
+    photos = _candidates(kind)
+    progress = {"pending": 0, "total": 0, "error": None}
+    if kind != "screenshots":
+        photos, progress = _analysed(kind, photos, threshold)
     if kind == "clusters":
-        bursts = _time_bursts(photos)
-        try:
-            prints = _feature_prints([p for g in bursts for p in g])
-        except (subprocess.CalledProcessError, OSError) as e:
-            # Time alone groups different photos (a run of labels, report pages); show none.
-            err = e.stderr.decode()[-300:] if isinstance(e, subprocess.CalledProcessError) else e
-            return {
-                "kind": kind,
-                "count": 0,
-                "groups": [],
-                "classify": {"pending": 0, "error": str(err)},
-            }
-        groups = [run for g in bursts for run in _split_similar(g, prints)]
+        groups = [run for g in _time_bursts(photos) for run in _split_similar(g, _vision())]
         out = []
         for g in reversed(groups):  # newest group first
-            best = max(g, key=library.score_for_sort)  # first max wins ties: earliest shot
+            best = max(g, key=_vision_score)  # first max wins ties: earliest shot
             out.append({"photos": [_meta(p) for p in g], "best": best.uuid})
         return {
             "kind": kind,
             "count": sum(len(g["photos"]) for g in out),
             "groups": out,
-            "classify": {"pending": 0, "error": None},
+            "classify": progress,
         }
     photos.sort(key=lambda p: library.make_aware(p.date) if p.date else _MIN, reverse=True)
     verdicts: dict[str, dict] = {}
-    classify = {"pending": 0, "error": None}
     if kind in VERDICT_KINDS:
         _start_classifier(photos)
-        verdicts, classify = _verdicts(), dict(_classify)
+        verdicts = _verdicts()
+        if not progress["pending"]:  # Vision first, then the model: one bar at a time
+            progress = dict(_classify)
     if kind == "utility":
-        # "picture" = Vision said not a utility image; unjudged photos appear once classified.
+        # Unjudged photos appear once classified; "picture" means the model's own Vision
+        # check said it isn't a utility image after all.
         photos = [
             p for p in photos if verdicts.get(p.uuid, {"kind": "picture"})["kind"] != "picture"
         ]
@@ -403,7 +453,7 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
         "photos": [
             {**_meta(p), "verdict": _pass_verdict(kind, verdicts.get(p.uuid))} for p in photos
         ],
-        "classify": classify,
+        "classify": progress,
     }
 
 

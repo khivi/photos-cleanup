@@ -28,7 +28,7 @@ Run from the repo root.
 4. Poll `/health` for up to ~60s, then report the URL. The server reads the whole
    library before it listens; a large library takes a while.
 
-The server fails fast with a clear message (port in use, no library, Full Disk
-Access off, UI missing). On failure, read the background output. Full Disk
-Access is granted by the user in System Settings → Privacy & Security; Claude
-can't grant it.
+The server fails fast with a clear message (port in use, no Swift toolchain,
+Photos access off, UI missing). On failure, read the background output. Photos
+access is granted by the user in System Settings → Privacy & Security → Photos;
+Claude can't grant it.

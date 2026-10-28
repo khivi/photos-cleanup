@@ -30,7 +30,7 @@ Vite proxies API requests to the server.
 uv run pytest -q
 ```
 
-The tests mock PhotosDB. They need no Photos library and no Full Disk Access.
+The tests mock the PhotoKit helper. They need no Photos library, no Photos access and no Swift toolchain.
 
 ## Pre-commit
 

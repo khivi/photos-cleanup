@@ -1,9 +1,9 @@
-"""Server tests. The engine's PhotosDB is mocked so these run without a real
-Photos library (no TCC / Full Disk Access needed in CI)."""
+"""Server tests. The PhotoKit helper is mocked so these run without a real Photos
+library (no Photos access or Swift toolchain needed in CI)."""
 
 import json
 import socket
-import subprocess
+from array import array
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -11,19 +11,23 @@ from fastapi.testclient import TestClient
 
 from photos_cleanup import cli, library, server
 
+IDLE = {"pending": 0, "total": 0, "error": None}
+
 
 class FakePhoto:
-    def __init__(self, uuid="x", size=0, deriv=None, albums=(), path="/img.jpg"):
+    def __init__(self, uuid="x", albums=(), date=None):
         self.uuid = uuid
         self.albums = list(albums)
-        self.original_filename = f"{uuid}.jpg"
         self.width = 100
         self.height = 100
-        self.date = None
+        self.date = date
         self.ismovie = False
-        self.original_filesize = size
-        self.path_derivatives = deriv or []
-        self.path = path
+        self.screenshot = False
+
+
+def V(score=0.5, utility=False, vec=(0.0,)):
+    """One photo's Vision analysis, as server._vision() holds it."""
+    return {"print": array("f", vec), "utility": utility, "score": score}
 
 
 def test_health():
@@ -52,25 +56,39 @@ def test_photos_returns_all(monkeypatch):
     assert [p["uuid"] for p in data["photos"]] == ["a", "b", "c"]
 
 
-def test_thumb_serves_and_404(monkeypatch, tmp_path):
-    f = tmp_path / "t.jpg"
-    f.write_bytes(b"\xff\xd8\xff")  # jpeg magic bytes
-    items = [FakePhoto("a", deriv=[str(f)])]
+def test_thumb_made_once_cached_and_404(monkeypatch, tmp_path):
+    items = [FakePhoto("a")]
     monkeypatch.setattr(server, "_index", lambda: (items, {p.uuid: p for p in items}))
+    monkeypatch.setattr(server, "THUMB_DIR", tmp_path)
+    calls = []
+
+    def call(req):
+        calls.append(req)
+        with open(req["path"], "wb") as f:
+            f.write(b"\xff\xd8\xff")  # jpeg magic bytes
+        return {"ok": True}
+
+    monkeypatch.setattr(library.photokit, "call", call)
     client = TestClient(server.app, base_url="http://127.0.0.1")
     assert client.get("/thumb/a").status_code == 200
+    assert client.get("/thumb/a").status_code == 200  # served from the cache
+    assert [(c["op"], c["uuid"], c["size"]) for c in calls] == [("image", "a", 340)]
+    # Unknown ids never reach the file path, so ../ tricks can't name another file.
     assert client.get("/thumb/missing").status_code == 404
+    assert client.get("/thumb/..%2F..%2Fetc%2Fpasswd").status_code == 404
 
 
-def _patch_engine(monkeypatch, candidates, verdicts=None):
-    monkeypatch.setattr(server, "db", lambda: object())
+def _patch_engine(monkeypatch, candidates, verdicts=None, vision=None):
+    monkeypatch.setattr(server, "_all_photos", lambda: candidates)
     monkeypatch.setattr(server.library, "load_ignore_albums", lambda: frozenset())
     monkeypatch.setattr(
-        server.library, "get_candidate_photos", lambda pdb, ignore, **kw: candidates
+        server.library, "get_candidate_photos", lambda photos, ignore, **kw: candidates
     )
     monkeypatch.setattr(server, "_verdicts", lambda: verdicts or {})
     monkeypatch.setattr(server, "_start_classifier", lambda photos: None)
     monkeypatch.setattr(server, "_committed", set())
+    monkeypatch.setattr(server, "_vision", lambda: vision or {})
+    monkeypatch.setattr(server, "_start_vision", lambda photos: dict(IDLE))
 
 
 def test_cleanup_screenshots_attaches_verdicts(monkeypatch):
@@ -79,83 +97,82 @@ def test_cleanup_screenshots_attaches_verdicts(monkeypatch):
     data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/screenshots").json()
     assert data["count"] == 2
     assert {p["uuid"]: p["verdict"] for p in data["photos"]} == {"a": verdict, "b": None}
-    assert data["classify"] == {"pending": 0, "total": 0, "error": None}
+    assert data["classify"] == IDLE
 
 
-def test_cleanup_utility_shows_only_classified_non_pictures(monkeypatch):
+def test_cleanup_utility_shows_only_vision_utility_photos_the_model_kept_as_utility(monkeypatch):
     receipt = {"keep": False, "kind": "receipt", "reason": "Paid"}
     picture = {"keep": True, "kind": "picture", "reason": "Not a utility image"}
     _patch_engine(
         monkeypatch,
-        [FakePhoto("a"), FakePhoto("b"), FakePhoto("c"), FakePhoto("noimg", path=None)],
+        [FakePhoto(u) for u in "abcde"],
         {"a": receipt, "b": picture},  # c not classified yet
+        # d: Vision says not utility; e: not analysed yet
+        {"a": V(utility=True), "b": V(utility=True), "c": V(utility=True), "d": V()},
     )
     data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/utility").json()
     assert [p["uuid"] for p in data["photos"]] == ["a"]
     assert data["photos"][0]["verdict"] == receipt
 
 
-def test_cleanup_clusters_groups_bursts_with_best(monkeypatch):
+def test_cleanup_utility_shows_vision_progress_before_the_models(monkeypatch):
+    _patch_engine(monkeypatch, [FakePhoto("a")])
+    monkeypatch.setattr(server, "_start_vision", lambda photos: {**IDLE, "pending": 5, "total": 9})
+    monkeypatch.setattr(server, "_classify", {"pending": 1, "total": 1, "error": None})
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/utility").json()
+    assert data["classify"] == {"pending": 5, "total": 9, "error": None}
+
+
+def _dated(uuids_secs: dict[str, int]) -> list[FakePhoto]:
     t0 = datetime(2024, 1, 1, tzinfo=UTC)
-    secs = {"a": 0, "b": 10, "c": 20, "far": 500, "d": 1000, "e": 1010, "f": 1020, "g": 1030}
-    photos = [FakePhoto(u) for u in secs]
-    for p in photos:
-        p.date = t0 + timedelta(seconds=secs[p.uuid])
-    photos.append(FakePhoto("filed", albums=["Bursts - Keep"]))
-    photos[-1].date = t0 + timedelta(seconds=1040)
-    _patch_engine(monkeypatch, photos)
-    scores = {"a": 0.1, "b": 0.9, "c": 0.5, "d": 0.2, "e": 0.3, "f": 0.8, "g": None}
-    monkeypatch.setattr(server.library, "get_photo_score", lambda p: scores.get(p.uuid))
-    monkeypatch.setattr(server, "_feature_prints", lambda ps: {p.uuid: [0.0] for p in ps})
+    return [FakePhoto(u, date=t0 + timedelta(seconds=s)) for u, s in uuids_secs.items()]
+
+
+def test_cleanup_clusters_groups_bursts_with_best(monkeypatch):
+    photos = _dated({"a": 0, "b": 10, "c": 20, "far": 500, "d": 1000, "e": 1010, "f": 1020})
+    photos += [FakePhoto("filed", albums=["Bursts - Keep"], date=photos[-1].date)]
+    scores = {"a": 0.1, "b": 0.9, "c": 0.5, "far": 0.5, "d": 0.2, "e": 0.3, "f": 0.8}
+    _patch_engine(monkeypatch, photos, vision={u: V(s) for u, s in scores.items()})
     data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/clusters").json()
     assert [(g["best"], [p["uuid"] for p in g["photos"]]) for g in data["groups"]] == [
-        ("f", ["d", "e", "f", "g"]),  # newest first; unscored g never wins
+        ("f", ["d", "e", "f"]),  # newest first
         ("b", ["a", "b", "c"]),
     ]
-    assert data["count"] == 7
+    assert data["count"] == 6
 
 
 def test_cleanup_clusters_splits_bursts_that_look_different(monkeypatch):
-    # One 40s burst: two repeats of one shot, then two repeats of another (e.g. labels).
-    t0 = datetime(2024, 1, 1, tzinfo=UTC)
-    photos = [FakePhoto(u) for u in "abcdefg"]
-    for i, p in enumerate(photos):
-        p.date = t0 + timedelta(seconds=10 * i)
-    _patch_engine(monkeypatch, photos)
-    monkeypatch.setattr(server.library, "get_photo_score", lambda p: 0.5)
-    # e: a one-off; f, g: utility images (document pages look alike), never grouped.
-    prints = {"a": [0.0], "b": [0.1], "c": [2.0], "d": [2.1], "e": [5.0], "f": None, "g": None}
-    monkeypatch.setattr(server, "_feature_prints", lambda ps: prints)
+    # One 60s burst: two repeats of one shot, then two of another, a one-off (e), two
+    # utility images (f, g: document pages look alike to prints) and one not analysed (h).
+    photos = _dated({u: 10 * i for i, u in enumerate("abcdefgh")})
+    vision = {
+        "a": V(vec=(0.0,)),
+        "b": V(vec=(0.1,)),
+        "c": V(vec=(2.0,)),
+        "d": V(vec=(2.1,)),
+        "e": V(vec=(5.0,)),
+        "f": V(utility=True, vec=(9.0,)),
+        "g": V(utility=True, vec=(9.0,)),
+    }
+    _patch_engine(monkeypatch, photos, vision=vision)
     data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/clusters").json()
     assert [[p["uuid"] for p in g["photos"]] for g in data["groups"]] == [["c", "d"], ["a", "b"]]
 
 
-def test_cleanup_clusters_shows_none_without_feature_prints(monkeypatch):
-    t0 = datetime(2024, 1, 1, tzinfo=UTC)
-    photos = [FakePhoto(u) for u in "abc"]
-    for i, p in enumerate(photos):
-        p.date = t0 + timedelta(seconds=i)
-    _patch_engine(monkeypatch, photos)
-
-    def fail(ps):
-        raise OSError("swiftc not found")
-
-    monkeypatch.setattr(server, "_feature_prints", fail)
-    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/clusters").json()
-    assert data["groups"] == [] and "swiftc" in data["classify"]["error"]
-
-
-def test_cleanup_low_quality_filters_by_score(monkeypatch):
-    _patch_engine(monkeypatch, [FakePhoto("a"), FakePhoto("b"), FakePhoto("c")])
-    scores = {"a": 0.005, "b": 0.5, "c": None}  # c is unscored -> excluded
-    monkeypatch.setattr(server.library, "get_photo_score", lambda p: scores[p.uuid])
-    data = (
-        TestClient(server.app, base_url="http://127.0.0.1")
-        .get("/cleanup/low-quality?threshold=0.01")
-        .json()
-    )
-    assert [p["uuid"] for p in data["photos"]] == ["a"]
+def test_cleanup_low_quality_filters_by_vision_score(monkeypatch):
+    vision = {"a": V(-0.9), "b": V(0.5), "edge": V(server.LOW_QUALITY_MAX)}  # c: not analysed
+    _patch_engine(monkeypatch, [FakePhoto(u) for u in ("a", "b", "c", "edge")], vision=vision)
+    client = TestClient(server.app, base_url="http://127.0.0.1")
+    data = client.get("/cleanup/low-quality").json()
+    assert [p["uuid"] for p in data["photos"]] == ["a", "edge"]
     assert data["photos"][0]["verdict"] is None
+    assert [
+        p["uuid"] for p in client.get("/cleanup/low-quality?threshold=0.6").json()["photos"]
+    ] == [
+        "a",
+        "b",
+        "edge",
+    ]
 
 
 def test_cleanup_skips_already_filed(monkeypatch):
@@ -293,16 +310,33 @@ def test_check_port_foreign_program_exits_1(capsys):
     assert "in use by another program" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize(
-    ("mac", "swiftc_rc", "expect"),
-    [("26.4", 0, "macOS 27"), ("27.0.1", 1, "xcode-select --install"), ("27.0.1", 0, None)],
-)
-def test_verdicts_unavailable(monkeypatch, mac, swiftc_rc, expect):
+def test_check_library_needs_swift(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "_has_swiftc", lambda: False)
+    with pytest.raises(SystemExit):
+        cli._check_library()
+    assert "xcode-select --install" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("status", ["denied", "limited", "restricted"])
+def test_check_library_needs_full_photos_access(monkeypatch, capsys, status):
+    monkeypatch.setattr(cli, "_has_swiftc", lambda: True)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(library.photokit, "call", lambda req: {"status": status})
+    with pytest.raises(SystemExit):
+        cli._check_library()
+    err = capsys.readouterr().err
+    assert status in err and "Privacy & Security > Photos" in err
+
+
+def test_check_library_passes_when_authorized(monkeypatch):
+    monkeypatch.setattr(cli, "_has_swiftc", lambda: True)
+    monkeypatch.setattr(library.photokit, "call", lambda req: {"status": "authorized"})
+    cli._check_library()
+
+
+@pytest.mark.parametrize(("mac", "expect"), [("26.4", "macOS 27"), ("27.0.1", None)])
+def test_verdicts_unavailable(monkeypatch, mac, expect):
     monkeypatch.setattr(cli.platform, "mac_ver", lambda: (mac, ("", "", ""), "arm64"))
-    monkeypatch.setattr(cli.shutil, "which", lambda name: "/usr/bin/xcrun")
-    monkeypatch.setattr(
-        cli.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, swiftc_rc)
-    )
     why = cli._verdicts_unavailable()
     assert why is None if expect is None else expect in why
 
@@ -333,10 +367,10 @@ def test_second_pass_queues_behind_a_running_classifier(monkeypatch):
             server._inflight.difference_update(p.uuid for p in photos)
 
     monkeypatch.setattr(server, "_run_classifier", fake_run)
-    shots = [FakePhoto("s1", deriv=["x"]), FakePhoto("s2", deriv=["x"])]
+    shots = [FakePhoto("s1"), FakePhoto("s2")]
     server._start_classifier(shots)  # Screenshots tab
     assert first_running.wait(5)
-    server._start_classifier([FakePhoto("u1", deriv=["x"])])  # Utility tab, mid-run
+    server._start_classifier([FakePhoto("u1")])  # Utility tab, mid-run
     server._start_classifier(shots)  # Screenshots reopened: already in flight, not re-queued
     assert server._classify["pending"] == 3
     assert server._classify["total"] == 3  # Utility's photo joined the running run's total
@@ -347,41 +381,80 @@ def test_second_pass_queues_behind_a_running_classifier(monkeypatch):
         threading.Event().wait(0.1)
     assert judged == [["s1", "s2"], ["u1"]]
     assert server._classifier is None
-    server._start_classifier([FakePhoto("u2", deriv=["x"])])  # a new run starts from idle
+    server._start_classifier([FakePhoto("u2")])  # a new run starts from idle
     assert server._classify["total"] == 1
 
 
+def test_vision_job_analyses_caches_and_reports_progress(monkeypatch, tmp_path):
+    import threading
+
+    monkeypatch.setattr(server, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(server, "_vision_queue", [])
+    monkeypatch.setattr(server, "_vision_state", dict(IDLE))
+    monkeypatch.setattr(server, "_vision_thread", None)
+    server._vision.cache_clear()
+    release = threading.Event()
+    seen: list[list[str]] = []
+    b64 = "AAAAAA=="  # one Float32 zero
+
+    def call(req):
+        release.wait(5)
+        seen.append(req["uuids"])
+        return {
+            "results": [
+                {"uuid": "a", "print": b64, "ptype": 1, "utility": False, "score": -0.9},
+                {"uuid": "b", "error": "no local image"},
+            ]
+        }
+
+    monkeypatch.setattr(library.photokit, "call", call)
+    try:
+        progress = server._start_vision([FakePhoto("a"), FakePhoto("b")])
+        assert progress == {"pending": 2, "total": 2, "error": None}
+        assert server._start_vision([FakePhoto("a")])["pending"] == 2  # already queued
+        release.set()
+        for _ in range(50):
+            if server._vision_thread is None:
+                break
+            threading.Event().wait(0.1)
+        assert seen == [["a", "b"]]
+        assert server._vision()["a"]["score"] == -0.9 and server._vision()["b"] is None
+        server._vision.cache_clear()  # a restart reads the disk cache, nothing re-analysed
+        assert set(server._vision()) == {"a", "b"}
+        assert server._start_vision([FakePhoto("a"), FakePhoto("b")])["pending"] == 0
+    finally:
+        server._vision.cache_clear()
+
+
 def test_counts_only_where_known(monkeypatch):
-    t0 = datetime(2024, 1, 1, tzinfo=UTC)
-    photos = [FakePhoto(u, deriv=["x"]) for u in "abc"]
-    for i, p in enumerate(photos):
-        p.date = t0 + timedelta(seconds=i)
+    photos = _dated({"a": 0, "b": 1, "c": 2})
+    vision: dict = {}
     _patch_engine(monkeypatch, photos)
+    monkeypatch.setattr(server, "_vision", lambda: vision)
     monkeypatch.setattr(server, "_index", lambda: (photos, {p.uuid: p for p in photos}))
-    monkeypatch.setattr(server.library, "get_photo_score", lambda p: 0.0)
-    monkeypatch.setattr(server, "_prints", {})
     client = TestClient(server.app, base_url="http://127.0.0.1")
-    data = client.get("/counts").json()
-    assert data == {
+    assert client.get("/counts").json() == {
         "all": 3,
         "screenshots": 3,
-        "low-quality": 3,
-        "utility": None,  # not every photo judged yet
-        "clusters": None,  # feature prints not computed yet
+        "low-quality": None,  # the Vision analysis hasn't run yet
+        "utility": None,
+        "clusters": None,
     }
+    vision.update(a=V(-0.9, utility=True, vec=(0.0,)), b=V(0.5, vec=(0.1,)), c=V(0.5, vec=(0.2,)))
+    assert client.get("/counts").json()["utility"] is None  # analysed, not yet judged
     pic = {"keep": True, "kind": "picture", "reason": ""}
     doc = {"keep": False, "kind": "receipt", "reason": ""}
     monkeypatch.setattr(server, "_verdicts", lambda: {"a": doc, "b": pic, "c": pic})
-    monkeypatch.setattr(server, "_prints", {"a": [0.0], "b": [0.1], "c": [9.0]})
     data = client.get("/counts").json()
-    assert data["utility"] == 1 and data["clusters"] == 2
+    assert data["utility"] == 1 and data["clusters"] == 2 and data["low-quality"] == 1
 
 
 def test_utility_never_preselects_a_misread_screenshot_for_delete(monkeypatch):
-    photos = [FakePhoto(u, deriv=["x"]) for u in "ab"]
+    photos = [FakePhoto(u) for u in "ab"]
     shot = {"keep": False, "kind": "screenshot", "reason": "A hand with a ring"}
     receipt = {"keep": False, "kind": "receipt", "reason": "Coffee receipt"}
-    _patch_engine(monkeypatch, photos, {"a": shot, "b": receipt})
+    vision = {"a": V(utility=True), "b": V(utility=True)}
+    _patch_engine(monkeypatch, photos, {"a": shot, "b": receipt}, vision)
     client = TestClient(server.app, base_url="http://127.0.0.1")
     got = {p["uuid"]: p["verdict"]["keep"] for p in client.get("/cleanup/utility").json()["photos"]}
     assert got == {"a": True, "b": False}
@@ -389,40 +462,33 @@ def test_utility_never_preselects_a_misread_screenshot_for_delete(monkeypatch):
     assert {p["uuid"]: p["verdict"]["keep"] for p in shots} == {"a": False, "b": False}
 
 
-def test_add_to_album_runs_the_photokit_helper(monkeypatch):
-    monkeypatch.setattr(server, "_swift_bin", lambda src, plist=None: "/bin/albums")
-    seen = {}
-
-    def run(cmd, input, **kw):
-        seen.update(cmd=cmd, input=input)
-        return subprocess.CompletedProcess(cmd, 0, "2\t0\n", "")
-
-    monkeypatch.setattr(server.subprocess, "run", run)
+def test_add_to_album_asks_the_photokit_helper(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        library.photokit, "call", lambda req: seen.append(req) or {"added": 2, "skipped": 0}
+    )
     server._add_to_album([FakePhoto("a"), FakePhoto("b")], "X - Delete Me")
-    assert seen == {"cmd": ["/bin/albums", "X - Delete Me"], "input": "a\nb\n"}
+    assert seen == [{"op": "add", "album": "X - Delete Me", "uuids": ["a", "b"]}]
 
 
 def test_add_to_album_reports_photos_access_off(monkeypatch):
-    monkeypatch.setattr(server, "_swift_bin", lambda src, plist=None: "/bin/albums")
-    monkeypatch.setattr(
-        server.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 3, "", "")
-    )
+    def denied(req):
+        raise library.PhotoKitError("Photos access not granted")
+
+    monkeypatch.setattr(library.photokit, "call", denied)
     with pytest.raises(server.HTTPException) as e:
         server._add_to_album([FakePhoto("a")], "X")
     assert e.value.status_code == 403 and "Privacy & Security > Photos" in e.value.detail
 
 
-def test_add_to_album_falls_back_to_applescript_without_swiftc(monkeypatch):
-    def no_swiftc(src, plist=None):
-        raise FileNotFoundError("swiftc")
-
-    monkeypatch.setattr(server, "_swift_bin", no_swiftc)
-    calls = []
-    monkeypatch.setattr(
-        server.library, "add_to_album_applescript", lambda photos, album: calls.append(album)
-    )
-    server._add_to_album([FakePhoto("a")], "X")
-    assert calls == ["X"]
+def test_load_photos_from_the_helper(monkeypatch):
+    row = {"uuid": "u", "date": 1700000000.5, "w": 4, "h": 3, "shot": True, "live": False}
+    row |= {"movie": False, "fav": True, "albums": ["Trip"]}
+    undated = {**row, "uuid": "v", "date": None}
+    monkeypatch.setattr(library.photokit, "call", lambda req: {"photos": [row, undated]})
+    p, q = library.load_photos()
+    assert (p.uuid, p.width, p.screenshot, p.favorite, p.albums) == ("u", 4, True, True, ["Trip"])
+    assert p.date == datetime.fromtimestamp(1700000000.5, UTC) and q.date is None
 
 
 def test_candidate_filter():
@@ -439,29 +505,59 @@ def test_candidate_filter():
             self.albums = list(albums)
             self.date = datetime(year, 1, 1) if year else None
 
-    class DB:
-        def photos(self):
-            return [
-                P("plain"),
-                P("shot", screenshot=True),
-                P("movie", ismovie=True),
-                P("fav", favorite=True),
-                P("mine", albums=["Trip to Goa"]),  # the user's own album protects it
-                P("smart", albums=["Selfies"]),  # Apple's smart album doesn't
-                P("filed", albums=["Screenshots - Delete Me"]),  # nor does a review album
-                P("undated", year=None),
-                P("old", year=1990),
-            ]
-
+    photos = [
+        P("plain"),
+        P("shot", screenshot=True),
+        P("movie", ismovie=True),
+        P("fav", favorite=True),
+        P("mine", albums=["Trip to Goa"]),  # the user's own album protects it
+        P("smart", albums=["Selfies"]),  # Apple's smart album doesn't
+        P("filed", albums=["Screenshots - Delete Me"]),  # nor does a review album
+        P("undated", year=None),
+        P("old", year=1990),
+    ]
     ignore = library.load_ignore_albums()
     uuids = lambda ps: [p.uuid for p in ps]  # noqa: E731
-    assert uuids(library.get_candidate_photos(DB(), ignore)) == [
+    assert uuids(library.get_candidate_photos(photos, ignore)) == [
         "plain",
         "smart",
         "filed",
         "undated",
         "old",
     ]
-    assert uuids(library.get_candidate_photos(DB(), ignore, only_screenshots=True)) == ["shot"]
-    dated = library.get_candidate_photos(DB(), ignore, require_valid_date=True)
+    assert uuids(library.get_candidate_photos(photos, ignore, only_screenshots=True)) == ["shot"]
+    dated = library.get_candidate_photos(photos, ignore, require_valid_date=True)
     assert uuids(dated) == ["plain", "smart", "filed"]
+
+
+def test_vision_batch_in_progress_is_not_queued_twice(monkeypatch, tmp_path):
+    import threading
+
+    monkeypatch.setattr(server, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(server, "_vision_queue", [])
+    monkeypatch.setattr(server, "_vision_state", dict(IDLE))
+    monkeypatch.setattr(server, "_vision_thread", None)
+    server._vision.cache_clear()
+    started, release = threading.Event(), threading.Event()
+    calls = []
+
+    def call(req):
+        calls.append(req["uuids"])
+        started.set()
+        release.wait(5)
+        return {"results": [{"uuid": u, "error": "x"} for u in req["uuids"]]}
+
+    monkeypatch.setattr(library.photokit, "call", call)
+    try:
+        server._start_vision([FakePhoto("a")])
+        assert started.wait(5)
+        # A poll while "a" is being analysed: not queued again, total unchanged.
+        assert server._start_vision([FakePhoto("a")]) == {"pending": 1, "total": 1, "error": None}
+        release.set()
+        for _ in range(50):
+            if server._vision_thread is None:
+                break
+            threading.Event().wait(0.1)
+        assert calls == [["a"]]
+    finally:
+        server._vision.cache_clear()

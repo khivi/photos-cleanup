@@ -1,15 +1,21 @@
-"""Reading the Photos library through osxphotos: the candidate filter and photo helpers.
+"""The Photos library, read and written through PhotoKit (photokit.swift).
 
-Originally the shared code of the photo-cleanup command-line tool; this app keeps only
-what the server uses. Every osxphotos call lives here.
+Every library access goes through the long-running helper here; the server never touches
+the library directly. Also the candidate filter and photo grouping the passes share.
 """
 
 from __future__ import annotations
 
+import json
+import subprocess
+import threading
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import osxphotos
+CACHE_DIR = Path.home() / "Library/Caches/photos-cleanup"
+PHOTOKIT_SRC = Path(__file__).with_name("photokit.swift")
+INFO_PLIST = Path(__file__).with_name("Info.plist")  # PhotoKit's permission prompt needs it
 
 # Apple's smart albums: membership doesn't mean the user organised the photo.
 DEFAULT_IGNORE_ALBUMS = frozenset(
@@ -54,6 +60,82 @@ IGNORE_FILES = ("albums_ignore", "albums_ignore.local")
 MIN_DATE = datetime(2000, 1, 1, tzinfo=UTC)
 
 
+def swift_bin(src: Path, plist: Path | None = None) -> Path:
+    """Compile a Swift helper into the cache dir on first use or when its source changes."""
+    exe = CACHE_DIR / src.stem
+    if not exe.exists() or exe.stat().st_mtime < src.stat().st_mtime:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        embed = ["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist"]
+        extra = [*embed, "-Xlinker", str(plist)] if plist else []
+        subprocess.run(
+            ["swiftc", "-O", str(src), "-o", str(exe), *extra], check=True, capture_output=True
+        )
+    return exe
+
+
+class PhotoKitError(RuntimeError):
+    pass
+
+
+class PhotoKit:
+    """One photokit.swift process; requests are serialised (one JSON line each way)."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._proc: subprocess.Popen | None = None
+
+    def call(self, req: dict) -> dict:
+        with self._lock:
+            if self._proc is None or self._proc.poll() is not None:
+                exe = swift_bin(PHOTOKIT_SRC, INFO_PLIST)
+                self._proc = subprocess.Popen(
+                    [exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+                )
+            self._proc.stdin.write(json.dumps(req) + "\n")
+            self._proc.stdin.flush()
+            line = self._proc.stdout.readline()
+        if not line:
+            raise PhotoKitError("the PhotoKit helper exited")
+        out = json.loads(line)
+        if "error" in out:
+            raise PhotoKitError(out["error"])
+        return out
+
+
+photokit = PhotoKit()
+
+
+@dataclass
+class Photo:
+    uuid: str
+    date: datetime | None
+    width: int
+    height: int
+    screenshot: bool
+    live_photo: bool
+    ismovie: bool
+    favorite: bool
+    albums: list[str] = field(default_factory=list)
+
+
+def load_photos() -> list[Photo]:
+    """Every photo and video in the user's own library (not iCloud Shared Albums)."""
+    return [
+        Photo(
+            uuid=x["uuid"],
+            date=datetime.fromtimestamp(x["date"], UTC) if x["date"] is not None else None,
+            width=x["w"],
+            height=x["h"],
+            screenshot=x["shot"],
+            live_photo=x["live"],
+            ismovie=x["movie"],
+            favorite=x["fav"],
+            albums=x["albums"],
+        )
+        for x in photokit.call({"op": "list"})["photos"]
+    ]
+
+
 def _read_album_file(path: Path) -> set[str]:
     """Parse an album-name file: one per line, '#' starts a comment, blanks ignored."""
     if not path.is_file():
@@ -82,12 +164,8 @@ def make_aware(dt: datetime) -> datetime:
     return dt
 
 
-def get_photosdb() -> osxphotos.PhotosDB:
-    return osxphotos.PhotosDB()
-
-
 def get_candidate_photos(
-    photosdb,
+    photos,
     ignore_albums: frozenset[str],
     *,
     only_screenshots: bool = False,
@@ -96,32 +174,16 @@ def get_candidate_photos(
     """Photos a pass may suggest: not favorited, not videos, not in any of the user's own
     albums. Screenshots appear only with only_screenshots, which returns nothing else.
     """
-    photos = []
-    for p in photosdb.photos():
+    out = []
+    for p in photos:
         if p.screenshot != only_screenshots or p.ismovie or p.favorite:
             continue
         if set(p.albums) - ignore_albums:
             continue
         if require_valid_date and (p.date is None or make_aware(p.date) < MIN_DATE):
             continue
-        photos.append(p)
-    return photos
-
-
-def get_photo_score(photo) -> float | None:
-    """Apple's overall curation score, or None if Apple has not scored the photo.
-
-    None rather than 0: an unscored photo is typically a fresh import or iCloud-only and
-    should not be treated as low quality.
-    """
-    s = photo.score
-    return s.overall if s and s.overall is not None else None
-
-
-def score_for_sort(photo) -> float:
-    """Sort unscored photos last — never let them out-rank a real score."""
-    score = get_photo_score(photo)
-    return score if score is not None else -1.0
+        out.append(p)
+    return out
 
 
 def group_by_time(photos, window_seconds: int, min_size: int) -> list[list]:
@@ -143,14 +205,3 @@ def group_by_time(photos, window_seconds: int, min_size: int) -> list[list]:
     if len(current) >= min_size:
         groups.append(current)
     return groups
-
-
-def add_to_album_applescript(photos, album_name: str) -> None:
-    """Append photos to an album by driving Photos.app with AppleScript.
-
-    Fallback for when the PhotoKit helper can't be built. Slow, and needs Automation access.
-    """
-    from osxphotos.photosalbum import PhotosAlbum
-
-    # Batched (10 per Apple Event): one add per photo timed out the GUI commit on ~100 photos.
-    PhotosAlbum(album_name).update(photos)
