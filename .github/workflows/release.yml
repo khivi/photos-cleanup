@@ -1,0 +1,118 @@
+name: release
+
+# When a commit to master changes `let version` in main.swift: build a
+# universal binary + the SwiftPM resource bundle, tar them, create the GitHub
+# Release v<version> with the tarball attached, then bump the Homebrew tap.
+#
+# Idempotent: if release v<version> exists, the whole job after the check is
+# skipped. To redo a release, delete the release and the tag first.
+#
+# Repo secret HOMEBREW_TAP_TOKEN (the fine-grained PAT shared with cockpit)
+# is used only for the tap bump. It needs Contents: write on
+# khivi/homebrew-photos-cleanup.
+
+on:
+  push:
+    branches: [master]
+    paths: ["Sources/PhotosCleanup/main.swift"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write # create the tag and Release with GITHUB_TOKEN
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read version and skip if already released
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="$(sed -n 's/^let version = "\(.*\)"$/\1/p' Sources/PhotosCleanup/main.swift)"
+          if [ -z "$v" ]; then
+            echo "::error::could not read 'let version' from main.swift"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" >/dev/null 2>&1; then
+            echo "release v$v already exists"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # package.json has no `packageManager`, so pin the major here.
+      - if: steps.ver.outputs.skip == 'false'
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - if: steps.ver.outputs.skip == 'false'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - if: steps.ver.outputs.skip == 'false'
+        run: pnpm install --frozen-lockfile
+
+      - if: steps.ver.outputs.skip == 'false'
+        run: pnpm build
+
+      # The UI is gitignored; without this check a release that skipped
+      # `pnpm build` would ship a binary that serves a blank page.
+      - name: UI was built
+        if: steps.ver.outputs.skip == 'false'
+        run: test -f Sources/PhotosCleanup/ui/dist/index.html
+
+      - name: Build universal release binary
+        if: steps.ver.outputs.skip == 'false'
+        run: swift build -c release --arch arm64 --arch x86_64
+
+      - name: Package tarball
+        if: steps.ver.outputs.skip == 'false'
+        id: pkg
+        env:
+          V: ${{ steps.ver.outputs.version }}
+        run: |
+          bin="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
+          ls "$bin"
+          test -d "$bin/photos-cleanup_PhotosCleanup.bundle"
+          test -f "$bin/photos-cleanup_PhotosCleanup.bundle/ui/dist/index.html" \
+            || test -f "$bin/photos-cleanup_PhotosCleanup.bundle/Contents/Resources/ui/dist/index.html"
+          lipo -archs "$bin/photos-cleanup"
+          out="photos-cleanup-$V-macos-universal.tar.gz"
+          # Every bundle: Hummingbird's NIO dependencies look up their own via Bundle.module.
+          (cd "$bin" && tar -czf "$OLDPWD/$out" photos-cleanup *.bundle)
+          echo "tarball=$out" >> "$GITHUB_OUTPUT"
+          "$bin/photos-cleanup" --version | grep -q "$V"
+
+      - name: Create tag and GitHub Release
+        if: steps.ver.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.ver.outputs.version }}
+          TARBALL: ${{ steps.pkg.outputs.tarball }}
+        run: |
+          gh release create "v$V" "$TARBALL" \
+            --target "$GITHUB_SHA" --title "v$V" --generate-notes
+
+      - name: Bump Homebrew tap
+        if: steps.ver.outputs.skip == 'false'
+        uses: mislav/bump-homebrew-formula-action@v4
+        with:
+          formula-name: photos-cleanup
+          homebrew-tap: khivi/homebrew-photos-cleanup
+          tag-name: v${{ steps.ver.outputs.version }}
+          download-url: https://github.com/${{ github.repository }}/releases/download/v${{ steps.ver.outputs.version }}/${{ steps.pkg.outputs.tarball }}
+          create-branch: false
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

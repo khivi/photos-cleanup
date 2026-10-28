@@ -12,7 +12,7 @@ labels: bug
 
 - photos-cleanup version: <!-- `photos-cleanup --version` -->
 - macOS version:
-- Install method: <!-- brew / pip / pipx / uv / from source -->
+- Install method: <!-- brew / from source -->
 
 ## Terminal output
 
