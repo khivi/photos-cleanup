@@ -46,6 +46,7 @@ DEFAULT_IGNORE_ALBUMS = frozenset(
 CLEANUP_ALBUM_NAMES = frozenset(
     {
         "Screenshots - Delete Me",
+        "Low Quality - Delete Me",
         "Low Quality - Review Me",
         "Cluster Extras - Review Me",
         "Cluster Keepers",

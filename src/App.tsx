@@ -296,7 +296,7 @@ function App() {
   const rowCount = Math.ceil(displayed.length / columnCount);
   const banner =
     view === "deleted"
-      ? "Nothing is deleted yet. These photos were moved this session to the pass’s “Delete Me” / “Review Me” album — open it in Photos, select all, and delete. This list resets on reload."
+      ? "Nothing is deleted yet. These photos were moved this session to the pass’s “Delete Me” album — open it in Photos, select all, and delete. This list resets on reload."
       : status;
   const gridHeight = height - headerH - (banner ? 30 : 0);
 

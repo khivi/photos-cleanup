@@ -8,7 +8,7 @@ When you commit, the app files the photos into albums in Photos.
 ## Safety
 
 The app never deletes a photo.
-Photos you mark delete go into an album for that pass, such as "Screenshots - Delete Me". Low-quality photos go to "Low Quality - Review Me".
+Photos you mark delete go into an album for that pass, such as "Screenshots - Delete Me".
 Photos you mark keep go into a "Keep" album, such as "Screenshots - Keep". Later runs skip them.
 You delete the photos yourself from that album in Photos.
 The app skips favorites and photos that are already in your own albums.
@@ -70,7 +70,7 @@ If access is off, the app opens this settings pane and names the terminal app.
 1. Run `photos-cleanup`. Your browser opens at `http://127.0.0.1:8765/`.
 2. Pick a cleanup pass. The passes are screenshots, utility photos (receipts, tickets), bursts (repeated shots of one scene), and low quality.
 3. Review the thumbnail grid. Mark each photo keep or delete.
-4. Commit. Photos marked delete go into the pass's "Delete Me" album ("Review Me" for low quality). Keepers go into its "Keep" album.
+4. Commit. Photos marked delete go into the pass's "Delete Me" album. Keepers go into its "Keep" album.
 5. Open that album in Photos. Check it, then delete the photos there.
 
 Photos keeps deleted items in Recently Deleted for 30 days.

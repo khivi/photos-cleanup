@@ -561,3 +561,14 @@ def test_vision_batch_in_progress_is_not_queued_twice(monkeypatch, tmp_path):
         assert calls == [["a"]]
     finally:
         server._vision.cache_clear()
+
+
+def test_low_quality_files_into_delete_me_and_its_old_album_still_counts(monkeypatch):
+    assert server.ALBUMS["low-quality"] == "Low Quality - Delete Me"
+    old = FakePhoto("old", albums=["Low Quality - Review Me"])  # filed before the rename
+    new = FakePhoto("new", albums=["Low Quality - Delete Me"])
+    _patch_engine(
+        monkeypatch, [old, new, FakePhoto("a")], vision={u: V(-0.9) for u in ("old", "new", "a")}
+    )
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/low-quality").json()
+    assert [p["uuid"] for p in data["photos"]] == ["a"]

@@ -38,10 +38,10 @@ SIMILAR_MAX_DIST = 0.45
 # a finger over the lens); from about -0.7 up, dark or soft photos of people creep in.
 LOW_QUALITY_MAX = -0.75
 
-# Per-pass album names (engine convention: end with "Delete Me" / "Review Me").
+# Per-pass album names.
 ALBUMS = {
     "screenshots": "Screenshots - Delete Me",
-    "low-quality": "Low Quality - Review Me",
+    "low-quality": "Low Quality - Delete Me",
     "utility": "Utility - Delete Me",
     "clusters": "Bursts - Delete Me",
 }
@@ -53,6 +53,8 @@ KEEP_ALBUMS = {
     "utility": "Utility - Keep",
     "clusters": "Bursts - Keep",
 }
+# Earlier names of a pass's album: photos in them still count as filed.
+LEGACY_ALBUMS = {"low-quality": {"Low Quality - Review Me"}}
 # Passes judged by the Foundation Models classifier (see verdict.swift).
 VERDICT_KINDS = {"screenshots", "utility"}
 
@@ -369,7 +371,7 @@ def _candidates(kind: str) -> list:
     else:
         raise HTTPException(status_code=404, detail="unknown cleanup kind")
     # Album membership comes from the startup snapshot; _committed covers this session's commits.
-    filed = {ALBUMS[kind], KEEP_ALBUMS[kind]}
+    filed = {ALBUMS[kind], KEEP_ALBUMS[kind], *LEGACY_ALBUMS.get(kind, ())}
     return [p for p in photos if p.uuid not in _committed and filed.isdisjoint(p.albums)]
 
 
