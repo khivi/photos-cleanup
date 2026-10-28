@@ -80,7 +80,7 @@ wheels = [
 
 [[package]]
 name = "fastapi"
-version = "0.156.1"
+version = "0.158.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -90,9 +90,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1d/74/eb2eeca2185a17afaf31a12b7122fdde4e8783f58ee2164f6e2482a1e2a7/fastapi-0.156.1.tar.gz", hash = "sha256:9da53b0b8b2fd79e260da101dab73a0d6ce6b5e539bef515e5fc0e8abecc76e8", size = 493536, upload-time = "2026-10-20T18:24:08.537Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7c/47/702f3164e1453923434fb997fa5368a7f8e6a443e149d5c0e5148f279623/fastapi-0.158.0.tar.gz", hash = "sha256:890440689039bdadb06131bafae81eb63468a0dd9f6185fcec47afb69424ea6a", size = 509671, upload-time = "2026-10-21T17:02:14.798Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/aa/c2/8e4cb1429b2d7196659e048d6a55f53b687663a704943459af33dca92142/fastapi-0.156.1-py3-none-any.whl", hash = "sha256:0422f86554a11df52f0b80c34e5ba2f1d415cd0bca0c0910fdd37df80d4b534a", size = 146673, upload-time = "2026-10-20T18:24:07.134Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/df/f273d102d6ee50c5de3e56023a3e69bad30c209f8002e8d2efeecbeb114c/fastapi-0.158.0-py3-none-any.whl", hash = "sha256:c5127864026eca80a419047caba7760d561160904445fd825a60b6285b86ed0b", size = 148533, upload-time = "2026-10-21T17:02:12.881Z" },
 ]
 
 [[package]]
