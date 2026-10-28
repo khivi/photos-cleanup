@@ -10,6 +10,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 Next: **native SwiftUI app** (reopened 2026-10-28). The grid spike (`spike/grid_probe.swift`, `feea7cb`, `5542d42`) scrolled all 7,383 assets smoothly with `.highQualityFormat` plus `startCachingImages` ~30 rows ahead. It imports `PhotosCleanupCore` unchanged; the server and React UI go once it reaches parity. Earlier decision against it (2026-07-22): commit `8320785`.
 
+Decided for the native app, starting 2026-10-29:
+
+- **Build:** SwiftPM, plus a script that assembles and signs the `.app` bundle. No Xcode project.
+- **Thumbnails:** the app owns a `PHCachingImageManager` (`.highQualityFormat`, caching ~30 rows ahead), as in the spike. Core's JPEG `thumbnail()` stays for the server.
+- **Core types:** make `Photo` `Identifiable` and replace `PassResult`'s tuples when the first SwiftUI view needs them.
+- **Homebrew:** move the tap from a formula to a cask once the app matches the browser UI.
+- **Setup:** the app gets its own Photos permission; the terminal-permission steps and the `NSApplication` workaround go.
+
 Not pursuing:
 
 - **Mac App Store.** It needs a sandboxed app bundle; revisit once the native app exists.
