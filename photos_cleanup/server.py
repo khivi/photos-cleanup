@@ -1,10 +1,8 @@
 """Local server: serves the built UI (./ui) and the API on 127.0.0.1.
 
-Wraps the photo_cleanup engine; the UI is same-origin, so no CORS.
+Library reads go through library.py (osxphotos); the UI is same-origin, so no CORS.
 ponytail: single cached PhotosDB + photo index — the load is slow (seconds on a
 big library) so we do it once; restart the server to pick up library changes.
-
-The engine (photo_cleanup) is vendored in-repo — see CLAUDE.md.
 """
 
 from __future__ import annotations
@@ -27,10 +25,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from photo_cleanup import common
-from photo_cleanup.cleanups.clusters import _score_for_sort
+from photos_cleanup import library
 
-CLUSTER_WINDOW_S = 60  # the clusters cleanup's default
+CLUSTER_WINDOW_S = 60
 # Feature-print L2 distance below which two neighbouring shots count as repeats. Calibrated
 # by eye on 40 real bursts: pairs <= 0.44 were the same shot; from 0.46 they were different
 # photos (report pages, a different person, different medicine labels).
@@ -43,7 +40,7 @@ ALBUMS = {
     "utility": "Utility - Delete Me",
     "clusters": "Bursts - Delete Me",
 }
-# Not in common.CLEANUP_ALBUM_NAMES, so they count as user albums and the candidate
+# Not in library.CLEANUP_ALBUM_NAMES, so they count as user albums and the candidate
 # filter skips their photos on every later run.
 KEEP_ALBUMS = {
     "screenshots": "Screenshots - Keep",
@@ -73,7 +70,7 @@ _MIN = datetime.min.replace(tzinfo=UTC)
 
 @functools.lru_cache(maxsize=1)
 def db():
-    return common.get_photosdb()
+    return library.get_photosdb()
 
 
 # The cached PhotosDB never sees album changes, so committed photos are tracked here.
@@ -140,7 +137,7 @@ def _add_to_album(photos, album: str) -> None:
         exe = _swift_bin(ALBUMS_SRC, INFO_PLIST)
     except (subprocess.CalledProcessError, OSError):
         # No Swift toolchain: the AppleScript path is slow and needs Automation access, but works.
-        common.add_to_album(photos, album, assume_yes=True, replace=False)
+        library.add_to_album_applescript(photos, album)
         return
     out = subprocess.run(
         [exe, album], input="".join(f"{p.uuid}\n" for p in photos), capture_output=True, text=True
@@ -273,7 +270,7 @@ def _start_classifier(photos) -> None:
 def _index():
     """Newest-first photo list + uuid lookup, built once."""
     photos = db().photos()
-    photos.sort(key=lambda p: common.make_aware(p.date) if p.date else _MIN, reverse=True)
+    photos.sort(key=lambda p: library.make_aware(p.date) if p.date else _MIN, reverse=True)
     return photos, {p.uuid: p for p in photos}
 
 
@@ -320,19 +317,19 @@ def thumb(uuid: str):
 def _candidates(kind: str, threshold: float = 0.01) -> list:
     """A pass's photos, before any model judgement, minus those already filed."""
     photosdb = db()
-    ignore = common.load_ignore_albums(None)
+    ignore = library.load_ignore_albums()
     if kind == "screenshots":
-        photos, _ = common.get_candidate_photos(photosdb, ignore, only_screenshots=True)
+        photos = library.get_candidate_photos(photosdb, ignore, only_screenshots=True)
     elif kind == "utility":
         # Screenshots have their own pass; the classifier's Vision step filters the rest.
-        photos, _ = common.get_candidate_photos(photosdb, ignore)
+        photos = library.get_candidate_photos(photosdb, ignore)
         photos = [p for p in photos if _image_path(p)]
     elif kind == "clusters":
-        photos, _ = common.get_candidate_photos(photosdb, ignore, require_valid_date=True)
+        photos = library.get_candidate_photos(photosdb, ignore, require_valid_date=True)
     elif kind == "low-quality":
-        photos, _ = common.get_candidate_photos(photosdb, ignore)
+        photos = library.get_candidate_photos(photosdb, ignore)
         photos = [
-            p for p in photos if (s := common.get_photo_score(p)) is not None and s <= threshold
+            p for p in photos if (s := library.get_photo_score(p)) is not None and s <= threshold
         ]
     else:
         raise HTTPException(status_code=404, detail="unknown cleanup kind")
@@ -342,8 +339,8 @@ def _candidates(kind: str, threshold: float = 0.01) -> list:
 
 
 def _time_bursts(photos) -> list[list]:
-    photos = sorted(photos, key=lambda p: common.make_aware(p.date))
-    return common.group_by_time(photos, CLUSTER_WINDOW_S, 2)
+    photos = sorted(photos, key=lambda p: library.make_aware(p.date))
+    return library.group_by_time(photos, CLUSTER_WINDOW_S, 2)
 
 
 @app.get("/counts")
@@ -388,7 +385,7 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
         groups = [run for g in bursts for run in _split_similar(g, prints)]
         out = []
         for g in reversed(groups):  # newest group first
-            best = max(g, key=_score_for_sort)  # first max wins ties: earliest shot
+            best = max(g, key=library.score_for_sort)  # first max wins ties: earliest shot
             out.append({"photos": [_meta(p) for p in g], "best": best.uuid})
         return {
             "kind": kind,
@@ -396,7 +393,7 @@ def cleanup(kind: str, threshold: float = 0.01) -> dict:
             "groups": out,
             "classify": {"pending": 0, "error": None},
         }
-    photos.sort(key=lambda p: common.make_aware(p.date) if p.date else _MIN, reverse=True)
+    photos.sort(key=lambda p: library.make_aware(p.date) if p.date else _MIN, reverse=True)
     verdicts: dict[str, dict] = {}
     classify = {"pending": 0, "error": None}
     if kind in VERDICT_KINDS:

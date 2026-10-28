@@ -19,7 +19,7 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-from photo_cleanup import common
+from photos_cleanup import library as common
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 300
 random.seed(0)

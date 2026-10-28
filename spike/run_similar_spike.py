@@ -8,7 +8,9 @@ For every involved photo we compute Vision's VNGenerateImageFeaturePrintRequest 
 measure pairwise L2 distance, then ask: does small Vision distance separate the
 positives from the negatives? If yes, the "similar" pass survives a native rewrite.
 
-Needs Full Disk Access. Run: uv run python spike/run_similar_spike.py
+Historical: it imports the engine copy removed from this repo, so it no longer runs here.
+Its result (Vision catches the exact dupes at 0.0-0.35, random pairs at 0.70+) is what
+the Bursts similarity split builds on. The engine lives on in the photo-cleanup repo.
 """
 
 from __future__ import annotations

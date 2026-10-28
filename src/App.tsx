@@ -8,7 +8,7 @@ type Photo = {
   filename: string;
   is_video: boolean;
   verdict?: Verdict | null;
-  best?: boolean; // clusters: the engine's pick of the group
+  best?: boolean; // clusters: the highest-scored photo of the group
 };
 type Classify = { pending: number; total?: number; error: string | null };
 type View = "all" | "screenshots" | "utility" | "clusters" | "low-quality" | "deleted";

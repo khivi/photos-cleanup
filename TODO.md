@@ -2,7 +2,7 @@
 
 ## Stack — DECIDED 2026-10-27: browser + local Python server
 
-The app stays a local FastAPI server (osxphotos engine) serving the React UI to the browser. Swift exists only as on-device helpers the server shells out to (`photos_cleanup/verdict.swift`).
+The app stays a local FastAPI server (osxphotos reads) serving the React UI to the browser. Swift exists only as on-device helpers the server shells out to (`photos_cleanup/verdict.swift`).
 
 Not pursuing:
 

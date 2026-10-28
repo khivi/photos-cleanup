@@ -16,7 +16,7 @@ classifiers = [
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
-    "osxphotos>=0.68",  # the engine (photo_cleanup, vendored below) reads the library
+    "osxphotos>=0.68",  # reads the library (photos_cleanup/library.py)
 ]
 
 [project.urls]
@@ -32,15 +32,14 @@ photos-cleanup = "photos_cleanup.cli:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# One codebase: the vendored engine (./photo_cleanup) and the server (./photos_cleanup)
-# install from this same pyproject. The UI is built by `pnpm build` into
-# photos_cleanup/ui, which is gitignored, so it ships as an artifact.
+# The UI is built by `pnpm build` into photos_cleanup/ui, which is gitignored, so it
+# ships as an artifact.
 [tool.hatch.build.targets.wheel]
-packages = ["photo_cleanup", "photos_cleanup"]
+packages = ["photos_cleanup"]
 artifacts = ["photos_cleanup/ui/"]
 
 [tool.hatch.build.targets.sdist]
-include = ["photo_cleanup/", "photos_cleanup/", "README.md", "LICENSE"]
+include = ["photos_cleanup/", "README.md", "LICENSE"]
 artifacts = ["photos_cleanup/ui/"]
 
 [dependency-groups]

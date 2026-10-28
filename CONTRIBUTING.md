@@ -44,17 +44,10 @@ The pre-push hook runs pytest and `uv audit`.
 
 ## Layout
 
-- `photo_cleanup/` — vendored engine
-- `photos_cleanup/` — FastAPI server and the Swift verdict helper
+- `photos_cleanup/` — FastAPI server, library reads (`library.py`) and the Swift helpers
 - `src/` — React UI
 - `tests/` — server tests
 - `spike/` — research probes
-
-## Vendored engine
-
-The engine in `./photo_cleanup` is the source of truth in this repo.
-It started as a copy of an upstream project.
-Edit it here. Do not import or depend on the upstream repo.
 
 ## Release
 

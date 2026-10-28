@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from photos_cleanup import cli, server
+from photos_cleanup import cli, library, server
 
 
 class FakePhoto:
@@ -77,9 +77,9 @@ def test_thumb_serves_and_404(monkeypatch, tmp_path):
 
 def _patch_engine(monkeypatch, candidates, verdicts=None):
     monkeypatch.setattr(server, "db", lambda: object())
-    monkeypatch.setattr(server.common, "load_ignore_albums", lambda extra=None: frozenset())
+    monkeypatch.setattr(server.library, "load_ignore_albums", lambda: frozenset())
     monkeypatch.setattr(
-        server.common, "get_candidate_photos", lambda pdb, ignore, **kw: (candidates, {})
+        server.library, "get_candidate_photos", lambda pdb, ignore, **kw: candidates
     )
     monkeypatch.setattr(server, "_verdicts", lambda: verdicts or {})
     monkeypatch.setattr(server, "_start_classifier", lambda photos: None)
@@ -118,7 +118,7 @@ def test_cleanup_clusters_groups_bursts_with_best(monkeypatch):
     photos[-1].date = t0 + timedelta(seconds=1040)
     _patch_engine(monkeypatch, photos)
     scores = {"a": 0.1, "b": 0.9, "c": 0.5, "d": 0.2, "e": 0.3, "f": 0.8, "g": None}
-    monkeypatch.setattr(server.common, "get_photo_score", lambda p: scores.get(p.uuid))
+    monkeypatch.setattr(server.library, "get_photo_score", lambda p: scores.get(p.uuid))
     monkeypatch.setattr(server, "_feature_prints", lambda ps: {p.uuid: [0.0] for p in ps})
     data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/clusters").json()
     assert [(g["best"], [p["uuid"] for p in g["photos"]]) for g in data["groups"]] == [
@@ -135,7 +135,7 @@ def test_cleanup_clusters_splits_bursts_that_look_different(monkeypatch):
     for i, p in enumerate(photos):
         p.date = t0 + timedelta(seconds=10 * i)
     _patch_engine(monkeypatch, photos)
-    monkeypatch.setattr(server.common, "get_photo_score", lambda p: 0.5)
+    monkeypatch.setattr(server.library, "get_photo_score", lambda p: 0.5)
     # e: a one-off; f, g: utility images (document pages look alike), never grouped.
     prints = {"a": [0.0], "b": [0.1], "c": [2.0], "d": [2.1], "e": [5.0], "f": None, "g": None}
     monkeypatch.setattr(server, "_feature_prints", lambda ps: prints)
@@ -161,7 +161,7 @@ def test_cleanup_clusters_shows_none_without_feature_prints(monkeypatch):
 def test_cleanup_low_quality_filters_by_score(monkeypatch):
     _patch_engine(monkeypatch, [FakePhoto("a"), FakePhoto("b"), FakePhoto("c")])
     scores = {"a": 0.005, "b": 0.5, "c": None}  # c is unscored -> excluded
-    monkeypatch.setattr(server.common, "get_photo_score", lambda p: scores[p.uuid])
+    monkeypatch.setattr(server.library, "get_photo_score", lambda p: scores[p.uuid])
     data = (
         TestClient(server.app, base_url="http://127.0.0.1")
         .get("/cleanup/low-quality?threshold=0.01")
@@ -371,7 +371,7 @@ def test_counts_only_where_known(monkeypatch):
         p.date = t0 + timedelta(seconds=i)
     _patch_engine(monkeypatch, photos)
     monkeypatch.setattr(server, "_index", lambda: (photos, {p.uuid: p for p in photos}))
-    monkeypatch.setattr(server.common, "get_photo_score", lambda p: 0.0)
+    monkeypatch.setattr(server.library, "get_photo_score", lambda p: 0.0)
     monkeypatch.setattr(server, "_prints", {})
     client = TestClient(server.app, base_url="http://127.0.0.1")
     data = client.get("/counts").json()
@@ -432,7 +432,49 @@ def test_add_to_album_falls_back_to_applescript_without_swiftc(monkeypatch):
     monkeypatch.setattr(server, "_swift_bin", no_swiftc)
     calls = []
     monkeypatch.setattr(
-        server.common, "add_to_album", lambda photos, album, **kw: calls.append(album)
+        server.library, "add_to_album_applescript", lambda photos, album: calls.append(album)
     )
     server._add_to_album([FakePhoto("a")], "X")
     assert calls == ["X"]
+
+
+def test_candidate_filter():
+    class P:
+        def __init__(
+            self, uuid, screenshot=False, ismovie=False, favorite=False, albums=(), year=2024
+        ):
+            self.uuid, self.screenshot, self.ismovie, self.favorite = (
+                uuid,
+                screenshot,
+                ismovie,
+                favorite,
+            )
+            self.albums = list(albums)
+            self.date = datetime(year, 1, 1) if year else None
+
+    class DB:
+        def photos(self):
+            return [
+                P("plain"),
+                P("shot", screenshot=True),
+                P("movie", ismovie=True),
+                P("fav", favorite=True),
+                P("mine", albums=["Trip to Goa"]),  # the user's own album protects it
+                P("smart", albums=["Selfies"]),  # Apple's smart album doesn't
+                P("filed", albums=["Screenshots - Delete Me"]),  # nor does a review album
+                P("undated", year=None),
+                P("old", year=1990),
+            ]
+
+    ignore = library.load_ignore_albums()
+    uuids = lambda ps: [p.uuid for p in ps]  # noqa: E731
+    assert uuids(library.get_candidate_photos(DB(), ignore)) == [
+        "plain",
+        "smart",
+        "filed",
+        "undated",
+        "old",
+    ]
+    assert uuids(library.get_candidate_photos(DB(), ignore, only_screenshots=True)) == ["shot"]
+    dated = library.get_candidate_photos(DB(), ignore, require_valid_date=True)
+    assert uuids(dated) == ["plain", "smart", "filed"]

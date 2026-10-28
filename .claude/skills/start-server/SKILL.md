@@ -12,7 +12,7 @@ Run from the repo root.
    ```bash
    P=$(lsof -ti tcp:8765 -sTCP:LISTEN)
    T=$(date -j -f "%a %b %d %T %Y" "$(ps -o lstart= -p "$P" | xargs)" +%FT%T)
-   find photos_cleanup photo_cleanup pyproject.toml uv.lock -name '*.py' -newermt "$T" -o -name '*.toml' -newermt "$T" -o -name uv.lock -newermt "$T"
+   find photos_cleanup pyproject.toml uv.lock -name '*.py' -newermt "$T" -o -name '*.toml' -newermt "$T" -o -name uv.lock -newermt "$T"
    ```
 
    No output: the server is current. Rebuild the UI if needed (step 2), report the
