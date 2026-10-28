@@ -57,6 +57,7 @@ The tests fake `PhotoLibrary` and `Judge`, so they need no library and no Apple 
 ### Executable: `Sources/PhotosCleanup/`
 
 `main.swift` holds `let version`. It parses options, then checks that the UI exists and the port is free.
+The decisions behind those checks live in `Sources/PhotosCleanupServer/Startup.swift`, where tests cover them; `main.swift` only acts on them.
 If the port serves `/health`, it reopens the browser and exits.
 It starts a windowless `NSApplication`, because PhotoKit's `requestImage` returns nil in a plain command-line process.
 It asks for Photos access, loads the photo list, starts the Vision job and runs the server.
