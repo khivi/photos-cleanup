@@ -228,7 +228,7 @@ function App() {
     if (uuids.length === 0 && keep.length === 0) return;
     setCommitting(true);
     setStatus(null);
-    // First commit triggers a macOS "control Photos" prompt; if it isn't
+    // The first commit triggers macOS's Photos access prompt; if it isn't
     // answered the request blocks. Time out so the UI never hangs forever.
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 90_000);
@@ -239,7 +239,10 @@ function App() {
         body: JSON.stringify({ kind: view, uuids, keep }),
         signal: ctrl.signal,
       });
-      if (!r.ok) throw new Error(`commit failed (${r.status})`);
+      if (!r.ok) {
+        const detail = await r.json().then((d) => d.detail, () => null);
+        throw new Error(detail ?? `commit failed (${r.status})`);
+      }
       const data = await r.json();
       // Refresh: pull the moved photos out of the candidate grid and into the
       // "To be deleted" tab (dedupe by uuid).
@@ -264,8 +267,8 @@ function App() {
       const timedOut = e instanceof DOMException && e.name === "AbortError";
       setStatus(
         timedOut
-          ? "Timed out — Photos may still be adding, or a “control Photos” prompt is pending (System Settings → Privacy → Automation). Try again; re-adding is safe."
-          : String(e),
+          ? "Timed out — a Photos access prompt may be waiting for an answer. Try again; re-adding is safe."
+          : e instanceof Error ? e.message : String(e),
       );
     } finally {
       clearTimeout(timer);

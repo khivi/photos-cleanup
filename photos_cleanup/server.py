@@ -58,6 +58,8 @@ UI_DIR = Path(__file__).with_name("ui")
 CACHE_DIR = Path.home() / "Library/Caches/photos-cleanup"
 VERDICT_SRC = Path(__file__).with_name("verdict.swift")
 FEATUREPRINT_SRC = Path(__file__).with_name("featureprint.swift")
+ALBUMS_SRC = Path(__file__).with_name("albums.swift")
+INFO_PLIST = Path(__file__).with_name("Info.plist")  # PhotoKit's permission prompt needs it
 DECISIONS_LOG = "decisions.jsonl"  # user's final keep/delete per committed verdict photo
 # Keyed to the helper's source, so a prompt or kind-list change re-judges everything.
 VERDICT_CACHE = f"verdicts-{hashlib.sha256(VERDICT_SRC.read_bytes()).hexdigest()[:8]}.jsonl"
@@ -120,12 +122,37 @@ def _image_path(p) -> str | None:
     return p.path or (p.path_derivatives[0] if p.path_derivatives else None)
 
 
-def _swift_bin(src: Path) -> Path:
+def _swift_bin(src: Path, plist: Path | None = None) -> Path:
     exe = CACHE_DIR / src.stem
     if not exe.exists() or exe.stat().st_mtime < src.stat().st_mtime:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["swiftc", "-O", str(src), "-o", str(exe)], check=True, capture_output=True)
+        embed = ["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist"]
+        extra = [*embed, "-Xlinker", str(plist)] if plist else []
+        subprocess.run(
+            ["swiftc", "-O", str(src), "-o", str(exe), *extra], check=True, capture_output=True
+        )
     return exe
+
+
+def _add_to_album(photos, album: str) -> None:
+    """Append photos to an album through PhotoKit (albums.swift): one call, no Apple Events."""
+    try:
+        exe = _swift_bin(ALBUMS_SRC, INFO_PLIST)
+    except (subprocess.CalledProcessError, OSError):
+        # No Swift toolchain: the AppleScript path is slow and needs Automation access, but works.
+        common.add_to_album(photos, album, assume_yes=True, replace=False)
+        return
+    out = subprocess.run(
+        [exe, album], input="".join(f"{p.uuid}\n" for p in photos), capture_output=True, text=True
+    )
+    if out.returncode == 3:
+        raise HTTPException(
+            status_code=403,
+            detail="Photos access is off. Turn it on for your terminal app in System Settings "
+            "> Privacy & Security > Photos, then commit again.",
+        )
+    if out.returncode != 0:
+        raise HTTPException(status_code=500, detail=f"Adding to album failed: {out.stderr[-300:]}")
 
 
 # ponytail: in-memory only; ~1.3k prints take ~10s, so a restart recomputes them.
@@ -446,9 +473,7 @@ def commit(req: CommitReq) -> dict:
         raise HTTPException(status_code=400, detail="no matching photos")
     for photos, name in ((doomed, album), (kept, keep_album)):
         if photos:
-            # assume_yes: no TTY here, the GUI already confirmed. Append: replacing
-            # would drop earlier commits from the album.
-            common.add_to_album(photos, name, assume_yes=True, replace=False)
+            _add_to_album(photos, name)
     _committed.update(p.uuid for p in doomed + kept)
     if req.kind in VERDICT_KINDS:
         _log_decisions(

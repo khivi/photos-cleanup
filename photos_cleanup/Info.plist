@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.khivi.photos-cleanup</string>
+    <key>CFBundleName</key>
+    <string>photos-cleanup</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>photos-cleanup reads your library to find photos to review and files them into review albums. It never deletes.</string>
+</dict>
+</plist>

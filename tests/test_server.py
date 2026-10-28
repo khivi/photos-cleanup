@@ -210,9 +210,9 @@ def test_commit_files_delete_and_keep_then_hides_them(monkeypatch):
     _patch_engine(monkeypatch, items)
     calls = []
     monkeypatch.setattr(
-        server.common,
-        "add_to_album",
-        lambda photos, album, **kw: calls.append(([p.uuid for p in photos], album, kw)),
+        server,
+        "_add_to_album",
+        lambda photos, album: calls.append(([p.uuid for p in photos], album)),
     )
     client = TestClient(server.app, base_url="http://127.0.0.1")
     r = client.post("/commit", json={"kind": "screenshots", "uuids": ["a"], "keep": ["b"]})
@@ -222,10 +222,7 @@ def test_commit_files_delete_and_keep_then_hides_them(monkeypatch):
         "kept": 1,
         "keep_album": "Screenshots - Keep",
     }
-    assert calls == [
-        (["a"], "Screenshots - Delete Me", {"assume_yes": True, "replace": False}),
-        (["b"], "Screenshots - Keep", {"assume_yes": True, "replace": False}),
-    ]
+    assert calls == [(["a"], "Screenshots - Delete Me"), (["b"], "Screenshots - Keep")]
     remaining = client.get("/cleanup/screenshots").json()["photos"]
     assert [p["uuid"] for p in remaining] == ["c"]
 
@@ -240,7 +237,7 @@ def test_commit_unknown_kind_404(monkeypatch):
 
 def test_commit_no_matching_400(monkeypatch):
     monkeypatch.setattr(server, "_index", lambda: ([], {}))
-    monkeypatch.setattr(server.common, "add_to_album", lambda *a, **k: None)
+    monkeypatch.setattr(server, "_add_to_album", lambda *a: None)
     r = TestClient(server.app, base_url="http://127.0.0.1").post(
         "/commit", json={"kind": "screenshots", "uuids": ["missing"], "keep": ["gone"]}
     )
@@ -256,7 +253,7 @@ def test_commit_logs_decisions_and_verdict_stats(monkeypatch, tmp_path):
     }  # c has no verdict: not logged
     _patch_engine(monkeypatch, items, verdicts)
     monkeypatch.setattr(server, "CACHE_DIR", tmp_path)
-    monkeypatch.setattr(server.common, "add_to_album", lambda *a, **k: None)
+    monkeypatch.setattr(server, "_add_to_album", lambda *a: None)
     client = TestClient(server.app, base_url="http://127.0.0.1")
     assert client.get("/verdict-stats").json() == {}
     client.post("/commit", json={"kind": "screenshots", "uuids": ["a", "c"], "keep": ["b"]})
@@ -403,3 +400,39 @@ def test_utility_never_preselects_a_misread_screenshot_for_delete(monkeypatch):
     assert got == {"a": True, "b": False}
     shots = client.get("/cleanup/screenshots").json()["photos"]  # the Screenshots pass is untouched
     assert {p["uuid"]: p["verdict"]["keep"] for p in shots} == {"a": False, "b": False}
+
+
+def test_add_to_album_runs_the_photokit_helper(monkeypatch):
+    monkeypatch.setattr(server, "_swift_bin", lambda src, plist=None: "/bin/albums")
+    seen = {}
+
+    def run(cmd, input, **kw):
+        seen.update(cmd=cmd, input=input)
+        return subprocess.CompletedProcess(cmd, 0, "2\t0\n", "")
+
+    monkeypatch.setattr(server.subprocess, "run", run)
+    server._add_to_album([FakePhoto("a"), FakePhoto("b")], "X - Delete Me")
+    assert seen == {"cmd": ["/bin/albums", "X - Delete Me"], "input": "a\nb\n"}
+
+
+def test_add_to_album_reports_photos_access_off(monkeypatch):
+    monkeypatch.setattr(server, "_swift_bin", lambda src, plist=None: "/bin/albums")
+    monkeypatch.setattr(
+        server.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 3, "", "")
+    )
+    with pytest.raises(server.HTTPException) as e:
+        server._add_to_album([FakePhoto("a")], "X")
+    assert e.value.status_code == 403 and "Privacy & Security > Photos" in e.value.detail
+
+
+def test_add_to_album_falls_back_to_applescript_without_swiftc(monkeypatch):
+    def no_swiftc(src, plist=None):
+        raise FileNotFoundError("swiftc")
+
+    monkeypatch.setattr(server, "_swift_bin", no_swiftc)
+    calls = []
+    monkeypatch.setattr(
+        server.common, "add_to_album", lambda photos, album, **kw: calls.append(album)
+    )
+    server._add_to_album([FakePhoto("a")], "X")
+    assert calls == ["X"]

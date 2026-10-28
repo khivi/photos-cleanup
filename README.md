@@ -66,12 +66,16 @@ The app needs this to read the Photos library. Grant it to the terminal app that
 
 If access is off, the app opens this settings pane and names the terminal app.
 
-### Photos automation
+### Photos
 
-The app writes albums through Photos with AppleScript.
-On your first commit, macOS asks if your terminal may control Photos.
-Click OK.
-To change this later, open System Settings > Privacy & Security > Automation.
+The app files photos into albums through PhotoKit, Apple's Photos API.
+On your first commit, macOS asks if your terminal may access your Photos.
+Click Allow.
+To change this later, open System Settings > Privacy & Security > Photos.
+
+Without Xcode's command-line tools (`xcode-select --install`), the app falls back to AppleScript.
+Then macOS asks instead if your terminal may control Photos.
+That path is slower on large commits.
 
 ## Usage
 
