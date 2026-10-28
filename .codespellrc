@@ -1,2 +1,2 @@
 [codespell]
-skip = .git,node_modules,dist,.venv,*.lock,pnpm-lock.yaml,*.icns,*.png
+skip = .git,node_modules,dist,*.lock,pnpm-lock.yaml,*.icns,*.png

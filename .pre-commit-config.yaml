@@ -14,7 +14,6 @@ repos:
       - id: check-yaml
       - id: check-json
         exclude: ^tsconfig.*\.json$  # tsconfigs are JSONC (comments)
-      - id: check-toml
       - id: check-added-large-files
       - id: check-case-conflict
       - id: check-merge-conflict
@@ -22,21 +21,6 @@ repos:
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
       - id: detect-private-key
-      - id: debug-statements
-
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
-    hooks:
-      - id: ruff
-        args: ['--fix']
-        types_or: [python, pyi]
-      - id: ruff-format
-        types_or: [python, pyi]
-
-  - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.25
-    hooks:
-      - id: validate-pyproject
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.43.0
@@ -68,28 +52,21 @@ repos:
         language: system
         types: [swift]
         # The Swift package's files only compile together; swift-build checks them.
-        exclude: ^(spike|Sources|Tests|tests)/|^Package\.swift$
+        exclude: ^(spike|Sources|Tests)/|^Package\.swift$
 
       # The Swift package (server, Core, tests) builds as a whole.
       - id: swift-build
         name: swift build (with tests)
         entry: swift build --build-tests
         language: system
-        files: ^(Sources|Tests|tests)/.*\.swift$|^Package\.(swift|resolved)$
+        files: ^(Sources|Tests)/.*\.swift$|^Package\.(swift|resolved)$
         pass_filenames: false
 
-      - id: pytest
-        name: pytest
-        entry: uv run pytest -q
+      # The full test run; too slow for every commit, so pre-push only.
+      - id: swift-test
+        name: swift test
+        entry: swift test
         language: system
-        types: [python]
-        pass_filenames: false
-        stages: [pre-push]
-
-      - id: uv-audit
-        name: uv audit (dependency vulnerabilities)
-        entry: uv audit --preview-features audit-command
-        language: system
-        always_run: true
+        types: [swift]
         pass_filenames: false
         stages: [pre-push]
