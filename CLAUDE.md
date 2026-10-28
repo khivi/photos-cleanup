@@ -24,6 +24,17 @@ Keep this sibling-repo note out of code and config comments — it belongs only 
 - `src/` — React UI; in dev, Vite proxies API paths to :8765
 - Public docs: `README.md`, `CONTRIBUTING.md` (dev and release), `SECURITY.md`
 
+## Naming a pass
+
+A pass has exactly one name, set in `PASSES` in `server.py`: the key (`bursts`) is the
+URL and the UI view; the title (`Bursts`) is the tab label and the album prefix. Its
+albums are always `<Title> - Delete Me` and `<Title> - Keep`, derived from the title,
+never written out. No synonyms: not "clusters" for Bursts, not "Review Me" for an album.
+`test_every_pass_has_one_name` enforces this, including the tab labels in `App.tsx`.
+
+Renaming a pass whose albums already exist in users' libraries: add the old album names
+to `LEGACY_ALBUMS`, so photos filed under them don't come back as candidates.
+
 ## Dev
 
 ```bash

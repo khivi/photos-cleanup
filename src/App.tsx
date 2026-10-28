@@ -7,24 +7,25 @@ type Photo = {
   uuid: string;
   is_video: boolean;
   verdict?: Verdict | null;
-  best?: boolean; // clusters: the highest-scored photo of the group
+  best?: boolean; // bursts: the highest-scored photo of the group
 };
 type Classify = { pending: number; total?: number; error: string | null };
-type View = "all" | "screenshots" | "utility" | "clusters" | "low-quality" | "deleted";
+// A pass's view key and tab label match the server's PASSES (and its albums' prefix).
+type View = "all" | "screenshots" | "utility" | "bursts" | "low-quality" | "deleted";
 type Decision = "keep" | "delete";
-const CLEANUP_VIEWS: View[] = ["screenshots", "utility", "clusters", "low-quality"];
+const CLEANUP_VIEWS: View[] = ["screenshots", "utility", "bursts", "low-quality"];
 const VERDICT_VIEWS: View[] = ["screenshots", "utility"]; // judged by the on-device model
 
 const CELL = 170; // px per thumbnail cell
 const POLL_MS = 5000; // refresh while the server analyses or classifies in the background
 
-/** Burst rows from /cleanup/clusters, each photo flagged with whether it's its group's best. */
+/** Burst rows from /cleanup/bursts, each photo flagged with whether it's its group's best. */
 function groupsOf(data: { groups: { photos: Photo[]; best: string }[] }): Photo[][] {
   return data.groups.map((g) => g.photos.map((p) => ({ ...p, best: p.uuid === g.best })));
 }
 
 function initialDecision(v: View, p: Photo): Decision {
-  if (v === "clusters") return p.best ? "keep" : "delete";
+  if (v === "bursts") return p.best ? "keep" : "delete";
   if (!VERDICT_VIEWS.includes(v)) return "delete";
   return p.verdict && !p.verdict.keep ? "delete" : "keep";
 }
@@ -76,7 +77,7 @@ function App() {
   const [view, setView] = useState<View>("all");
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [deleted, setDeleted] = useState<Photo[]>([]); // queued-for-deletion this session
-  const [groups, setGroups] = useState<Photo[][]>([]); // clusters view: one row per burst
+  const [groups, setGroups] = useState<Photo[][]>([]); // bursts view: one row per burst
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [touched, setTouched] = useState<Set<string>>(new Set()); // decided explicitly by the user
   const touchedRef = useRef(touched);
@@ -146,7 +147,7 @@ function App() {
         if (!r.ok) return;
         const data = await r.json();
         if (cancelled) return;
-        if (view === "clusters") {
+        if (view === "bursts") {
           // Bursts regroup as more photos are analysed, so take the new rows wholesale.
           const gs = groupsOf(data);
           setGroups(gs);
@@ -154,7 +155,7 @@ function App() {
         }
         const fresh = new Map<string, Photo>(data.photos.map((p: Photo) => [p.uuid, p]));
         // Candidates appear as they're analysed or classified, so merge new ones in.
-        if (view === "clusters") setPhotos(data.photos);
+        if (view === "bursts") setPhotos(data.photos);
         else setPhotos((prev) => {
           const have = new Set(prev.map((p) => p.uuid));
           const added = data.photos.filter((p: Photo) => !have.has(p.uuid));
@@ -192,7 +193,7 @@ function App() {
       const path = v === "all" ? "/photos" : `/cleanup/${v}`;
       const r = await fetch(path);
       const data = await r.json();
-      if (v === "clusters") {
+      if (v === "bursts") {
         const gs = groupsOf(data);
         data.photos = gs.flat();
         setGroups(gs);
@@ -418,8 +419,8 @@ function App() {
         <Tab v="all" label="All" />
         <Tab v="screenshots" label="Screenshots" />
         <Tab v="utility" label="Utility" />
-        <Tab v="clusters" label="Bursts" />
-        <Tab v="low-quality" label="Low quality" />
+        <Tab v="bursts" label="Bursts" />
+        <Tab v="low-quality" label="Low Quality" />
         <Tab
           v="deleted"
           label="To be deleted"
@@ -451,7 +452,7 @@ function App() {
           )}
           {!loading && classify.error && (
             <span style={{ fontWeight: 400, fontSize: 12, color: "crimson", marginRight: 10 }}>
-              {view === "clusters" ? "Similarity check unavailable" : "AI verdicts unavailable"}:{" "}
+              {view === "bursts" ? "Similarity check unavailable" : "AI verdicts unavailable"}:{" "}
               {classify.error}
             </span>
           )}
@@ -493,7 +494,7 @@ function App() {
             Nothing left to review. Photos already filed in this pass’s albums are hidden.
           </div>
         )}
-        {!loading && width > 0 && view === "clusters" && (
+        {!loading && width > 0 && view === "bursts" && (
           <List
             rowComponent={GroupRow}
             rowProps={{ groups, cell }}
@@ -502,7 +503,7 @@ function App() {
             style={{ width, height: gridHeight }}
           />
         )}
-        {!loading && width > 0 && view !== "clusters" && (
+        {!loading && width > 0 && view !== "bursts" && (
           <Grid
             key={view}
             cellComponent={GridCell}

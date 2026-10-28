@@ -129,7 +129,7 @@ def main() -> None:
     except Exception as e:
         _die(f"couldn't load the Photos library: {e}")
     print(f"{n:,} photos loaded in {time.monotonic() - start:.1f}s.")
-    # Bursts, Low quality and Utility all need the Vision analysis; start it now.
+    # Bursts, Low Quality and Utility all need the Vision analysis; start it now.
     stills = [p for p in server._index()[0] if not p.ismovie and not p.screenshot]
     progress = server._start_vision(stills)
     if progress["pending"]:

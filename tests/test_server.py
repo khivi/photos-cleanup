@@ -128,12 +128,12 @@ def _dated(uuids_secs: dict[str, int]) -> list[FakePhoto]:
     return [FakePhoto(u, date=t0 + timedelta(seconds=s)) for u, s in uuids_secs.items()]
 
 
-def test_cleanup_clusters_groups_bursts_with_best(monkeypatch):
+def test_cleanup_bursts_groups_bursts_with_best(monkeypatch):
     photos = _dated({"a": 0, "b": 10, "c": 20, "far": 500, "d": 1000, "e": 1010, "f": 1020})
     photos += [FakePhoto("filed", albums=["Bursts - Keep"], date=photos[-1].date)]
     scores = {"a": 0.1, "b": 0.9, "c": 0.5, "far": 0.5, "d": 0.2, "e": 0.3, "f": 0.8}
     _patch_engine(monkeypatch, photos, vision={u: V(s) for u, s in scores.items()})
-    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/clusters").json()
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/bursts").json()
     assert [(g["best"], [p["uuid"] for p in g["photos"]]) for g in data["groups"]] == [
         ("f", ["d", "e", "f"]),  # newest first
         ("b", ["a", "b", "c"]),
@@ -141,7 +141,7 @@ def test_cleanup_clusters_groups_bursts_with_best(monkeypatch):
     assert data["count"] == 6
 
 
-def test_cleanup_clusters_splits_bursts_that_look_different(monkeypatch):
+def test_cleanup_bursts_splits_bursts_that_look_different(monkeypatch):
     # One 60s burst: two repeats of one shot, then two of another, a one-off (e), two
     # utility images (f, g: document pages look alike to prints) and one not analysed (h).
     photos = _dated({u: 10 * i for i, u in enumerate("abcdefgh")})
@@ -155,7 +155,7 @@ def test_cleanup_clusters_splits_bursts_that_look_different(monkeypatch):
         "g": V(utility=True, vec=(9.0,)),
     }
     _patch_engine(monkeypatch, photos, vision=vision)
-    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/clusters").json()
+    data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/bursts").json()
     assert [[p["uuid"] for p in g["photos"]] for g in data["groups"]] == [["c", "d"], ["a", "b"]]
 
 
@@ -438,7 +438,7 @@ def test_counts_only_where_known(monkeypatch):
         "screenshots": 3,
         "low-quality": None,  # the Vision analysis hasn't run yet
         "utility": None,
-        "clusters": None,
+        "bursts": None,
     }
     vision.update(a=V(-0.9, utility=True, vec=(0.0,)), b=V(0.5, vec=(0.1,)), c=V(0.5, vec=(0.2,)))
     assert client.get("/counts").json()["utility"] is None  # analysed, not yet judged
@@ -446,7 +446,7 @@ def test_counts_only_where_known(monkeypatch):
     doc = {"keep": False, "kind": "receipt", "reason": ""}
     monkeypatch.setattr(server, "_verdicts", lambda: {"a": doc, "b": pic, "c": pic})
     data = client.get("/counts").json()
-    assert data["utility"] == 1 and data["clusters"] == 2 and data["low-quality"] == 1
+    assert data["utility"] == 1 and data["bursts"] == 2 and data["low-quality"] == 1
 
 
 def test_utility_never_preselects_a_misread_screenshot_for_delete(monkeypatch):
@@ -572,3 +572,14 @@ def test_low_quality_files_into_delete_me_and_its_old_album_still_counts(monkeyp
     )
     data = TestClient(server.app, base_url="http://127.0.0.1").get("/cleanup/low-quality").json()
     assert [p["uuid"] for p in data["photos"]] == ["a"]
+
+
+def test_every_pass_has_one_name():
+    """The key is the URL; the title is the tab label and every album's prefix."""
+    assert list(server.PASSES) == list(server.ALBUMS) == list(server.KEEP_ALBUMS)
+    for key, title in server.PASSES.items():
+        assert server.ALBUMS[key] == f"{title} - Delete Me"
+        assert server.KEEP_ALBUMS[key] == f"{title} - Keep"
+    ui = open("src/App.tsx").read()
+    for key, title in server.PASSES.items():
+        assert f'<Tab v="{key}" label="{title}" />' in ui, f"tab for {key} must read {title!r}"

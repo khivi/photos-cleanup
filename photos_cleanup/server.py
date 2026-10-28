@@ -28,7 +28,7 @@ from pydantic import BaseModel
 
 from photos_cleanup import library
 
-CLUSTER_WINDOW_S = 60
+BURST_WINDOW_S = 60
 # Feature-print L2 distance below which two neighbouring shots count as repeats. Calibrated
 # by eye on 40 real bursts: pairs <= 0.44 were the same shot; from 0.46 they were different
 # photos (report pages, a different person, different medicine labels).
@@ -38,21 +38,18 @@ SIMILAR_MAX_DIST = 0.45
 # a finger over the lens); from about -0.7 up, dark or soft photos of people creep in.
 LOW_QUALITY_MAX = -0.75
 
-# Per-pass album names.
-ALBUMS = {
-    "screenshots": "Screenshots - Delete Me",
-    "low-quality": "Low Quality - Delete Me",
-    "utility": "Utility - Delete Me",
-    "clusters": "Bursts - Delete Me",
+# One name per pass: its key here is the URL (/cleanup/<key>) and the UI view; its title is
+# the tab label and the album prefix. Album names are derived, never written out.
+PASSES = {
+    "screenshots": "Screenshots",
+    "utility": "Utility",
+    "bursts": "Bursts",
+    "low-quality": "Low Quality",
 }
+ALBUMS = {key: f"{title} - Delete Me" for key, title in PASSES.items()}
 # Not in library.CLEANUP_ALBUM_NAMES, so they count as user albums and the candidate
 # filter skips their photos on every later run.
-KEEP_ALBUMS = {
-    "screenshots": "Screenshots - Keep",
-    "low-quality": "Low Quality - Keep",
-    "utility": "Utility - Keep",
-    "clusters": "Bursts - Keep",
-}
+KEEP_ALBUMS = {key: f"{title} - Keep" for key, title in PASSES.items()}
 # Earlier names of a pass's album: photos in them still count as filed.
 LEGACY_ALBUMS = {"low-quality": {"Low Quality - Review Me"}}
 # Passes judged by the Foundation Models classifier (see verdict.swift).
@@ -137,7 +134,7 @@ def _add_to_album(photos, album: str) -> None:
 
 
 # Vision analysis (feature print, isUtility, aesthetics score) for every candidate, computed
-# once in the background and cached on disk. Bursts, Low quality and Utility all read it.
+# once in the background and cached on disk. Bursts, Low Quality and Utility all read it.
 _vision_lock = threading.Lock()
 _vision_state: dict = {"pending": 0, "total": 0, "error": None}
 _vision_queue: list[str] = []
@@ -366,7 +363,7 @@ def _candidates(kind: str) -> list:
         photos = library.get_candidate_photos(photos, ignore, only_screenshots=True)
     elif kind in ("utility", "low-quality"):
         photos = library.get_candidate_photos(photos, ignore)
-    elif kind == "clusters":
+    elif kind == "bursts":
         photos = library.get_candidate_photos(photos, ignore, require_valid_date=True)
     else:
         raise HTTPException(status_code=404, detail="unknown cleanup kind")
@@ -376,7 +373,7 @@ def _candidates(kind: str) -> list:
 
 
 def _analysed(kind: str, photos, threshold: float = LOW_QUALITY_MAX) -> tuple[list, dict]:
-    """Narrow Utility and Low quality by the Vision analysis done so far, and its progress."""
+    """Narrow Utility and Low Quality by the Vision analysis done so far, and its progress."""
     progress = _start_vision(photos)
     vision = _vision()
     if kind == "utility":
@@ -388,7 +385,7 @@ def _analysed(kind: str, photos, threshold: float = LOW_QUALITY_MAX) -> tuple[li
 
 def _time_bursts(photos) -> list[list]:
     photos = sorted(photos, key=lambda p: library.make_aware(p.date))
-    return library.group_by_time(photos, CLUSTER_WINDOW_S, 2)
+    return library.group_by_time(photos, BURST_WINDOW_S, 2)
 
 
 @app.get("/counts")
@@ -409,7 +406,7 @@ def counts() -> dict:
             judged = [verdicts[p.uuid] for p in photos if p.uuid in verdicts]
             done = len(judged) == len(photos)
             out[kind] = sum(v["kind"] != "picture" for v in judged) if done else None
-        elif kind == "clusters":
+        elif kind == "bursts":
             out[kind] = sum(
                 len(r) for g in _time_bursts(photos) for r in _split_similar(g, _vision())
             )
@@ -425,7 +422,7 @@ def cleanup(kind: str, threshold: float = LOW_QUALITY_MAX) -> dict:
     progress = {"pending": 0, "total": 0, "error": None}
     if kind != "screenshots":
         photos, progress = _analysed(kind, photos, threshold)
-    if kind == "clusters":
+    if kind == "bursts":
         groups = [run for g in _time_bursts(photos) for run in _split_similar(g, _vision())]
         out = []
         for g in reversed(groups):  # newest group first
