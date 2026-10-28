@@ -1,7 +1,12 @@
 import Foundation
-import FoundationModels
 import Photos
 import Vision
+
+// Image attachments arrived with FoundationModels 2 (the macOS 27 SDK). Older SDKs, like CI
+// runners', still build: verdicts then report themselves unavailable.
+#if canImport(FoundationModels, _version: 2.0)
+    import FoundationModels
+#endif
 
 /// Keep/delete verdicts for photos.
 public protocol Judge: Sendable {
@@ -19,14 +24,21 @@ public struct FoundationModelsJudge: Judge {
     public init(library: PhotoKitLibrary) { self.library = library }
 
     public func unavailableReason() -> String? {
+        #if !canImport(FoundationModels, _version: 2.0)
+            return "screenshot verdicts need a build made with the macOS 27 SDK"
+        #else
         guard #available(macOS 27.0, *) else { return "screenshot verdicts need macOS 27 or later with Apple Intelligence on" }
         guard case .available = SystemLanguageModel.default.availability else {
             return "Foundation Models unavailable: \(SystemLanguageModel.default.availability)"
         }
         return nil
+        #endif
     }
 
     public func judge(_ photo: Photo) async -> Verdict? {
+        #if !canImport(FoundationModels, _version: 2.0)
+            return nil
+        #else
         guard #available(macOS 27.0, *) else { return nil }
         guard let asset = library.assets([photo.uuid])[photo.uuid],
             let img = try? await offload({ library.cgImage(asset, maxSide: 1024) }) ?? nil
@@ -34,9 +46,11 @@ public struct FoundationModelsJudge: Judge {
         guard let vision = analyse(img) else { return nil }
         guard vision.utility else { return Verdict(keep: true, kind: "picture", reason: "Not a utility image") }
         return try? await Model.verdict(image: img, taken: photo.date)
+        #endif
     }
 }
 
+#if canImport(FoundationModels, _version: 2.0)
 @available(macOS 27.0, *)
 enum Model {
     @Generable
@@ -86,3 +100,4 @@ enum Model {
         return Verdict(keep: a.keep || !deletable.contains(a.kind), kind: a.kind.rawValue, reason: a.summary)
     }
 }
+#endif
