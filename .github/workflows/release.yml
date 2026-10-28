@@ -1,0 +1,175 @@
+name: release
+
+# When a commit to master changes `let version` in main.swift: build a
+# universal binary + the SwiftPM resource bundle, tar them, create the GitHub
+# Release v<version> with the tarball attached, then bump the Homebrew tap.
+#
+# Idempotent: if release v<version> exists, the whole job after the check is
+# skipped. To redo a release, delete the release and the tag first.
+#
+# Repo secret HOMEBREW_TAP_TOKEN (the fine-grained PAT shared with cockpit)
+# is used only for the tap bump. It needs Contents: write on
+# khivi/homebrew-photos-cleanup.
+#
+# The binary is signed with Developer ID (hardened runtime) and notarized, so a
+# copy downloaded from the Releases page passes Gatekeeper. Repo secrets, all
+# from fnox profile `cockpit`: MACOS_CERT_P12 (base64 .p12, Developer ID
+# Application: Amit Khivesara (3WD7XPJ5M5)), MACOS_CERT_PASSWORD, and the App
+# Store Connect API key NOTARY_KEY_P8 (base64), NOTARY_KEY_ID, NOTARY_ISSUER_ID.
+
+on:
+  push:
+    branches: [master]
+    paths: ["Sources/PhotosCleanup/main.swift"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # xcode-27 (preview) has the macOS 27 SDK; on macos-latest the binary would
+    # ship without Foundation Models verdicts.
+    runs-on: xcode-27
+    permissions:
+      contents: write # create the tag and Release with GITHUB_TOKEN
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read version and skip if already released
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="$(sed -n 's/^let version = "\(.*\)"$/\1/p' Sources/PhotosCleanup/main.swift)"
+          if [ -z "$v" ]; then
+            echo "::error::could not read 'let version' from main.swift"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" >/dev/null 2>&1; then
+            echo "release v$v already exists"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # package.json has no `packageManager`, so pin the major here.
+      - if: steps.ver.outputs.skip == 'false'
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - if: steps.ver.outputs.skip == 'false'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - if: steps.ver.outputs.skip == 'false'
+        run: pnpm install --frozen-lockfile
+
+      - if: steps.ver.outputs.skip == 'false'
+        run: pnpm build
+
+      # The UI is gitignored; without this check a release that skipped
+      # `pnpm build` would ship a binary that serves a blank page.
+      - name: UI was built
+        if: steps.ver.outputs.skip == 'false'
+        run: test -f Sources/PhotosCleanup/ui/dist/index.html
+
+      - name: Build universal release binary
+        if: steps.ver.outputs.skip == 'false'
+        run: swift build -c release --arch arm64 --arch x86_64
+
+      - name: Sign and notarize the binary
+        if: steps.ver.outputs.skip == 'false'
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          bin="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
+          k="$RUNNER_TEMP/signing"
+          mkdir -p "$k"
+          kc="$k/ci.keychain-db"
+          kcpw="$(uuidgen)"
+          printf %s "$MACOS_CERT_P12" | base64 -d > "$k/cert.p12"
+          printf %s "$NOTARY_KEY_P8" | base64 -d > "$k/key.p8"
+          security create-keychain -p "$kcpw" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$kcpw" "$kc"
+          security import "$k/cert.p12" -k "$kc" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "$kcpw" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+
+          codesign --force --options runtime --timestamp --keychain "$kc" \
+            --identifier com.khivi.photos-cleanup \
+            --sign "Developer ID Application: Amit Khivesara (3WD7XPJ5M5)" "$bin/photos-cleanup"
+          codesign --verify --strict "$bin/photos-cleanup"
+
+          # A bare binary can't carry a stapled ticket; Gatekeeper looks it up online.
+          ditto -c -k "$bin/photos-cleanup" "$k/notarize.zip"
+          xcrun notarytool submit "$k/notarize.zip" --wait --output-format json \
+            --key "$k/key.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" > "$k/result.json"
+          cat "$k/result.json"
+          if [ "$(jq -r .status "$k/result.json")" != "Accepted" ]; then
+            xcrun notarytool log "$(jq -r .id "$k/result.json")" \
+              --key "$k/key.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" || true
+            echo "::error::notarization was not accepted"
+            exit 1
+          fi
+
+      - name: Remove signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing/ci.keychain-db" 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/signing"
+
+      - name: Package tarball
+        if: steps.ver.outputs.skip == 'false'
+        id: pkg
+        env:
+          V: ${{ steps.ver.outputs.version }}
+        run: |
+          bin="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
+          ls "$bin"
+          test -d "$bin/photos-cleanup_PhotosCleanup.bundle"
+          test -f "$bin/photos-cleanup_PhotosCleanup.bundle/ui/dist/index.html" \
+            || test -f "$bin/photos-cleanup_PhotosCleanup.bundle/Contents/Resources/ui/dist/index.html"
+          lipo -archs "$bin/photos-cleanup"
+          codesign -dv "$bin/photos-cleanup" 2>&1 | grep -q "TeamIdentifier=3WD7XPJ5M5"
+          # Never ship a build without AI verdicts (an SDK older than macOS 27).
+          strings "$bin/photos-cleanup" | grep -q "photo library and decide whether each is still worth keeping"
+          out="photos-cleanup-$V-macos-universal.tar.gz"
+          # Every bundle: Hummingbird's NIO dependencies look up their own via Bundle.module.
+          (cd "$bin" && tar -czf "$OLDPWD/$out" photos-cleanup *.bundle)
+          echo "tarball=$out" >> "$GITHUB_OUTPUT"
+          "$bin/photos-cleanup" --version | grep -q "$V"
+
+      - name: Create tag and GitHub Release
+        if: steps.ver.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.ver.outputs.version }}
+          TARBALL: ${{ steps.pkg.outputs.tarball }}
+        run: |
+          gh release create "v$V" "$TARBALL" \
+            --target "$GITHUB_SHA" --title "v$V" --generate-notes
+
+      - name: Bump Homebrew tap
+        if: steps.ver.outputs.skip == 'false'
+        uses: mislav/bump-homebrew-formula-action@v4
+        with:
+          formula-name: photos-cleanup
+          homebrew-tap: khivi/homebrew-photos-cleanup
+          tag-name: v${{ steps.ver.outputs.version }}
+          download-url: https://github.com/${{ github.repository }}/releases/download/v${{ steps.ver.outputs.version }}/${{ steps.pkg.outputs.tarball }}
+          create-branch: false
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

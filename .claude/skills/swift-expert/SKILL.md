@@ -1,6 +1,6 @@
 ---
 name: swift-expert
-description: Use when writing or reviewing Swift in this repo (on-device helpers like photos_cleanup/verdict.swift and the spike/ probes). Consult references/latest-apis.md FIRST so you emit current APIs, not deprecated ones the training corpus is full of.
+description: Use when writing or reviewing Swift in this repo (the Swift package in Sources/ and the spike/ probes). Consult references/latest-apis.md FIRST so you emit current APIs, not deprecated ones the training corpus is full of.
 ---
 
 # swift-expert
@@ -19,8 +19,8 @@ That is the whole job. Everything below is a fact, not a preference.
 
 ## Scope for this repo
 
-Swift here is on-device helpers the Python server shells out to
-(`photos_cleanup/verdict.swift`: Vision + Foundation Models) and the `spike/` probes.
+Swift here is the whole backend: the Swift package in `Sources/` (PhotoKit, Vision and
+Foundation Models in `PhotosCleanupCore`, a Hummingbird server) and the `spike/` probes.
 The native SwiftUI + PhotoKit rewrite is not being pursued (see `TODO.md`); the
 SwiftUI and PhotoKit rows stay in the reference in case that changes. Nothing
 here is generic app-building advice.
