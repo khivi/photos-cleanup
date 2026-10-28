@@ -8,13 +8,6 @@ on:
 permissions:
   contents: read
 
-# macOS runner: osxphotos and its pyobjc deps install only there.
-# swift-typecheck is skipped: verdict.swift imports FoundationModels (macOS 27
-# SDK), which GitHub runners do not have yet. Remove once they ship it.
-# no-commit-to-branch (if added) would fail on push-to-master runs.
-env:
-  SKIP: "swift-typecheck,no-commit-to-branch"
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -24,11 +17,6 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
-
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
 
       # package.json has no `packageManager`, so pin the major here.
       - uses: pnpm/action-setup@v6
@@ -40,22 +28,14 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # The tsc hook needs node_modules; the pytest hook needs the uv env.
       - run: pnpm install --frozen-lockfile
-      - run: uv sync
 
-      - name: Pre-commit hooks
-        run: uv run --with pre-commit pre-commit run --all-files
+      # Writes the UI to Sources/PhotosCleanup/ui/dist. Package.swift has
+      # `.copy("ui")`, so swift build needs it to exist first.
+      - run: pnpm build
 
-      - name: Pre-push hooks (pytest, uv audit)
-        run: uv run --with pre-commit pre-commit run --all-files --hook-stage pre-push
+      - name: UI was built
+        run: test -f Sources/PhotosCleanup/ui/dist/index.html
 
-      - name: Build UI and package
-        run: |
-          pnpm build
-          uv build
-
-      # Vite writes the UI into photos_cleanup/ui (gitignored, hatch artifact).
-      # A wheel without it installs but serves a blank page.
-      - name: Wheel contains the UI
-        run: unzip -l dist/*.whl | grep -q photos_cleanup/ui/index.html
+      - run: swift build
+      - run: swift test
