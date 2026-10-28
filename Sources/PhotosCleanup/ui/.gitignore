@@ -1,0 +1,2 @@
+# `pnpm build` output. This folder stays in git so the SwiftPM resource always exists.
+dist/
