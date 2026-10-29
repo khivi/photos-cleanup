@@ -40,7 +40,7 @@ The Swift package has no dependencies.
 | `Verdicts.swift` | The `Judge` protocol and `FoundationModelsJudge`. It returns kind, keep/delete and a short summary for one photo. It needs macOS 27 and Apple Intelligence. |
 | `Passes.swift` | `Passes.all` (one key and title per pass), the tooltips, the thresholds, the candidate filter, time grouping and the similarity split. |
 | `Cleanup.swift` | The `Cleanup` actor. It holds the photo list, the Vision job, the verdict queue, commits and the caches. |
-| `Review.swift` | `ReviewModel` (`@Observable`, main actor). The current tab, keep/delete choices, Select all, what Commit sends, progress, the session's To be deleted list, and every label the screen shows. |
+| `Review.swift` | `ReviewModel` (`@Observable`, main actor). The current tab, keep/delete choices, Select all, what Commit sends, progress, the To be deleted list (read from the Delete Me albums), and every label the screen shows. |
 
 `PhotosCleanupApp` has three files:
 
