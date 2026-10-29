@@ -51,6 +51,13 @@ repos:
 
   - repo: local
     hooks:
+      # Style from .swift-format; `swift format --in-place <files>` fixes most findings.
+      - id: swift-format
+        name: swift format lint
+        entry: swift format lint --strict
+        language: system
+        types: [swift]
+
       # The spike probes are standalone scripts outside the package; swift-build checks the package.
       # One file per swiftc call: given several files, swiftc only allows top-level code in
       # main.swift. A probe with `@main` needs -parse-as-library; a top-level script must not have it.
