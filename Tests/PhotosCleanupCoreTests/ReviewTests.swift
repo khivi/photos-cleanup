@@ -171,3 +171,32 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.deletedAlbum["n"] == "Screenshots - Delete Me")
     }
 }
+
+@MainActor
+@Suite struct CommitPreviewTests {
+    @Test func previewMatchesWhatCommitSends() async throws {
+        let burst = dated(["x": 0, "y": 1, "z": 2])
+        let (c, lib) = try await makeCleanup(burst, vision: ["x": V(0.1), "y": V(0.9), "z": V(0.2)])
+        let m = ReviewModel(cleanup: c)
+        #expect(m.commitPreview.isEmpty)
+        await m.select(.pass("bursts"))
+        #expect(m.commitPreview.map(\.label) == ["2 → Bursts - Delete Me", "1 → Bursts - Keep"])
+        await m.commit()
+        let sent = lib.adds.withLock { $0 }
+        #expect(sent.map(\.album) == ["Bursts - Delete Me", "Bursts - Keep"])
+        #expect(sent.map(\.uuids.count) == [2, 1])
+        #expect(m.commitPreview.isEmpty)
+    }
+
+    @Test func emptySideIsOmittedAndLabels() async throws {
+        let (c, _) = try await makeCleanup([Photo(uuid: "a", screenshot: true)], judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("screenshots"))
+        #expect(m.commitPreview.isEmpty)  // unjudged, untouched: nothing is sent
+        #expect(m.windowSubtitle == "1 candidates · 0 to delete")
+        m.setAll(.delete)
+        #expect(m.commitPreview == [.init(count: 1, album: "Screenshots - Delete Me")])
+        #expect(m.moveButtonLabel == "Move to Albums…")
+        #expect(ReviewModel.keepAllLabel == "Keep All" && ReviewModel.deleteAllLabel == "Delete All")
+    }
+}

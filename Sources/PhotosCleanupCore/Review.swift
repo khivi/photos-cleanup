@@ -127,6 +127,31 @@ public final class ReviewModel {
     public var showsEmptyState: Bool { inPass && !loading && displayed.isEmpty }
     public static let emptyState = "Nothing left to review. Photos already filed in this pass’s albums are hidden."
 
+    // MARK: Commit preview (Phase 5 labels)
+
+    /// One album `commit()` will fill, and how many photos go in.
+    public struct CommitLine: Sendable, Equatable {
+        public var count: Int
+        public var album: String
+        /// "12 → Bursts - Delete Me"
+        public var label: String { "\(count) → \(album)" }
+    }
+
+    /// Exactly what `commit()` sends: `doomed` to the Delete Me album, `keepers` to the Keep album.
+    public var commitPreview: [CommitLine] {
+        guard let key = view.passKey, let del = Passes.deleteAlbum(key), let keep = Passes.keepAlbum(key) else {
+            return []
+        }
+        return [CommitLine(count: doomed.count, album: del), CommitLine(count: keepers.count, album: keep)]
+            .filter { $0.count > 0 }
+    }
+
+    /// Window subtitle: "41 candidates · 12 to delete", "N photos" or "N queued for deletion".
+    public var windowSubtitle: String { summary }
+    public var moveButtonLabel: String { committing ? "Moving…" : "Move to Albums…" }
+    public static let keepAllLabel = "Keep All"
+    public static let deleteAllLabel = "Delete All"
+
     // MARK: Loading
 
     public func select(_ v: ReviewView) async {
