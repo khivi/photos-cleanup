@@ -92,6 +92,41 @@ public final class ReviewModel {
         return n.map { "\(title) (\($0.formatted()))" } ?? title
     }
 
+    // MARK: Sidebar
+
+    public struct SidebarItem: Identifiable, Sendable {
+        public let view: ReviewView
+        public let title: String
+        public let help: String
+        /// The photo count; nil while unknown or at 0, so the row shows no badge.
+        public let badge: Int?
+        public var id: ReviewView { view }
+    }
+
+    public struct SidebarSection: Identifiable, Sendable {
+        public let title: String
+        public let items: [SidebarItem]
+        public var id: String { title }
+    }
+
+    /// Library (All), Cleanup (the passes), Review (To be deleted), built from `tabs`.
+    public var sidebar: [SidebarSection] {
+        func item(_ t: (view: ReviewView, title: String, help: String)) -> SidebarItem {
+            let n: Int? = switch t.view {
+            case .all: counts["all"] ?? nil
+            case .pass(let k): counts[k] ?? nil
+            case .deleted: deleted.count
+            }
+            return SidebarItem(view: t.view, title: t.title, help: t.help, badge: n.flatMap { $0 > 0 ? $0 : nil })
+        }
+        func items(_ keep: (ReviewView) -> Bool) -> [SidebarItem] { Self.tabs.filter { keep($0.view) }.map(item) }
+        return [
+            SidebarSection(title: "Library", items: items { $0 == .all }),
+            SidebarSection(title: "Cleanup", items: items { $0.passKey != nil }),
+            SidebarSection(title: "Review", items: items { $0 == .deleted }),
+        ]
+    }
+
     public var inPass: Bool { view.passKey != nil }
 
     /// "N candidates · M to delete", "N photos" or "N queued for deletion".

@@ -145,6 +145,22 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect("\(CleanupError.accessDenied)".hasPrefix("Photos access not granted"))
     }
 
+    @Test func sidebarSectionsAndBadges() async throws {
+        let (c, _) = try await makeCleanup(shots("a", "b"), verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        let titles = m.sidebar.map { $0.items.map(\.title) }
+        #expect(m.sidebar.map(\.title) == ["Library", "Cleanup", "Review"])
+        #expect(titles == [["All"], Passes.all.map(\.title), ["To be deleted"]])
+        #expect(m.sidebar.flatMap(\.items).allSatisfy { $0.badge == nil && !$0.help.isEmpty })  // nothing counted yet
+        await m.refreshCounts()
+        var badges: [String: Int?] { Dictionary(uniqueKeysWithValues: m.sidebar.flatMap(\.items).map { ($0.title, $0.badge) }) }
+        #expect(badges["All"] == 2 && badges["Screenshots"] == 2)
+        #expect(badges["Bursts"] == .some(nil) && badges["To be deleted"] == .some(nil))  // 0 shows no badge
+        await m.select(.pass("screenshots"))
+        await m.commit()
+        #expect(badges["To be deleted"] == 1)
+    }
+
     @Test func deletedListSurvivesRestart() async throws {
         let lib = [
             Photo(uuid: "s", screenshot: true, albums: ["Screenshots - Delete Me"]),
