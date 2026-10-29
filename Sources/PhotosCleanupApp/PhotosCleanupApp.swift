@@ -68,6 +68,7 @@ struct ContentView: View {
         let photos = await cleanup.photos
         await cleanup.startVision(photos.filter { !$0.isMovie && !$0.screenshot })
         let model = ReviewModel(cleanup: cleanup)
+        model.showsInspector = UserDefaults.standard.bool(forKey: inspectorKey)
         await model.select(.all)
         return .loaded(model, Thumbnails(library: library, uuids: photos.map(\.uuid)))
     }

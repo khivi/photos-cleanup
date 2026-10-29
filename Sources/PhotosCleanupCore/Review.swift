@@ -205,6 +205,7 @@ public final class ReviewModel {
     /// Window subtitle: "41 candidates · 12 to delete", "N photos" or "N queued for deletion".
     public var windowSubtitle: String { loading ? "Loading…" : summary }
     public var moveButtonLabel: String { committing ? "Moving…" : "Move to Albums…" }
+    public var inspectorToggleLabel: String { showsInspector ? "Hide Info" : "Show Info" }
     public static let keepAllLabel = "Keep All"
     public static let deleteAllLabel = "Delete All"
 
@@ -372,6 +373,48 @@ public final class ReviewModel {
     }
 
     public func selectAll() { selected = Set(order) }
+
+    // MARK: Inspector
+
+    /// The Info side panel is open. The app persists it.
+    public var showsInspector = false
+
+    /// What the Info panel shows for the one selected photo.
+    public struct Info: Sendable, Equatable {
+        public let id: String
+        public let date: String
+        public let kind: String
+        /// "kind: reason" of the verdict, if there is one.
+        public let verdict: String?
+        public let albums: String
+        /// "→ Screenshots - Delete Me": where Move to Albums puts it; nil when it stays put.
+        public let target: String?
+        /// The mark, in a pass only.
+        public let decision: Decision?
+    }
+
+    /// The single selected photo, nil with none or several selected.
+    public func inspectorInfo(locale: Locale = .current, timeZone: TimeZone = .current) -> Info? {
+        guard selected.count == 1, let id = anchor, selected.contains(id),
+              let p = view == .deleted ? deleted.first(where: { $0.id == id }).map({ PassPhoto(photo: $0) }) : photos.first(where: { $0.id == id })
+        else { return nil }
+        let style = Date.FormatStyle(date: .long, time: .shortened, locale: locale, timeZone: timeZone)
+        var target: String?
+        if let key = view.passKey, let d = decisions[id] {
+            if d == .delete { target = Passes.deleteAlbum(key) } else if keepers.contains(where: { $0.id == id }) { target = Passes.keepAlbum(key) }
+        }
+        return Info(
+            id: id, date: p.photo.date.map { $0.formatted(style) } ?? "Unknown date",
+            kind: p.photo.screenshot ? "Screenshot" : "Photo",
+            verdict: p.verdict.map { "\($0.kind): \($0.reason)" },
+            albums: p.photo.albums.isEmpty ? "In no album" : p.photo.albums.sorted().joined(separator: ", "),
+            target: target.map { "→ \($0)" }, decision: inPass ? decisions[id] : nil)
+    }
+
+    /// The Info panel's text when it has no single photo.
+    public var inspectorPlaceholder: String {
+        selected.count > 1 ? "\(selected.count) photos selected" : "No photo selected"
+    }
 
     /// An arrow key: selects the photo `delta` places from the anchor (1 is next, a row is the column count).
     public func moveSelection(by delta: Int) {
