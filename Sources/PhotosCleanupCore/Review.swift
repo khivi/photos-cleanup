@@ -54,6 +54,7 @@ public final class ReviewModel {
     public var undoManager = UndoManager()
 
     private let cleanup: Cleanup
+    public private(set) var verdictStatRows: [VerdictStatRow] = []
 
     public init(cleanup: Cleanup) { self.cleanup = cleanup }
 
@@ -169,6 +170,31 @@ public final class ReviewModel {
 
     public var showsEmptyState: Bool { inPass && !loading && displayed.isEmpty }
     public static let emptyState = "Nothing left to review. Photos already filed in this pass’s albums are hidden."
+
+    // MARK: Commit preview (Phase 5 labels)
+
+    /// One album `commit()` will fill, and how many photos go in.
+    public struct CommitLine: Sendable, Equatable {
+        public var count: Int
+        public var album: String
+        /// "12 → Bursts - Delete Me"
+        public var label: String { "\(count) → \(album)" }
+    }
+
+    /// Exactly what `commit()` sends: `doomed` to the Delete Me album, `keepers` to the Keep album.
+    public var commitPreview: [CommitLine] {
+        guard let key = view.passKey, let del = Passes.deleteAlbum(key), let keep = Passes.keepAlbum(key) else {
+            return []
+        }
+        return [CommitLine(count: doomed.count, album: del), CommitLine(count: keepers.count, album: keep)]
+            .filter { $0.count > 0 }
+    }
+
+    /// Window subtitle: "41 candidates · 12 to delete", "N photos" or "N queued for deletion".
+    public var windowSubtitle: String { summary }
+    public var moveButtonLabel: String { committing ? "Moving…" : "Move to Albums…" }
+    public static let keepAllLabel = "Keep All"
+    public static let deleteAllLabel = "Delete All"
 
     // MARK: Loading
 
@@ -353,6 +379,42 @@ public final class ReviewModel {
             status = "Moved \(parts.joined(separator: ", "))."
         } catch {
             status = "\(error)"
+        }
+    }
+}
+
+// MARK: Burst headers
+
+extension BurstGroup {
+    /// "Jan 1, 2024 · 3 photos": the date of the first shot and the count. The date is left out
+    /// when no shot has one. Locale and time zone are parameters so tests can pin them.
+    public func headerLabel(locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        let count = "\(photos.count) \(photos.count == 1 ? "photo" : "photos")"
+        guard let first = photos.compactMap(\.date).min() else { return count }
+        let style = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: locale, timeZone: timeZone)
+        return "\(first.formatted(style)) · \(count)"
+    }
+}
+
+// MARK: Verdict stats
+
+/// One pass's agreement between the model's verdicts and the user's committed choices.
+public struct VerdictStatRow: Sendable, Equatable, Identifiable {
+    public var key: String
+    public var title: String
+    public var agree: Int
+    public var total: Int
+    public var id: String { key }
+    /// "12 of 14 agree"
+    public var label: String { "\(agree) of \(total) agree" }
+}
+
+extension ReviewModel {
+    /// Reads the decisions log: one row per pass that has entries, in pass order.
+    public func refreshVerdictStats() async {
+        let stats = await cleanup.verdictStats()
+        verdictStatRows = Passes.all.compactMap { p in
+            stats[p.key].map { VerdictStatRow(key: p.key, title: p.title, agree: $0.agree, total: $0.total) }
         }
     }
 }

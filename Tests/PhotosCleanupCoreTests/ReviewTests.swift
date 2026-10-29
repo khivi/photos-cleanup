@@ -293,3 +293,72 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.deletedAlbum["n"] == "Screenshots - Delete Me")
     }
 }
+
+@MainActor
+@Suite struct CommitPreviewTests {
+    @Test func previewMatchesWhatCommitSends() async throws {
+        let burst = dated(["x": 0, "y": 1, "z": 2])
+        let (c, lib) = try await makeCleanup(burst, vision: ["x": V(0.1), "y": V(0.9), "z": V(0.2)])
+        let m = ReviewModel(cleanup: c)
+        #expect(m.commitPreview.isEmpty)
+        await m.select(.pass("bursts"))
+        #expect(m.commitPreview.map(\.label) == ["2 → Bursts - Delete Me", "1 → Bursts - Keep"])
+        await m.commit()
+        let sent = lib.adds.withLock { $0 }
+        #expect(sent.map(\.album) == ["Bursts - Delete Me", "Bursts - Keep"])
+        #expect(sent.map(\.uuids.count) == [2, 1])
+        #expect(m.commitPreview.isEmpty)
+    }
+
+    @Test func emptySideIsOmittedAndLabels() async throws {
+        let (c, _) = try await makeCleanup([Photo(uuid: "a", screenshot: true)], judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("screenshots"))
+        #expect(m.commitPreview.isEmpty)  // unjudged, untouched: nothing is sent
+        #expect(m.windowSubtitle == "1 candidates · 0 to delete")
+        m.setAll(.delete)
+        #expect(m.commitPreview == [.init(count: 1, album: "Screenshots - Delete Me")])
+        #expect(m.moveButtonLabel == "Move to Albums…")
+        #expect(ReviewModel.keepAllLabel == "Keep All" && ReviewModel.deleteAllLabel == "Delete All")
+    }
+}
+
+@Suite struct BurstHeaderTests {
+    let us = Locale(identifier: "en_US")
+    let utc = TimeZone(identifier: "UTC")!
+
+    @Test func dateAndCount() {
+        let g = BurstGroup(photos: dated(["b": 60, "a": 0, "c": 120]), best: "a")
+        #expect(g.headerLabel(locale: us, timeZone: utc) == "Jan 1, 2024 · 3 photos")
+    }
+
+    @Test func timeZoneShiftsTheDay() {
+        let g = BurstGroup(photos: dated(["a": 0, "b": 1]), best: "a")
+        let la = TimeZone(identifier: "America/Los_Angeles")!
+        #expect(g.headerLabel(locale: us, timeZone: la) == "Dec 31, 2023 · 2 photos")
+    }
+
+    @Test func undatedAndSingular() {
+        #expect(BurstGroup(photos: [Photo(uuid: "a")], best: "a").headerLabel(locale: us, timeZone: utc) == "1 photo")
+    }
+}
+
+@MainActor
+@Suite struct VerdictStatRowTests {
+    @Test func rowsPerPassWithLegacyKeys() async throws {
+        let dir = tempDir()
+        let log = [
+            ["uuid": "a", "kind": "screenshots", "verdict_keep": false, "decision": "delete"],
+            ["uuid": "b", "kind": "screenshots", "verdict_keep": false, "decision": "keep"],
+            ["uuid": "c", "kind": "utility", "verdict_keep": true, "decision": "keep"],  // legacy key
+            ["uuid": "d", "kind": "bogus", "verdict_keep": true, "decision": "keep"],  // not a pass
+        ].map(jsonLine).joined(separator: "\n") + "\n"
+        try log.write(to: dir.appendingPathComponent(Cleanup.decisionsLog), atomically: true, encoding: .utf8)
+        let (c, _) = try await makeCleanup([], cacheDir: dir)
+        let m = ReviewModel(cleanup: c)
+        #expect(m.verdictStatRows.isEmpty)
+        await m.refreshVerdictStats()
+        #expect(m.verdictStatRows.map(\.title) == ["Screenshots", "Paperwork"])
+        #expect(m.verdictStatRows.map(\.label) == ["1 of 2 agree", "1 of 1 agree"])
+    }
+}
