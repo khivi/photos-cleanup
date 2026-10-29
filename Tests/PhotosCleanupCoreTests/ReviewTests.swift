@@ -259,13 +259,13 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(!m.previewing)
     }
 
-    @Test func selectionFollowsTheListAndMarksNeedAPass() async throws {
+    @Test func selectionFollowsTheList() async throws {
         let (c, _) = try await makeCleanup(shots("a", "b", "c"), judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
         await m.select(.all)
         m.selectAll()
-        m.markSelection(.delete)  // All has no decisions
-        #expect(m.decisions.isEmpty && m.selected.count == 3)
+        m.markSelection(.delete)  // All marks Delete too
+        #expect(m.decisions.count == 3 && m.selected.count == 3)
         await m.select(.pass("screenshots"))  // a tab change clears it
         #expect(m.selected.isEmpty && m.anchor == nil)
         let ids = m.displayed.map(\.id)
@@ -430,15 +430,54 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.inspectorInfo()?.albums == "In album: Trip" && m.inspectorInfo()?.kind == "Photo")
     }
 
-    @Test func noMarkOutsideAPass() async throws {
+    @Test func allStartsUnmarked() async throws {
         let (c, _) = try await makeCleanup(shots("a"), judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
         await m.select(.all)
         m.click("a")
         let i = try #require(m.inspectorInfo())
-        #expect(i.decision == nil && i.target == nil)
+        #expect(i.decision == .keep && i.target == nil)  // unmarked in All
         #expect(m.inspectorToggleLabel == "Show Info")
         m.showsInspector = true
         #expect(m.inspectorToggleLabel == "Hide Info")
+    }
+
+    @Test func marksInAllCommitOnlyDeletesToAllAlbum() async throws {
+        let album = Passes.allDeleteAlbum
+        let (c, lib) = try await makeCleanup(shots("a", "b", "c"), judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        m.undoManager.groupsByEvent = false
+        await m.select(.all)
+        #expect(m.decisions.isEmpty && !m.canSetAll && m.canMark && !m.canCommit)
+        m.mark(["a", "b"], .delete)
+        m.mark(["b"], .keep)  // Keep clears the mark in All
+        #expect(m.decisions == ["a": .delete] && m.keepers.isEmpty)
+        m.undoManager.undo()
+        #expect(m.decisions == ["a": .delete, "b": .delete])
+        m.undoManager.redo()
+        #expect(m.decisions == ["a": .delete])
+        m.click("a")
+        #expect(m.inspectorInfo()?.target == "→ \(album)" && m.inspectorInfo()?.decision == .delete)
+        m.click("c")
+        #expect(m.inspectorInfo()?.target == nil && m.inspectorInfo()?.decision == .keep)
+        m.setAll(.delete)  // no-op in All
+        #expect(m.commitPreview == [.init(count: 1, album: album)])
+        #expect(m.commitPreview.map(\.label) == ["1 → All - Delete Me"])
+        await m.commit()
+        let adds = lib.adds.withLock { $0 }
+        #expect(adds.map(\.album) == [album] && adds[0].uuids == ["a"])
+        #expect(m.photos.count == 3 && m.decisions.isEmpty)  // still in All, now badged via deletedAlbum
+        #expect(m.deletedAlbum["a"] == album && m.deleted.map(\.id) == ["a"])
+        #expect(m.status == "Moved 1 to “\(album)”.")
+        #expect(m.sidebar.last?.items.first?.badge == 1)
+    }
+
+    @Test func keepAllIsDisabledInAll() async throws {
+        let (c, _) = try await makeCleanup(shots("a"), judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.all)
+        #expect(!m.canSetAll)
+        await m.select(.pass("screenshots"))
+        #expect(m.canSetAll)
     }
 }

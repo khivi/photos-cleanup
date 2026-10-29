@@ -97,6 +97,8 @@ struct ReviewScreen: View {
                 .labelStyle(.titleAndIcon)
                 .disabled(!model.canSetAll)
             }
+        }
+        if model.canMark {  // Keep All / Delete All stay pass-only; All has just the move
             ToolbarItem {
                 Button(model.moveButtonLabel) { model.confirmingMove = true }
                     .disabled(!model.canMove)
@@ -168,7 +170,7 @@ struct ReviewScreen: View {
     private func cell(_ p: PassPhoto) -> some View {
         let mark: PhotoCell.Mark =
             switch model.view {
-            case .all: .none
+            case .all: model.decision(p.id).map { .decision($0) } ?? (model.deletedAlbum[p.id] != nil ? .deleteMe : .none)
             case .deleted: .deleteMe
             case .pass: model.decision(p.id).map { .decision($0) } ?? .none
             }
@@ -238,7 +240,7 @@ struct ReviewCommands: Commands {
                 Button("Delete") { model?.markSelection(.delete) }
                     .keyboardShortcut(.delete, modifiers: [])
             }
-            .disabled(model?.inPass != true)
+            .disabled(model?.canMark != true)
             Divider()
             Group {
                 Button(ReviewModel.keepAllLabel) { model?.setAll(.keep) }

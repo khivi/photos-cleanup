@@ -93,12 +93,14 @@ public final class ReviewModel {
     public var canMove: Bool { !loading && !committing && canCommit }
     /// Keep All and Delete All can run now.
     public var canSetAll: Bool { inPass && !loading && !photos.isEmpty }
-    public var canCommit: Bool { view.passKey != nil && !(doomed.isEmpty && keepers.isEmpty) }
+    public var canCommit: Bool { (inPass || view == .all) && !(doomed.isEmpty && keepers.isEmpty) }
+    /// K, ⌫ and the Inspector's picker work: in a pass, and in All (where Keep clears a mark).
+    public var canMark: Bool { inPass || view == .all }
 
     // MARK: Labels (what the screen shows; views only lay them out)
 
     public static let tabs: [(view: ReviewView, title: String, help: String)] =
-        [(.all, "All", "Every photo in your library.")]
+        [(.all, Passes.allTitle, "Every photo in your library. Mark photos Delete to move them to “\(Passes.allDeleteAlbum)”.")]
         + Passes.all.map { (.pass($0.key), $0.title, Passes.about[$0.key] ?? "") }
         + [(.deleted, "To be deleted", "Photos waiting in a Delete Me album. Delete them there in Photos.")]
 
@@ -156,7 +158,8 @@ public final class ReviewModel {
         if inPass {
             return "\(photos.count) \(photos.count == 1 ? "candidate" : "candidates") · \(doomed.count) to delete"
         }
-        return "\(photos.count.formatted()) \(photos.count == 1 ? "photo" : "photos")"
+        let n = "\(photos.count.formatted()) \(photos.count == 1 ? "photo" : "photos")"
+        return doomed.isEmpty ? n : "\(n) · \(doomed.count) to delete"
     }
 
     public var commitLabel: String {
@@ -197,6 +200,7 @@ public final class ReviewModel {
 
     /// Exactly what `commit()` sends: `doomed` to the Delete Me album, `keepers` to the Keep album.
     public var commitPreview: [CommitLine] {
+        if view == .all { return doomed.isEmpty ? [] : [CommitLine(count: doomed.count, album: Passes.allDeleteAlbum)] }
         guard let key = view.passKey, let del = Passes.deleteAlbum(key), let keep = Passes.keepAlbum(key) else {
             return []
         }
@@ -302,10 +306,11 @@ public final class ReviewModel {
 
     // MARK: Deciding
 
-    /// Marks `ids` Keep or Delete as the user's choice.
+    /// Marks `ids` Keep or Delete as the user's choice. In All, Keep clears the mark: photos there are unmarked or Delete.
     public func mark(_ ids: some Collection<String>, _ d: Decision) {
+        let inAll = view == .all
         apply(
-            Dictionary(ids.map { ($0, (d, true)) }, uniquingKeysWith: { a, _ in a }),
+            Dictionary(ids.map { ($0, (inAll && d == .keep ? nil : d, !inAll || d == .delete)) }, uniquingKeysWith: { a, _ in a }),
             name: d == .keep ? "Keep" : "Delete")
     }
 
@@ -330,13 +335,14 @@ public final class ReviewModel {
     /// Flips one photo.
     public func toggle(_ uuid: String) { mark([uuid], decisions[uuid] == .delete ? .keep : .delete) }
 
-    /// Marks the selected photos; only a pass has decisions.
+    /// Marks the selected photos; only a pass and All have marks.
     public func markSelection(_ d: Decision) {
-        guard inPass else { return }
+        guard canMark else { return }
         mark(selected, d)
     }
 
     public func setAll(_ d: Decision) {
+        guard inPass else { return }  // marking the whole library isn't useful
         apply(
             Dictionary(photos.map { ($0.id, (d, true)) }, uniquingKeysWith: { a, _ in a }),
             name: d == .keep ? "Keep All" : "Delete All")
@@ -411,7 +417,9 @@ public final class ReviewModel {
         else { return nil }
         let style = Date.FormatStyle(date: .long, time: .shortened, locale: locale, timeZone: timeZone)
         var target: String?
-        if let key = view.passKey, let d = decisions[id] {
+        if view == .all {
+            if decisions[id] == .delete { target = Passes.allDeleteAlbum }
+        } else if let key = view.passKey, let d = decisions[id] {
             if d == .delete {
                 target = Passes.deleteAlbum(key)
             } else if keepers.contains(where: { $0.id == id }) {
@@ -425,7 +433,7 @@ public final class ReviewModel {
             albums: p.photo.albums.isEmpty
                 ? "In no album"
                 : "In \(p.photo.albums.count == 1 ? "album" : "albums"): \(p.photo.albums.sorted().joined(separator: ", "))",
-            target: target.map { "→ \($0)" }, decision: inPass ? decisions[id] : nil)
+            target: target.map { "→ \($0)" }, decision: canMark ? decisions[id] ?? .keep : nil)
     }
 
     /// The Info panel's text when it has no single photo.
@@ -460,7 +468,7 @@ public final class ReviewModel {
     // MARK: Commit
 
     public func commit() async {
-        guard let key = view.passKey else { return }
+        guard let key = view.passKey ?? (view == .all ? Passes.allKey : nil) else { return }
         let doomed = doomed
         let keep = keepers.map(\.id)
         if doomed.isEmpty && keep.isEmpty { return }
@@ -473,7 +481,7 @@ public final class ReviewModel {
             let seen = Set(committed.map(\.id))
             committed = doomed.map(\.photo).filter { !seen.contains($0.id) } + committed
             for p in doomed { committedAlbum[p.id] = r.album }
-            photos.removeAll { gone.contains($0.id) }
+            if inPass { photos.removeAll { gone.contains($0.id) } }  // All keeps them, badged Delete Me
             groups = groups.map { BurstGroup(photos: $0.photos.filter { !gone.contains($0.id) }, best: $0.best) }
                 .filter { !$0.photos.isEmpty }
             for id in gone { decisions[id] = nil }

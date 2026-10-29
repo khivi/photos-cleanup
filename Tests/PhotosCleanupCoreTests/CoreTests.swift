@@ -71,6 +71,9 @@ import Testing
         #expect(Passes.keepAlbum(key) == "\(title) - Keep")
         #expect(Passes.about[key]?.isEmpty == false, "\(key) needs a tooltip")
     }
+    // All's one album derives from the All title, and the All tab reads that title.
+    #expect(Passes.allDeleteAlbum == "\(Passes.allTitle) - Delete Me")
+    #expect(ReviewModel.tabs.contains { $0.view == .all && $0.title == Passes.allTitle })
     // The app's tabs read exactly the pass titles.
     for (key, title) in Passes.all {
         #expect(ReviewModel.tabs.contains { $0.view == .pass(key) && $0.title == title })
@@ -286,4 +289,25 @@ import Testing
     let read = Cleanup.readVision(url)
     #expect(read["u"] == vr(-0.25, utility: true, [0.5, -1]))
     #expect(read["gone"] == .some(nil))
+}
+
+@Test func allDeleteMeCountsAsWaitingAndEveryPassSkipsIt() async throws {
+    #expect(Passes.waitingAlbum(in: ["Trip", Passes.allDeleteAlbum]) == Passes.allDeleteAlbum)
+    let filed = Photo(uuid: "a", screenshot: true, albums: [Passes.allDeleteAlbum])
+    let other = Photo(uuid: "b", screenshot: true)
+    let (c, _) = try await makeCleanup([filed, other], judge: FakeJudge(off: "off"), keepAlbumPhotos: false)
+    for kind in ["screenshots", "bursts"] { #expect(try await c.candidates(kind).map(\.uuid).filter { $0 == "a" }.isEmpty) }
+    #expect(try await c.pass("screenshots").photos.map(\.photo.uuid) == ["b"])
+    let plain = [Photo(uuid: "a", albums: [Passes.allDeleteAlbum]), Photo(uuid: "b")]
+    let (d, _) = try await makeCleanup(plain, keepAlbumPhotos: false)
+    #expect(try await d.candidates("low-quality").map(\.uuid) == ["b"])
+    #expect(try await d.candidates("paperwork").map(\.uuid) == ["b"])
+}
+
+@Test func commitInAllFilesDeletesOnlyAndLogsNothing() async throws {
+    let (c, lib) = try await makeCleanup("ab".map { Photo(uuid: String($0)) })
+    let done = try await c.commit(Passes.allKey, delete: ["a"], keep: ["b"])
+    #expect(done == .init(added: 1, album: "All - Delete Me", kept: 0, keepAlbum: ""))
+    #expect(lib.adds.withLock { $0.map(\.album) } == ["All - Delete Me"])
+    #expect(await c.verdictStats().isEmpty)
 }
