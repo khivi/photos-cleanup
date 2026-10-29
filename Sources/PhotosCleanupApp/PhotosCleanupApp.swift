@@ -13,7 +13,7 @@ struct PhotosCleanupApp: App {
 enum Phase {
     case starting
     case noAccess(String)
-    case loaded(count: Int, verdictsOff: String?)
+    case loaded(photos: [Photo], thumbnails: Thumbnails, verdictsOff: String?)
     case failed(String)
 }
 
@@ -30,14 +30,26 @@ struct ContentView: View {
             case .noAccess(let status):
                 Text("Photos access is \(status).")
                 Button("Open Privacy Settings") { NSWorkspace.shared.open(photosSettings) }
-            case .loaded(let count, let verdictsOff):
-                Text("\(count.formatted()) photos").font(.title)
-                if let verdictsOff { Text("\(verdictsOff). Everything else works.").foregroundStyle(.secondary) }
+            case .loaded(let photos, let thumbnails, let verdictsOff):
+                HStack {
+                    Text("\(photos.count.formatted()) photos").font(.title2)
+                    if let verdictsOff { Text("\(verdictsOff). Everything else works.").foregroundStyle(.secondary) }
+                    Spacer()
+                }
+                .padding(.horizontal)
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize), spacing: 4)], spacing: 4) {
+                        ForEach(Array(photos.enumerated()), id: \.element.id) { i, photo in
+                            PhotoCell(index: i, uuid: photo.uuid, thumbnails: thumbnails)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
             case .failed(let message):
                 Text("Couldn't load the Photos library: \(message)")
             }
         }
-        .padding(40)
+        .padding(.vertical)
         .frame(minWidth: 400, minHeight: 240)
         .task { phase = await start() }
     }
@@ -53,6 +65,7 @@ struct ContentView: View {
             cacheDir: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Caches/photos-cleanup"),
             ignoreAlbums: loadIgnoreAlbums(), verdictsOff: verdictsOff)
         do { try await cleanup.load() } catch { return .failed("\(error)") }
-        return .loaded(count: await cleanup.photos.count, verdictsOff: verdictsOff)
+        let photos = await cleanup.photos
+        return .loaded(photos: photos, thumbnails: Thumbnails(library: library, uuids: photos.map(\.uuid)), verdictsOff: verdictsOff)
     }
 }
