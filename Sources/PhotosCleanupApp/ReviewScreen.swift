@@ -80,9 +80,10 @@ struct ReviewScreen: View {
         if model.inPass {
             ToolbarItemGroup {
                 Group {
-                    Button(ReviewModel.keepAllLabel, systemImage: "checkmark.circle") { model.setAll(.keep) }
-                    Button(ReviewModel.deleteAllLabel, systemImage: "xmark.circle") { model.setAll(.delete) }
+                    Button(ReviewModel.keepAllLabel, systemImage: "checkmark") { model.setAll(.keep) }
+                    Button(ReviewModel.deleteAllLabel, systemImage: "trash") { model.setAll(.delete) }
                 }
+                .labelStyle(.titleAndIcon)
                 .disabled(model.loading || model.photos.isEmpty)
             }
             ToolbarItem {
@@ -113,7 +114,7 @@ struct ReviewScreen: View {
         } else {
             // One ScrollView for every list: a second one would leave keyboard focus on the old one.
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize), spacing: 4)], spacing: 4) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize, maximum: cellMax), spacing: 4)], spacing: 4) {
                     if model.view == .pass("bursts") {
                         ForEach(model.groups, id: \.best) { group in
                             Section {

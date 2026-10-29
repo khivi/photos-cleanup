@@ -3,7 +3,9 @@ import Photos
 import PhotosCleanupCore
 import SwiftUI
 
-let cellSize: CGFloat = 170
+let cellSize: CGFloat = 120
+/// Adaptive cells grow up to this to fill a row; thumbnails are requested at this size.
+let cellMax: CGFloat = 150
 
 /// Thumbnails for the grid, from one PHCachingImageManager (settings measured in spike/grid_probe.swift).
 @MainActor
@@ -11,8 +13,8 @@ final class Thumbnails {
     private let manager = PHCachingImageManager()
     private let uuids: [String]  // grid order, newest first
     private let assets: [String: PHAsset]
-    private let size = CGSize(width: cellSize * (NSScreen.main?.backingScaleFactor ?? 2),
-                              height: cellSize * (NSScreen.main?.backingScaleFactor ?? 2))
+    private let size = CGSize(width: cellMax * (NSScreen.main?.backingScaleFactor ?? 2),
+                              height: cellMax * (NSScreen.main?.backingScaleFactor ?? 2))
     // Rows are ~8 cells wide: cache ~30 rows ahead of the lowest visible cell, ~15 behind.
     private let ahead = 240, behind = 120
     private var cached = 0..<0
@@ -115,7 +117,7 @@ struct PhotoCell: View {
         case .none: EmptyView()
         case .deleteMe: label("✗ Delete Me", .red)
         case .decision(.delete): label("✗ Delete", .red)
-        case .decision(.keep): label("✓ Keep", .green)
+        case .decision(.keep): EmptyView()  // most photos start as Keep: only the exceptions are marked
         }
     }
 
