@@ -46,6 +46,7 @@ public final class ReviewModel {
     public var verdictsOff: String? { cleanup.verdictsOff }
 
     private let cleanup: Cleanup
+    public private(set) var verdictStatRows: [VerdictStatRow] = []
 
     public init(cleanup: Cleanup) { self.cleanup = cleanup }
 
@@ -275,5 +276,28 @@ extension BurstGroup {
         guard let first = photos.compactMap(\.date).min() else { return count }
         let style = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: locale, timeZone: timeZone)
         return "\(first.formatted(style)) · \(count)"
+    }
+}
+
+// MARK: Verdict stats
+
+/// One pass's agreement between the model's verdicts and the user's committed choices.
+public struct VerdictStatRow: Sendable, Equatable, Identifiable {
+    public var key: String
+    public var title: String
+    public var agree: Int
+    public var total: Int
+    public var id: String { key }
+    /// "12 of 14 agree"
+    public var label: String { "\(agree) of \(total) agree" }
+}
+
+extension ReviewModel {
+    /// Reads the decisions log: one row per pass that has entries, in pass order.
+    public func refreshVerdictStats() async {
+        let stats = await cleanup.verdictStats()
+        verdictStatRows = Passes.all.compactMap { p in
+            stats[p.key].map { VerdictStatRow(key: p.key, title: p.title, agree: $0.agree, total: $0.total) }
+        }
     }
 }
