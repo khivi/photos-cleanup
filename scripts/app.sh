@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build and sign `.build/Photos Cleanup.app`. `run` also opens it, with output in a log.
 #   scripts/app.sh [run] [--universal]
+# SIGN_IDENTITY (e.g. "Developer ID Application: …") signs with the hardened runtime; default ad hoc.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -24,7 +25,13 @@ cp Sources/PhotosCleanupApp/Info.plist "$app/Contents/Info.plist"
 # This target's own SwiftPM resource bundles (none yet); $bin also holds every other target's.
 mkdir -p "$app/Contents/Resources"
 for b in "$bin"/photos-cleanup_PhotosCleanup{App,Core}.bundle; do [ -e "$b" ] && cp -R "$b" "$app/Contents/Resources/"; done
-codesign -s - -f "$app"
+# The hardened runtime denies Photos access without this entitlement, even when TCC allows it.
+ent=Sources/PhotosCleanupApp/PhotosCleanup.entitlements
+if [ -n "${SIGN_IDENTITY:-}" ]; then
+  codesign --force --options runtime --timestamp --entitlements "$ent" --sign "$SIGN_IDENTITY" ${KEYCHAIN:+--keychain "$KEYCHAIN"} "$app"
+else
+  codesign --force --entitlements "$ent" --sign - "$app"
+fi
 echo "$app"
 
 if [ "$run" = 1 ]; then

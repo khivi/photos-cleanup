@@ -31,7 +31,7 @@ Each phase ends in something that runs. The server and React UI stay working unt
 - [x] Add the `PhotosCleanupApp` executable target: SwiftUI `@main`, depends on Core only. Its own `Info.plist` with a bundle ID, `CFBundleShortVersionString` (the one version source), `LSMinimumSystemVersion` and `NSPhotoLibraryUsageDescription`.
 - [x] `scripts/app.sh`: `swift build -c release`, assemble `Photos Cleanup.app`, sign it. `scripts/app.sh run` builds, then `open`s it with stdout to a log. The spike showed a bare binary from a shell never gets its window in front.
 - [x] Window: ask for Photos access, `Cleanup.load()`, show the photo count.
-- [ ] **Risk:** the hardened runtime may need the `com.apple.security.personal-information.photos-library` entitlement. Check with a Developer ID build before phase 3.
+- [x] **Risk, resolved 2026-10-29:** the hardened runtime denies Photos access without `com.apple.security.personal-information.photos-library`, even with TCC at Full Access. `scripts/app.sh` signs with `Sources/PhotosCleanupApp/PhotosCleanup.entitlements`; set `SIGN_IDENTITY` for a Developer ID build.
 - [ ] **Risk:** TCC keys an ad-hoc signature on the binary hash, so every rebuild may ask for Photos access again. If it does, sign dev builds with a stable Apple Development identity.
 
 Done when: the app opens from Finder, macOS asks Photos access for the app (not the terminal), and the count matches the browser UI.
