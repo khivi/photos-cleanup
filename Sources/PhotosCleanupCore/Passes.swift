@@ -135,12 +135,12 @@ public let cleanupAlbumNames: Set<String> = [
     "Similar Photos - Review Me", "Documents - Review Me",
 ]
 
+public let settingsDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+    "Library/Application Support/photos-cleanup")
+
 /// Albums whose membership doesn't protect a photo: the defaults, review albums, and any listed
 /// in albums_ignore or albums_ignore.local in `dir` (one per line, '#' comments).
-public func loadIgnoreAlbums(
-    dir: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-        "Library/Application Support/photos-cleanup")
-) -> Set<String> {
+public func loadIgnoreAlbums(dir: URL = settingsDir) -> Set<String> {
     var albums = defaultIgnoreAlbums.union(cleanupAlbumNames)
     for name in ["albums_ignore", "albums_ignore.local"] {
         guard let text = try? String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8) else {
@@ -154,17 +154,38 @@ public func loadIgnoreAlbums(
     return albums
 }
 
+/// The names the user listed in `albums_ignore` (what the Settings window edits), in file order.
+public func userIgnoreAlbums(dir: URL = settingsDir) -> [String] {
+    guard let text = try? String(contentsOf: dir.appendingPathComponent("albums_ignore"), encoding: .utf8)
+    else { return [] }
+    return text.split(whereSeparator: \.isNewline)
+        .map { $0.trimmingCharacters(in: .whitespaces) }
+        .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+}
+
+/// Rewrites the names in `albums_ignore`, keeping its '#' comment lines. `albums_ignore.local` is untouched.
+public func saveIgnoreAlbums(_ names: [String], dir: URL = settingsDir) throws {
+    let file = dir.appendingPathComponent("albums_ignore")
+    let old = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+    let comments = old.split(whereSeparator: \.isNewline).map(String.init).filter {
+        $0.trimmingCharacters(in: .whitespaces).hasPrefix("#")
+    }
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try (comments + names).joined(separator: "\n").appending("\n").write(to: file, atomically: true, encoding: .utf8)
+}
+
 private let minDate = ISO8601DateFormatter().date(from: "2000-01-01T00:00:00Z")!
 
-/// Photos a pass may suggest: not favorited, not videos, not in any of the user's own albums.
+/// Photos a pass may suggest: not favorited, not videos, and (with `keepAlbumPhotos`, the default)
+/// not in any of the user's own albums.
 /// Screenshots appear only with onlyScreenshots, which returns nothing else.
 public func candidatePhotos(
     _ photos: [Photo], ignoring ignore: Set<String>, onlyScreenshots: Bool = false,
-    requireValidDate: Bool = false
+    requireValidDate: Bool = false, keepAlbumPhotos: Bool = true
 ) -> [Photo] {
     photos.filter { p in
         guard p.screenshot == onlyScreenshots, !p.isMovie, !p.favorite else { return false }
-        guard Set(p.albums).subtracting(ignore).isEmpty else { return false }
+        guard !keepAlbumPhotos || Set(p.albums).subtracting(ignore).isEmpty else { return false }
         if requireValidDate {
             guard let d = p.date, d >= minDate else { return false }
         }

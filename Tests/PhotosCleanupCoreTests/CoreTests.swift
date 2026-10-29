@@ -33,6 +33,32 @@ import Testing
     #expect(!ignore.contains("# a comment"))
 }
 
+@Test func ignoreAlbumsRoundTrip() throws {
+    let dir = tempDir()
+    try "# mine\nFamily\n".write(to: dir.appendingPathComponent("albums_ignore"), atomically: true, encoding: .utf8)
+    #expect(userIgnoreAlbums(dir: dir) == ["Family"])
+    try saveIgnoreAlbums(["Work", "Trips"], dir: dir)
+    #expect(userIgnoreAlbums(dir: dir) == ["Work", "Trips"])
+    #expect(try String(contentsOf: dir.appendingPathComponent("albums_ignore"), encoding: .utf8).hasPrefix("# mine\n"))
+    #expect(loadIgnoreAlbums(dir: dir).isSuperset(of: ["Work", "Trips"]))
+    #expect(!loadIgnoreAlbums(dir: dir).contains("Family"))
+}
+
+@Test func keepAlbumPhotosToggle() async throws {
+    let photos = [
+        Photo(uuid: "plain"), Photo(uuid: "mine", albums: ["Trip to Goa"]), Photo(uuid: "fav", favorite: true, albums: ["Trip to Goa"]),
+        Photo(uuid: "filed", albums: ["Trip to Goa", "Paperwork - Delete Me"]),
+        Photo(uuid: "legacy", albums: ["Trip to Goa", "Utility - Keep"]),
+    ]
+    let ignore = loadIgnoreAlbums(dir: tempDir())
+    #expect(candidatePhotos(photos, ignoring: ignore).map(\.uuid) == ["plain"])
+    #expect(candidatePhotos(photos, ignoring: ignore, keepAlbumPhotos: false).map(\.uuid) == ["plain", "mine", "filed", "legacy"])
+    let (on, _) = try await makeCleanup(photos)
+    #expect(Set(try await on.candidates("paperwork").map(\.uuid)) == ["plain"])
+    let (off, _) = try await makeCleanup(photos, keepAlbumPhotos: false)
+    #expect(Set(try await off.candidates("paperwork").map(\.uuid)) == ["plain", "mine"])
+}
+
 @MainActor @Test func everyPassHasOneName() {
     for (key, title) in Passes.all {
         #expect(Passes.deleteAlbum(key) == "\(title) - Delete Me")

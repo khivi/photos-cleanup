@@ -82,7 +82,8 @@ func tempDir() -> URL {
 /// A Cleanup over fakes with every photo a candidate (no albums to ignore beyond the defaults).
 func makeCleanup(
     _ photos: [Photo], vision: [String: VisionResult?] = [:], verdicts: [String: Verdict] = [:],
-    judge: FakeJudge = FakeJudge(), library: FakeLibrary? = nil, cacheDir: URL = tempDir()
+    judge: FakeJudge = FakeJudge(), library: FakeLibrary? = nil, cacheDir: URL = tempDir(),
+    keepAlbumPhotos: Bool = true
 ) async throws -> (Cleanup, FakeLibrary) {
     let lib = library ?? FakeLibrary(photos, vision: vision)
     if !vision.isEmpty {  // as if analysed in an earlier run
@@ -94,7 +95,7 @@ func makeCleanup(
         try lines.write(to: cacheDir.appendingPathComponent(Cleanup.verdictCache), atomically: true, encoding: .utf8)
     }
     let c = Cleanup(library: lib, judge: judge, cacheDir: cacheDir, ignoreAlbums: loadIgnoreAlbums(dir: cacheDir),
-                    verdictsOff: judge.off)
+                    keepAlbumPhotos: keepAlbumPhotos, verdictsOff: judge.off)
     try await c.load()
     return (c, lib)
 }
