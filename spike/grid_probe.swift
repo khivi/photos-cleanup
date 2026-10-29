@@ -5,6 +5,9 @@
 //   grid_probe --autoscroll  scroll top to bottom by itself, print the summary and quit
 //   --mode opportunistic|fast|hq  PHImageRequestOptions.deliveryMode (default opportunistic)
 //   --preload      startCachingImages for the rows ahead of the visible ones
+//   --select       click to select, ⇧-click for a range, ⌘-click to toggle, ⌘A for all, arrow keys
+//                  to move. With --autoscroll: select all, toggle one visible cell every 50ms while
+//                  scrolling, then from the top press ↓ 300 times at key-repeat rate (30/s)
 // Build (embeds the Info.plist PhotoKit requires for its permission prompt):
 //   swiftc -O -parse-as-library spike/grid_probe.swift -o /tmp/grid_probe \
 //     -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker spike/photokit_Info.plist
@@ -23,6 +26,8 @@
 //   hq --preload    93s, 1 hitch (84ms), peak 309MB, thumbnail p95 4ms: sharp and smooth
 // Verdict: native is viable. Use hq plus startCachingImages ~30 rows ahead (`near`); the cache
 // costs ~150MB more and makes hq as smooth as fast. Off-main decoding is not needed.
+// --select, by hand, 7,390 assets, 2026-10-29: click, ⇧-click, ⌘-click, ⌘A and the arrow keys all
+// work, and scrolling with everything selected stays smooth. One shared selection set is enough.
 import AppKit
 import Photos
 import SwiftUI
@@ -31,6 +36,7 @@ let cell: CGFloat = 170
 let autoscroll = CommandLine.arguments.contains("--autoscroll")
 let mode = CommandLine.arguments.drop { $0 != "--mode" }.dropFirst().first ?? "opportunistic"
 let preload = CommandLine.arguments.contains("--preload")
+let selecting = CommandLine.arguments.contains("--select")
 let launched = ContinuousClock.now  // globals are lazy: touched in GridProbe.init to pin it to launch
 
 func seconds(_ d: Duration) -> Double {
@@ -62,6 +68,7 @@ final class Stats {
     var finals: [Double] = []  // request → non-degraded image
     var syncFirst = 0  // first image delivered inside requestImage, on the main thread
     var requested = 0, cancelled = 0, peakMB = 0.0
+    var bodies = 0, changes = 0  // Thumb body evaluations; selection changes
     var gaps: [Double] = []  // main-thread timer gaps over 50ms
     private var last = ContinuousClock.now
     private var timer: Timer?
@@ -90,6 +97,10 @@ final class Stats {
                      requested, latencies.count, cancelled, pct(ms, 0.5), pct(ms, 0.95), ms.max() ?? 0))
         print(String(format: "main-thread hitches >50ms: %d, worst %.0fms", gaps.count, (gaps.max() ?? 0) * 1000))
         print(String(format: "memory now %.0fMB, peak %.0fMB", footprintMB(), peakMB))
+        if selecting {
+            print(String(format: "selection changes %d, thumb bodies %d (%.1f per change)",
+                         changes, bodies, Double(bodies) / Double(max(changes, 1))))
+        }
     }
 }
 
@@ -144,20 +155,48 @@ final class Library: ObservableObject {
     }
 }
 
+// One set read by every cell: the simplest design. Each change re-evaluates every visible
+// Thumb, since Observation tracks `ids` as a whole.
+@MainActor @Observable
+final class Selection {
+    var ids = Set<Int>()
+    var anchor: Int?
+
+    func click(_ i: Int) {
+        let mods = NSEvent.modifierFlags
+        if mods.contains(.shift), let anchor {
+            ids = Set(min(anchor, i)...max(anchor, i))
+        } else if mods.contains(.command) {
+            if ids.remove(i) == nil { ids.insert(i) }
+            anchor = i
+        } else {
+            ids = [i]
+            anchor = i
+        }
+        Stats.shared.changes += 1
+    }
+}
+
 struct Thumb: View {
     let index: Int
     let asset: PHAsset
     let lib: Library
+    let sel: Selection
     private var manager: PHCachingImageManager { lib.manager }
     @State private var image: NSImage?
 
     var body: some View {
+        let _ = Stats.shared.bodies += 1
+        let selected = selecting && sel.ids.contains(index)
         ZStack {
             Color.gray.opacity(0.15)
             if let image { Image(nsImage: image).resizable().scaledToFill() }
         }
         .frame(width: cell, height: cell)
         .clipped()
+        .overlay { if selected { Rectangle().strokeBorder(Color.accentColor, lineWidth: 4) } }
+        .contentShape(Rectangle())
+        .onTapGesture { if selecting { sel.click(index) } }
         .onAppear {
             lib.near(index)
             request()
@@ -202,8 +241,22 @@ struct Thumb: View {
 
 struct Grid: View {
     @StateObject private var lib = Library()
+    @State private var sel = Selection()
     @State private var position = ScrollPosition(edge: .top)
     @State private var y: CGFloat = 0
+    @State private var width: CGFloat = 1200
+    @FocusState private var focused: Bool
+
+    // The adaptive grid fits as many fixed-width columns as the width allows.
+    private var columns: Int { max(1, Int((width - 8 + 4) / (cell + 4))) }
+
+    private func move(_ delta: Int, count: Int) {
+        let i = min(count - 1, max(0, (sel.anchor ?? -1) + delta))
+        sel.ids = [i]
+        sel.anchor = i
+        Stats.shared.changes += 1
+        position.scrollTo(id: i)
+    }
 
     var body: some View {
         Group {
@@ -211,12 +264,31 @@ struct Grid: View {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: cell, maximum: cell), spacing: 4)], spacing: 4) {
                         ForEach(0..<assets.count, id: \.self) { i in
-                            Thumb(index: i, asset: assets.object(at: i), lib: lib)
+                            Thumb(index: i, asset: assets.object(at: i), lib: lib, sel: sel)
                         }
                     }
                     .padding(4)
                 }
                 .scrollPosition($position)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+                .focusable(selecting)
+                .focused($focused)
+                .focusEffectDisabled()
+                .onAppear { focused = selecting }
+                .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
+                    guard selecting else { return .ignored }
+                    switch press.key {
+                    case .leftArrow: move(-1, count: assets.count)
+                    case .rightArrow: move(1, count: assets.count)
+                    case .upArrow: move(-columns, count: assets.count)
+                    default: move(columns, count: assets.count)
+                    }
+                    return .handled
+                }
+                .background {
+                    Button("Select All") { sel.ids = Set(0..<assets.count); Stats.shared.changes += 1 }
+                        .keyboardShortcut("a").hidden()
+                }
                 .task { if autoscroll { await scrollThrough(rows: assets.count) } }
             } else {
                 Text(lib.status).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -235,13 +307,37 @@ struct Grid: View {
         let t = ContinuousClock.now
         let columns = max(1, Int((1200 - 8) / (cell + 4)))
         let height = CGFloat((count + columns - 1) / columns) * (cell + 4)
+        if selecting { sel.ids = Set(0..<count); Stats.shared.changes += 1 }
+        var lastToggle = ContinuousClock.now
         while y < height {
             y += 40
             position.scrollTo(y: y)
+            if selecting && ContinuousClock.now - lastToggle >= .milliseconds(50) {
+                let i = min(count - 1, Int(y / (cell + 4)) * columns + Int.random(in: 0..<columns))
+                if sel.ids.remove(i) == nil { sel.ids.insert(i) }
+                Stats.shared.changes += 1
+                lastToggle = .now
+            }
             try? await Task.sleep(for: .milliseconds(16))
         }
         try? await Task.sleep(for: .seconds(2))
         print(String(format: "autoscroll %.0fpt in %.1fs", height, seconds(ContinuousClock.now - t)))
+        if selecting {
+            position.scrollTo(edge: .top)
+            sel.anchor = nil
+            try? await Task.sleep(for: .seconds(2))
+            let before = Stats.shared.gaps.count
+            let ta = ContinuousClock.now
+            for _ in 0..<300 {
+                move(columns, count: count)
+                try? await Task.sleep(for: .milliseconds(33))
+            }
+            let arrows = Stats.shared.gaps.dropFirst(before)
+            print(String(format: "arrows: 300 x ↓ (%d columns) in %.1fs (ideal 9.9s), ended at %d of %d; hitches >50ms %d, worst %.0fms",
+                         columns, seconds(ContinuousClock.now - ta), sel.anchor ?? -1, count,
+                         arrows.count, (arrows.max() ?? 0) * 1000))
+            try? await Task.sleep(for: .seconds(1))
+        }
         NSApp.terminate(nil)
     }
 }
