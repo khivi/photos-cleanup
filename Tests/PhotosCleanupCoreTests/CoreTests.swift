@@ -18,7 +18,7 @@ import Testing
         Photo(uuid: "undated"),
         Photo(uuid: "old", date: year(1990)),
     ]
-    let ignore = loadIgnoreAlbums(cwd: tempDir())
+    let ignore = loadIgnoreAlbums(dir: tempDir())
     #expect(candidatePhotos(photos, ignoring: ignore).map(\.uuid) == ["plain", "smart", "filed", "undated", "old"])
     #expect(candidatePhotos(photos, ignoring: ignore, onlyScreenshots: true).map(\.uuid) == ["shot"])
     #expect(candidatePhotos(photos, ignoring: ignore, requireValidDate: true).map(\.uuid) == ["plain", "smart", "filed"])
@@ -28,7 +28,7 @@ import Testing
     let dir = tempDir()
     try "# a comment\nFamily\n\n".write(to: dir.appendingPathComponent("albums_ignore"), atomically: true, encoding: .utf8)
     try "Work\n".write(to: dir.appendingPathComponent("albums_ignore.local"), atomically: true, encoding: .utf8)
-    let ignore = loadIgnoreAlbums(cwd: dir)
+    let ignore = loadIgnoreAlbums(dir: dir)
     #expect(ignore.isSuperset(of: ["Family", "Work", "Selfies", "Screenshots - Delete Me"]))
     #expect(!ignore.contains("# a comment"))
 }

@@ -51,7 +51,8 @@ public struct PhotoKitLibrary: PhotoLibrary {
 
     static func uuid(_ a: PHAsset) -> String { String(a.localIdentifier.prefix { $0 != "/" }) }
 
-    func assets(_ uuids: [String]) -> [String: PHAsset] {
+    /// The PHAssets for these photo uuids, e.g. to feed a PHCachingImageManager.
+    public func assets(_ uuids: [String]) -> [String: PHAsset] {
         var out: [String: PHAsset] = [:]
         PHAsset.fetchAssets(withLocalIdentifiers: uuids.map { $0 + Self.idSuffix }, options: nil)
             .enumerateObjects { a, _, _ in out[Self.uuid(a)] = a }

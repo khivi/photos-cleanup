@@ -96,7 +96,7 @@ func makeCleanup(
         let lines = verdicts.map { Cleanup.verdictLine($0.key, $0.value) }.joined(separator: "\n") + "\n"
         try lines.write(to: cacheDir.appendingPathComponent(Cleanup.verdictCache), atomically: true, encoding: .utf8)
     }
-    let c = Cleanup(library: lib, judge: judge, cacheDir: cacheDir, ignoreAlbums: loadIgnoreAlbums(cwd: cacheDir),
+    let c = Cleanup(library: lib, judge: judge, cacheDir: cacheDir, ignoreAlbums: loadIgnoreAlbums(dir: cacheDir),
                     verdictsOff: judge.off)
     try await c.load()
     return (c, lib)

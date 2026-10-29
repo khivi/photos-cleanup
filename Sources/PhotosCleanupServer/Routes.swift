@@ -46,8 +46,8 @@ public func buildRouter(cleanup: Cleanup, uiDir: URL?) -> Router<BasicRequestCon
             let count = result.groups.reduce(0) { $0 + $1.photos.count }
             return json(["kind": kind, "count": count, "groups": groups, "classify": progress])
         }
-        let photos = result.photos.map { p, v in
-            meta(p).merging(["verdict": v.map(verdictJSON) ?? NSNull()]) { $1 }
+        let photos = result.photos.map { p in
+            meta(p.photo).merging(["verdict": p.verdict.map(verdictJSON) ?? NSNull()]) { $1 }
         }
         return json(["kind": kind, "count": photos.count, "photos": photos, "classify": progress])
     }

@@ -1,7 +1,8 @@
 import Foundation
 
 /// One photo or video in the user's own library (iCloud Shared Album photos are left out).
-public struct Photo: Sendable, Equatable {
+public struct Photo: Sendable, Hashable, Identifiable {
+    public var id: String { uuid }
     public var uuid: String
     public var date: Date?
     public var width: Int
@@ -42,7 +43,7 @@ public struct VisionResult: Sendable, Equatable {
 }
 
 /// A Foundation Models keep/delete call. kind "picture": Vision says it isn't a utility image.
-public struct Verdict: Sendable, Equatable {
+public struct Verdict: Sendable, Hashable {
     public var keep: Bool
     public var kind: String
     public var reason: String
@@ -115,13 +116,14 @@ public let cleanupAlbumNames: Set<String> = [
 ]
 
 /// Albums whose membership doesn't protect a photo: the defaults, review albums, and any listed
-/// in ./albums_ignore or ./albums_ignore.local (one per line, '#' comments).
-public func loadIgnoreAlbums(cwd: URL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
-    -> Set<String>
-{
+/// in albums_ignore or albums_ignore.local in `dir` (one per line, '#' comments).
+public func loadIgnoreAlbums(
+    dir: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+        "Library/Application Support/photos-cleanup")
+) -> Set<String> {
     var albums = defaultIgnoreAlbums.union(cleanupAlbumNames)
     for name in ["albums_ignore", "albums_ignore.local"] {
-        guard let text = try? String(contentsOf: cwd.appendingPathComponent(name), encoding: .utf8) else {
+        guard let text = try? String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8) else {
             continue
         }
         for line in text.split(whereSeparator: \.isNewline) {

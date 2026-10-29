@@ -2,9 +2,34 @@ import Foundation
 
 /// What a pass shows: its photos (or, for bursts, groups with the best shot) and progress.
 public struct PassResult: Sendable {
-    public var photos: [(photo: Photo, verdict: Verdict?)] = []
-    public var groups: [(photos: [Photo], best: String)] = []
+    public var photos: [PassPhoto] = []
+    public var groups: [BurstGroup] = []
     public var progress = JobProgress()
+
+    public init() {}
+}
+
+/// A photo in a pass, with the model's verdict where the pass has one.
+public struct PassPhoto: Sendable, Hashable, Identifiable {
+    public var photo: Photo
+    public var verdict: Verdict?
+    public var id: String { photo.uuid }
+
+    public init(photo: Photo, verdict: Verdict? = nil) {
+        self.photo = photo
+        self.verdict = verdict
+    }
+}
+
+/// Shots of one burst; `best` is the uuid of the one to keep.
+public struct BurstGroup: Sendable, Hashable {
+    public var photos: [Photo]
+    public var best: String
+
+    public init(photos: [Photo], best: String) {
+        self.photos = photos
+        self.best = best
+    }
 }
 
 public enum CleanupError: Error, Equatable {
@@ -116,7 +141,7 @@ public actor Cleanup {
         if kind == "bursts" {
             result.groups = bursts(photos).reversed().map { g in  // newest group first
                 // First max wins ties: the earliest shot.
-                (g, g.reduce(g[0]) { score($1) > score($0) ? $1 : $0 }.uuid)
+                BurstGroup(photos: g, best: g.reduce(g[0]) { score($1) > score($0) ? $1 : $0 }.uuid)
             }
             return result
         }
@@ -129,7 +154,9 @@ public actor Cleanup {
             // check said it isn't a utility image after all.
             photos = photos.filter { (verdicts[$0.uuid]?.kind ?? "picture") != "picture" }
         }
-        result.photos = photos.map { ($0, Passes.verdictKinds.contains(kind) ? passVerdict(kind, verdicts[$0.uuid]) : nil) }
+        result.photos = photos.map {
+            PassPhoto(photo: $0, verdict: Passes.verdictKinds.contains(kind) ? passVerdict(kind, verdicts[$0.uuid]) : nil)
+        }
         return result
     }
 
