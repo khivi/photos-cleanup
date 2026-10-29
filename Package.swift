@@ -4,7 +4,10 @@ import PackageDescription
 let package = Package(
     name: "photos-cleanup",
     platforms: [.macOS(.v15)],
-    products: [.executable(name: "photos-cleanup", targets: ["PhotosCleanup"])],
+    products: [
+        .executable(name: "photos-cleanup", targets: ["PhotosCleanup"]),
+        .executable(name: "PhotosCleanupApp", targets: ["PhotosCleanupApp"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
     ],
@@ -34,6 +37,12 @@ let package = Package(
                     "-Xlinker", "Sources/PhotosCleanup/Info.plist",
                 ]),
             ]
+        ),
+        // The native SwiftUI app. Run as a bundle: `scripts/app.sh` assembles Info.plist into one.
+        .executableTarget(
+            name: "PhotosCleanupApp",
+            dependencies: ["PhotosCleanupCore"],
+            exclude: ["Info.plist"]
         ),
         .testTarget(name: "PhotosCleanupCoreTests", dependencies: ["PhotosCleanupCore"]),
         .testTarget(
