@@ -45,6 +45,11 @@ public final class ReviewModel {
     public private(set) var error: String?
     public var verdictsOff: String? { cleanup.verdictsOff }
 
+    /// The photos the user selected in the grid, always among `displayed`.
+    public private(set) var selected: Set<String> = []
+    /// Where a ⇧-click range starts and arrow keys move from.
+    public private(set) var anchor: String?
+
     private let cleanup: Cleanup
 
     public init(cleanup: Cleanup) { self.cleanup = cleanup }
@@ -169,6 +174,7 @@ public final class ReviewModel {
         if v == .deleted {
             await loadWaiting()
             view = v
+            clearSelection()
             return
         }
         loading = true
@@ -184,6 +190,7 @@ public final class ReviewModel {
                 items = await cleanup.photos.map { PassPhoto(photo: $0) }
             }
             view = v
+            clearSelection()
             photos = items
             groups = gs
             progress = prog
@@ -213,6 +220,7 @@ public final class ReviewModel {
         }
         for p in photos where !touched.contains(p.id) { decisions[p.id] = initialDecision(p) }
         progress = r.progress
+        pruneSelection()
     }
 
     public func refreshCounts() async {
@@ -235,14 +243,65 @@ public final class ReviewModel {
 
     // MARK: Deciding
 
-    public func toggle(_ uuid: String) {
-        touched.insert(uuid)
-        decisions[uuid] = decisions[uuid] == .delete ? .keep : .delete
+    /// Marks `ids` Keep or Delete as the user's choice.
+    public func mark(_ ids: some Collection<String>, _ d: Decision) {
+        touched.formUnion(ids)
+        for id in ids { decisions[id] = d }
+    }
+
+    /// Flips one photo.
+    public func toggle(_ uuid: String) { mark([uuid], decisions[uuid] == .delete ? .keep : .delete) }
+
+    /// Marks the selected photos; only a pass has decisions.
+    public func markSelection(_ d: Decision) {
+        guard inPass else { return }
+        mark(selected, d)
     }
 
     public func setAll(_ d: Decision) {
         decisions = Dictionary(photos.map { ($0.id, d) }, uniquingKeysWith: { a, _ in a })
         touched = Set(photos.map(\.id))
+    }
+
+    // MARK: Selection
+
+    private var order: [String] { displayed.map(\.id) }
+
+    /// A click: replaces the selection; ⇧ extends from the anchor to `id`; ⌘ toggles `id`.
+    public func click(_ id: String, extend: Bool = false, toggle: Bool = false) {
+        if extend, let anchor, let a = order.firstIndex(of: anchor), let i = order.firstIndex(of: id) {
+            selected = Set(order[min(a, i)...max(a, i)])
+        } else if toggle {
+            if selected.remove(id) == nil { selected.insert(id) }
+            anchor = id
+        } else {
+            selected = [id]
+            anchor = id
+        }
+    }
+
+    public func selectAll() { selected = Set(order) }
+
+    /// An arrow key: selects the photo `delta` places from the anchor (1 is next, a row is the column count).
+    public func moveSelection(by delta: Int) {
+        let ids = order
+        guard !ids.isEmpty else { return }
+        let from = anchor.flatMap { ids.firstIndex(of: $0) } ?? (delta > 0 ? -1 : ids.count)
+        let id = ids[min(ids.count - 1, max(0, from + delta))]
+        selected = [id]
+        anchor = id
+    }
+
+    public func clearSelection() {
+        selected = []
+        anchor = nil
+    }
+
+    /// Drops photos that left the list (committed, or no longer a candidate).
+    private func pruneSelection() {
+        let ids = Set(order)
+        selected.formIntersection(ids)
+        if let a = anchor, !ids.contains(a) { anchor = nil }
     }
 
     // MARK: Commit
@@ -265,6 +324,7 @@ public final class ReviewModel {
                 .filter { !$0.photos.isEmpty }
             for id in gone { decisions[id] = nil }
             touched.subtract(gone)
+            pruneSelection()
             var parts: [String] = []
             if r.added > 0 { parts.append("\(r.added) to “\(r.album)”") }
             if r.kept > 0 { parts.append("\(r.kept) to “\(r.keepAlbum)”") }

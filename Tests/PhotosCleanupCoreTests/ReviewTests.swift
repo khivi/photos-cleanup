@@ -161,6 +161,75 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(badges["To be deleted"] == 1)
     }
 
+    @Test func selectExtendAndMark() async throws {
+        let (c, _) = try await makeCleanup(shots("a", "b", "c", "d"), judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("screenshots"))
+        let ids = m.displayed.map(\.id)
+        m.click(ids[1])
+        #expect(m.selected == [ids[1]] && m.anchor == ids[1])
+        m.click(ids[3], extend: true)
+        #expect(m.selected == Set(ids[1...3]) && m.anchor == ids[1])
+        m.click(ids[0], toggle: true)  // ⌘ adds, again removes
+        #expect(m.selected == Set(ids[0...3]))
+        m.click(ids[0], toggle: true)
+        #expect(m.selected == Set(ids[1...3]) && m.anchor == ids[0])
+        m.click(ids[2])
+        #expect(m.selected == [ids[2]])
+        m.selectAll()
+        #expect(m.selected == Set(ids))
+
+        m.click(ids[1])
+        m.click(ids[2], extend: true)
+        m.markSelection(.delete)
+        #expect(m.decisions[ids[1]] == .delete && m.decisions[ids[2]] == .delete && m.decisions[ids[0]] == .keep)
+        #expect(m.touched == [ids[1], ids[2]])
+        m.markSelection(.keep)
+        #expect(m.decisions[ids[1]] == .keep && m.decisions[ids[2]] == .keep)
+        m.toggle(ids[3])  // marking one photo
+        #expect(m.decisions[ids[3]] == .delete && m.touched.contains(ids[3]))
+    }
+
+    @Test func arrowKeysMoveTheSelection() async throws {
+        let (c, _) = try await makeCleanup(shots("a", "b", "c"), judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("screenshots"))
+        let ids = m.displayed.map(\.id)
+        m.moveSelection(by: 1)  // nothing selected: first
+        #expect(m.selected == [ids[0]])
+        m.moveSelection(by: 1)
+        m.moveSelection(by: 5)  // clamped
+        #expect(m.selected == [ids[2]] && m.anchor == ids[2])
+        m.moveSelection(by: -1)
+        #expect(m.selected == [ids[1]])
+        m.clearSelection()
+        m.moveSelection(by: -1)  // nothing selected: last
+        #expect(m.selected == [ids[2]])
+    }
+
+    @Test func selectionFollowsTheListAndMarksNeedAPass() async throws {
+        let (c, _) = try await makeCleanup(shots("a", "b", "c"), judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.all)
+        m.selectAll()
+        m.markSelection(.delete)  // All has no decisions
+        #expect(m.decisions.isEmpty && m.selected.count == 3)
+        await m.select(.pass("screenshots"))  // a tab change clears it
+        #expect(m.selected.isEmpty && m.anchor == nil)
+        let ids = m.displayed.map(\.id)
+        m.click(ids[0])
+        m.click(ids[1], toggle: true)
+        m.markSelection(.delete)
+        await m.commit()  // committed photos leave the selection
+        #expect(m.selected.isEmpty && m.anchor == nil)
+
+        await m.select(.pass("screenshots"))
+        m.selectAll()
+        #expect(m.selected == Set(m.displayed.map(\.id)))
+        await m.select(.deleted)
+        #expect(m.selected.isEmpty)
+    }
+
     @Test func deletedListSurvivesRestart() async throws {
         let lib = [
             Photo(uuid: "s", screenshot: true, albums: ["Screenshots - Delete Me"]),
