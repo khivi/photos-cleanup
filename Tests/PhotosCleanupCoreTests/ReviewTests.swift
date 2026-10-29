@@ -11,15 +11,16 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
 @Suite struct ReviewTests {
     @Test func initialDecisionsPerPass() async throws {
         // Screenshots: delete only on a not-keep verdict; unjudged keeps.
-        let (c, _) = try await makeCleanup(shots("a", "b", "c"), verdicts: ["a": dropV, "b": keepV],
-                                           judge: FakeJudge(off: "off"))
+        let (c, _) = try await makeCleanup(
+            shots("a", "b", "c"), verdicts: ["a": dropV, "b": keepV],
+            judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("screenshots"))
         #expect(m.decisions == ["a": .delete, "b": .keep, "c": .keep])
 
         // Bursts: best keeps, rest delete.
         let burst = dated(["x": 0, "y": 1, "z": 2])
-        let (c2, _) = try await makeCleanup(burst, vision: ["x": V(0.1), "y": V(0.9), "z": V(0.2)])
+        let (c2, _) = try await makeCleanup(burst, vision: ["x": vr(0.1), "y": vr(0.9), "z": vr(0.2)])
         let m2 = ReviewModel(cleanup: c2)
         await m2.select(.pass("bursts"))
         #expect(m2.decisions == ["x": .delete, "y": .keep, "z": .delete])
@@ -28,7 +29,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(!m2.isBest("y"))  // the star is a Bursts-view mark
 
         // Low quality: everything starts delete.
-        let (c3, _) = try await makeCleanup([Photo(uuid: "q")], vision: ["q": V(-0.9)])
+        let (c3, _) = try await makeCleanup([Photo(uuid: "q")], vision: ["q": vr(-0.9)])
         let m3 = ReviewModel(cleanup: c3)
         await m3.select(.pass("low-quality"))
         #expect(m3.decisions == ["q": .delete])
@@ -53,12 +54,13 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("screenshots"))
         // a has a verdict, b is untouched without one (not sent), c is touched twice back to keep.
-        m.toggle("c"); m.toggle("c")
+        m.toggle("c")
+        m.toggle("c")
         #expect(Set(m.keepers.map(\.id)) == ["a", "c"])
         #expect(m.doomed.isEmpty)
 
         let burst = dated(["x": 0, "y": 1])
-        let (c2, _) = try await makeCleanup(burst, vision: ["x": V(0.1), "y": V(0.9)])
+        let (c2, _) = try await makeCleanup(burst, vision: ["x": vr(0.1), "y": vr(0.9)])
         let m2 = ReviewModel(cleanup: c2)
         await m2.select(.pass("bursts"))
         #expect(m2.keepers.map(\.id) == ["y"] && m2.doomed.map(\.id) == ["x"])
@@ -80,8 +82,8 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
 
     @Test func refreshAppendsNewCandidates() async throws {
         let ps = [Photo(uuid: "a"), Photo(uuid: "b")]
-        let lib = FakeLibrary(ps, vision: ["a": V(-0.9), "b": V(-0.8)])
-        let (c, _) = try await makeCleanup(ps, vision: ["a": V(-0.9)], library: lib)
+        let lib = FakeLibrary(ps, vision: ["a": vr(-0.9), "b": vr(-0.8)])
+        let (c, _) = try await makeCleanup(ps, vision: ["a": vr(-0.9)], library: lib)
         lib.gate.close()  // b stays unanalysed during select
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("low-quality"))
@@ -96,8 +98,9 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
     }
 
     @Test func commitFilesAndUpdatesState() async throws {
-        let (c, lib) = try await makeCleanup(shots("a", "b", "c"), verdicts: ["b": keepV, "a": dropV],
-                                             judge: FakeJudge(off: "off"))
+        let (c, lib) = try await makeCleanup(
+            shots("a", "b", "c"), verdicts: ["b": keepV, "a": dropV],
+            judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("screenshots"))
         await m.commit()
@@ -127,7 +130,10 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
     @Test func labels() async throws {
         let (c, _) = try await makeCleanup(shots("a", "b"), verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
-        #expect(ReviewModel.tabs.map(\.title) == ["All", "Screenshots", "Paperwork", "Bursts", "Low Quality", "To be deleted"])
+        #expect(
+            ReviewModel.tabs.map(\.title) == [
+                "All", "Screenshots", "Paperwork", "Bursts", "Low Quality", "To be deleted",
+            ])
         await m.refreshCounts()
         await m.select(.all)
         #expect(m.summary == "2 photos" && m.tabLabel(.all, "All") == "All (2)")
@@ -156,7 +162,9 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(titles == [["All"], Passes.all.map(\.title), ["To be deleted"]])
         #expect(m.sidebar.flatMap(\.items).allSatisfy { $0.badge == nil && !$0.help.isEmpty })  // nothing counted yet
         await m.refreshCounts()
-        var badges: [String: Int?] { Dictionary(uniqueKeysWithValues: m.sidebar.flatMap(\.items).map { ($0.title, $0.badge) }) }
+        var badges: [String: Int?] {
+            Dictionary(uniqueKeysWithValues: m.sidebar.flatMap(\.items).map { ($0.title, $0.badge) })
+        }
         #expect(badges["All"] == 2 && badges["Screenshots"] == 2)
         #expect(badges["Bursts"] == .some(nil) && badges["To be deleted"] == .some(nil))  // 0 shows no badge
         await m.select(.pass("screenshots"))
@@ -343,7 +351,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
 @Suite struct CommitPreviewTests {
     @Test func previewMatchesWhatCommitSends() async throws {
         let burst = dated(["x": 0, "y": 1, "z": 2])
-        let (c, lib) = try await makeCleanup(burst, vision: ["x": V(0.1), "y": V(0.9), "z": V(0.2)])
+        let (c, lib) = try await makeCleanup(burst, vision: ["x": vr(0.1), "y": vr(0.9), "z": vr(0.2)])
         let m = ReviewModel(cleanup: c)
         #expect(m.commitPreview.isEmpty)
         await m.select(.pass("bursts"))
@@ -393,7 +401,10 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
 @Suite struct InspectorTests {
     @Test func infoFollowsSelection() async throws {
         let when = Date(timeIntervalSince1970: 0)
-        let photos = [Photo(uuid: "a", date: when, screenshot: true), Photo(uuid: "b", screenshot: true), Photo(uuid: "c", albums: ["Trip"])]
+        let photos = [
+            Photo(uuid: "a", date: when, screenshot: true), Photo(uuid: "b", screenshot: true),
+            Photo(uuid: "c", albums: ["Trip"]),
+        ]
         let (c, _) = try await makeCleanup(photos, verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("screenshots"))

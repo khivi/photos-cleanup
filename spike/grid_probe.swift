@@ -69,6 +69,8 @@ final class Stats {
     var syncFirst = 0  // first image delivered inside requestImage, on the main thread
     var requested = 0, cancelled = 0, peakMB = 0.0
     var bodies = 0, changes = 0  // Thumb body evaluations; selection changes
+
+    func countBody() { bodies += 1 }
     var gaps: [Double] = []  // main-thread timer gaps over 50ms
     private var last = ContinuousClock.now
     private var timer: Timer?
@@ -90,16 +92,22 @@ final class Stats {
         let ms = latencies.map { $0 * 1000 }
         let fm = finals.map { $0 * 1000 }
         print("mode \(mode)\(preload ? " +preload" : "")")
-        print(String(format: "full-quality %d; latency ms p50 %.0f p95 %.0f max %.0f; first image synchronous %d",
-                     finals.count, pct(fm, 0.5), pct(fm, 0.95), fm.max() ?? 0, syncFirst))
+        print(
+            String(
+                format: "full-quality %d; latency ms p50 %.0f p95 %.0f max %.0f; first image synchronous %d",
+                finals.count, pct(fm, 0.5), pct(fm, 0.95), fm.max() ?? 0, syncFirst))
         print(String(format: "first thumbnail %.2fs after launch", firstThumb ?? -1))
-        print(String(format: "thumbnails %d requested, %d delivered, %d cancelled; latency ms p50 %.0f p95 %.0f max %.0f",
-                     requested, latencies.count, cancelled, pct(ms, 0.5), pct(ms, 0.95), ms.max() ?? 0))
+        print(
+            String(
+                format: "thumbnails %d requested, %d delivered, %d cancelled; latency ms p50 %.0f p95 %.0f max %.0f",
+                requested, latencies.count, cancelled, pct(ms, 0.5), pct(ms, 0.95), ms.max() ?? 0))
         print(String(format: "main-thread hitches >50ms: %d, worst %.0fms", gaps.count, (gaps.max() ?? 0) * 1000))
         print(String(format: "memory now %.0fMB, peak %.0fMB", footprintMB(), peakMB))
         if selecting {
-            print(String(format: "selection changes %d, thumb bodies %d (%.1f per change)",
-                         changes, bodies, Double(bodies) / Double(max(changes, 1))))
+            print(
+                String(
+                    format: "selection changes %d, thumb bodies %d (%.1f per change)",
+                    changes, bodies, Double(bodies) / Double(max(changes, 1))))
         }
     }
 }
@@ -112,8 +120,9 @@ func thumbOptions() -> PHImageRequestOptions {
     return opts
 }
 
-@MainActor let thumbSize = CGSize(width: cell * (NSScreen.main?.backingScaleFactor ?? 2),
-                                  height: cell * (NSScreen.main?.backingScaleFactor ?? 2))
+@MainActor let thumbSize = CGSize(
+    width: cell * (NSScreen.main?.backingScaleFactor ?? 2),
+    height: cell * (NSScreen.main?.backingScaleFactor ?? 2))
 
 @MainActor
 final class Library: ObservableObject {
@@ -123,7 +132,10 @@ final class Library: ObservableObject {
 
     func load() async {
         let auth = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
-        guard auth == .authorized || auth == .limited else { status = "Photos access: \(auth.rawValue)"; return }
+        guard auth == .authorized || auth == .limited else {
+            status = "Photos access: \(auth.rawValue)"
+            return
+        }
         let t = ContinuousClock.now
         let opts = PHFetchOptions()
         opts.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
@@ -139,17 +151,21 @@ final class Library: ObservableObject {
     private let ahead = 240, behind = 120
 
     func near(_ i: Int) {
-        guard preload, let assets, i + ahead / 2 > cached.upperBound || i - behind / 2 < cached.lowerBound else { return }
+        guard preload, let assets, i + ahead / 2 > cached.upperBound || i - behind / 2 < cached.lowerBound else {
+            return
+        }
         let want = max(0, i - behind)..<min(assets.count, i + ahead)
         let add = IndexSet(integersIn: want).subtracting(IndexSet(integersIn: cached))
         let drop = IndexSet(integersIn: cached).subtracting(IndexSet(integersIn: want))
         if !add.isEmpty {
-            manager.startCachingImages(for: assets.objects(at: add), targetSize: thumbSize,
-                                       contentMode: .aspectFill, options: thumbOptions())
+            manager.startCachingImages(
+                for: assets.objects(at: add), targetSize: thumbSize,
+                contentMode: .aspectFill, options: thumbOptions())
         }
         if !drop.isEmpty {
-            manager.stopCachingImages(for: assets.objects(at: drop), targetSize: thumbSize,
-                                      contentMode: .aspectFill, options: thumbOptions())
+            manager.stopCachingImages(
+                for: assets.objects(at: drop), targetSize: thumbSize,
+                contentMode: .aspectFill, options: thumbOptions())
         }
         cached = want
     }
@@ -186,7 +202,7 @@ struct Thumb: View {
     @State private var image: NSImage?
 
     var body: some View {
-        let _ = Stats.shared.bodies += 1
+        let _ = Stats.shared.countBody()
         let selected = selecting && sel.ids.contains(index)
         ZStack {
             Color.gray.opacity(0.15)
@@ -208,7 +224,8 @@ struct Thumb: View {
 
     private func request() {
         let start = ContinuousClock.now
-        var first = true, inCall = true
+        var first = true
+        var inCall = true
         Stats.shared.requested += 1
         requestID = manager.requestImage(
             for: asset, targetSize: thumbSize, contentMode: .aspectFill, options: thumbOptions()
@@ -270,7 +287,11 @@ struct Grid: View {
                     .padding(4)
                 }
                 .scrollPosition($position)
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+                .onGeometryChange(for: CGFloat.self) {
+                    $0.size.width
+                } action: {
+                    width = $0
+                }
                 .focusable(selecting)
                 .focused($focused)
                 .focusEffectDisabled()
@@ -286,8 +307,11 @@ struct Grid: View {
                     return .handled
                 }
                 .background {
-                    Button("Select All") { sel.ids = Set(0..<assets.count); Stats.shared.changes += 1 }
-                        .keyboardShortcut("a").hidden()
+                    Button("Select All") {
+                        sel.ids = Set(0..<assets.count)
+                        Stats.shared.changes += 1
+                    }
+                    .keyboardShortcut("a").hidden()
                 }
                 .task { if autoscroll { await scrollThrough(rows: assets.count) } }
             } else {
@@ -307,7 +331,10 @@ struct Grid: View {
         let t = ContinuousClock.now
         let columns = max(1, Int((1200 - 8) / (cell + 4)))
         let height = CGFloat((count + columns - 1) / columns) * (cell + 4)
-        if selecting { sel.ids = Set(0..<count); Stats.shared.changes += 1 }
+        if selecting {
+            sel.ids = Set(0..<count)
+            Stats.shared.changes += 1
+        }
         var lastToggle = ContinuousClock.now
         while y < height {
             y += 40
@@ -333,9 +360,12 @@ struct Grid: View {
                 try? await Task.sleep(for: .milliseconds(33))
             }
             let arrows = Stats.shared.gaps.dropFirst(before)
-            print(String(format: "arrows: 300 x ↓ (%d columns) in %.1fs (ideal 9.9s), ended at %d of %d; hitches >50ms %d, worst %.0fms",
-                         columns, seconds(ContinuousClock.now - ta), sel.anchor ?? -1, count,
-                         arrows.count, (arrows.max() ?? 0) * 1000))
+            print(
+                String(
+                    format:
+                        "arrows: 300 x ↓ (%d columns) in %.1fs (ideal 9.9s), ended at %d of %d; hitches >50ms %d, worst %.0fms",
+                    columns, seconds(ContinuousClock.now - ta), sel.anchor ?? -1, count,
+                    arrows.count, (arrows.max() ?? 0) * 1000))
             try? await Task.sleep(for: .seconds(1))
         }
         NSApp.terminate(nil)

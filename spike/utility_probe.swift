@@ -35,7 +35,8 @@ let instructions = """
 let today = ISO8601DateFormatter.string(from: .now, timeZone: .current, formatOptions: [.withFullDate])
 
 guard case .available = SystemLanguageModel.default.availability else {
-    FileHandle.standardError.write("Foundation Models unavailable: \(SystemLanguageModel.default.availability)\n".data(using: .utf8)!)
+    FileHandle.standardError.write(
+        "Foundation Models unavailable: \(SystemLanguageModel.default.availability)\n".data(using: .utf8)!)
     exit(1)
 }
 
@@ -45,12 +46,18 @@ func clean(_ s: String) -> String {
 
 while let line = readLine(strippingNewline: true) {
     let parts = line.split(separator: "\t", maxSplits: 1).map(String.init)
-    guard parts.count == 2 else { print("ERR\tbad-input"); continue }
+    guard parts.count == 2 else {
+        print("ERR\tbad-input")
+        continue
+    }
     let url = URL(fileURLWithPath: parts[0])
     do {
         let aesthetics = VNCalculateImageAestheticsScoresRequest()
         try VNImageRequestHandler(url: url, options: [:]).perform([aesthetics])
-        guard aesthetics.results?.first?.isUtility == true else { print("SKIP"); continue }
+        guard aesthetics.results?.first?.isUtility == true else {
+            print("SKIP")
+            continue
+        }
 
         let session = LanguageModelSession(instructions: instructions)
         let v = try await session.respond(generating: Verdict.self) {

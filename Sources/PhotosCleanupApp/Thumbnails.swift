@@ -13,8 +13,9 @@ final class Thumbnails {
     private let manager = PHCachingImageManager()
     private let uuids: [String]  // grid order, newest first
     private let assets: [String: PHAsset]
-    private let size = CGSize(width: cellMax * (NSScreen.main?.backingScaleFactor ?? 2),
-                              height: cellMax * (NSScreen.main?.backingScaleFactor ?? 2))
+    private let size = CGSize(
+        width: cellMax * (NSScreen.main?.backingScaleFactor ?? 2),
+        height: cellMax * (NSScreen.main?.backingScaleFactor ?? 2))
     // Rows are ~8 cells wide: cache ~30 rows ahead of the lowest visible cell, ~15 behind.
     private let ahead = 240, behind = 120
     private var cached = 0..<0
@@ -38,7 +39,8 @@ final class Thumbnails {
     /// Calls `done` once, on the main actor. Returns an ID for `cancel`.
     func request(_ uuid: String, done: @escaping (NSImage?) -> Void) -> PHImageRequestID? {
         guard let asset = assets[uuid] else { return nil }
-        return manager.requestImage(for: asset, targetSize: size, contentMode: .aspectFill, options: options()) { image, _ in
+        return manager.requestImage(for: asset, targetSize: size, contentMode: .aspectFill, options: options()) {
+            image, _ in
             MainActor.assumeIsolated { done(image) }
         }
     }
@@ -52,8 +54,10 @@ final class Thumbnails {
         // iCloud: Photos downloads it for the one photo being previewed.
         o.deliveryMode = .opportunistic
         o.isNetworkAccessAllowed = true
-        return manager.requestImage(for: asset, targetSize: CGSize(width: side * scale, height: side * scale),
-                                    contentMode: .aspectFit, options: o) { image, _ in
+        return manager.requestImage(
+            for: asset, targetSize: CGSize(width: side * scale, height: side * scale),
+            contentMode: .aspectFit, options: o
+        ) { image, _ in
             MainActor.assumeIsolated { done(image) }
         }
     }
@@ -69,15 +73,23 @@ final class Thumbnails {
         func list(_ s: IndexSet) -> [PHAsset] { s.compactMap { assets[uuids[$0]] } }
         let add = IndexSet(integersIn: want).subtracting(IndexSet(integersIn: cached))
         let drop = IndexSet(integersIn: cached).subtracting(IndexSet(integersIn: want))
-        if !add.isEmpty { manager.startCachingImages(for: list(add), targetSize: size, contentMode: .aspectFill, options: options()) }
-        if !drop.isEmpty { manager.stopCachingImages(for: list(drop), targetSize: size, contentMode: .aspectFill, options: options()) }
+        if !add.isEmpty {
+            manager.startCachingImages(for: list(add), targetSize: size, contentMode: .aspectFill, options: options())
+        }
+        if !drop.isEmpty {
+            manager.stopCachingImages(for: list(drop), targetSize: size, contentMode: .aspectFill, options: options())
+        }
         cached = want
     }
 }
 
 /// One photo. The badges and dimming follow the review model's state, passed in as `mark`.
 struct PhotoCell: View {
-    enum Mark { case none, decision(Decision), deleteMe }
+    enum Mark {
+        case none
+        case decision(Decision)
+        case deleteMe
+    }
 
     let photo: PassPhoto
     let mark: Mark
@@ -102,7 +114,10 @@ struct PhotoCell: View {
             .overlay { if let image { Image(nsImage: image).resizable().scaledToFill().opacity(dim ? 0.5 : 1) } }
             .overlay(alignment: .topLeading) { badge.padding(6) }
             .overlay(alignment: .topTrailing) {
-                if best { Image(systemName: "star.fill").foregroundStyle(.yellow).shadow(radius: 2).padding(6).help("Vision's pick") }
+                if best {
+                    Image(systemName: "star.fill").foregroundStyle(.yellow).shadow(radius: 2).padding(6).help(
+                        "Vision's pick")
+                }
             }
             .overlay(alignment: .bottomLeading) {
                 if case .decision = mark, let v = photo.verdict {

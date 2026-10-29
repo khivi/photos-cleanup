@@ -153,8 +153,9 @@ func analyse(_ img: CGImage) -> VisionResult? {
     guard (try? VNImageRequestHandler(cgImage: img).perform([printReq, aesthetics])) != nil,
         let fp = printReq.results?.first, let ae = aesthetics.results?.first
     else { return nil }
-    return VisionResult(print: floats(fp.data, elementType: fp.elementType), utility: ae.isUtility,
-                        score: Double(ae.overallScore))
+    return VisionResult(
+        print: floats(fp.data, elementType: fp.elementType), utility: ae.isUtility,
+        score: Double(ae.overallScore))
 }
 
 func floats(_ data: Data, elementType: VNElementType) -> [Float] {

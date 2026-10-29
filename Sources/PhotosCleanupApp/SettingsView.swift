@@ -16,12 +16,16 @@ struct SettingsView: View {
         Form {
             Section {
                 Toggle("Keep photos in albums", isOn: $keepAlbumPhotos)
-                Text("On: a photo in one of your own albums is never suggested. Off: it can be. Favorites, videos and photos already filed by a pass are always skipped.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(
+                    "On: a photo in one of your own albums is never suggested. Off: it can be. Favorites, videos and photos already filed by a pass are always skipped."
+                )
+                .font(.caption).foregroundStyle(.secondary)
             }
             Section("Ignored albums") {
-                Text("Photos in these albums are not protected by being in them (Apple’s smart albums and the Delete Me and Keep albums already are).")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(
+                    "Photos in these albums are not protected by being in them (Apple’s smart albums and the Delete Me and Keep albums already are)."
+                )
+                .font(.caption).foregroundStyle(.secondary)
                 List(ignored, id: \.self, selection: $selection) { Text($0) }
                     .frame(height: 120)
                     .overlay { if ignored.isEmpty { Text("None").foregroundStyle(.secondary) } }

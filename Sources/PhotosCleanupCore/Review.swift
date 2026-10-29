@@ -103,11 +103,12 @@ public final class ReviewModel {
         + [(.deleted, "To be deleted", "Photos waiting in a Delete Me album. Delete them there in Photos.")]
 
     public func tabLabel(_ v: ReviewView, _ title: String) -> String {
-        let n: Int? = switch v {
-        case .all: counts["all"] ?? nil
-        case .pass(let k): counts[k] ?? nil
-        case .deleted: deleted.isEmpty ? nil : deleted.count
-        }
+        let n: Int? =
+            switch v {
+            case .all: counts["all"] ?? nil
+            case .pass(let k): counts[k] ?? nil
+            case .deleted: deleted.isEmpty ? nil : deleted.count
+            }
         return n.map { "\(title) (\($0.formatted()))" } ?? title
     }
 
@@ -131,11 +132,12 @@ public final class ReviewModel {
     /// Library (All), Cleanup (the passes), Review (To be deleted), built from `tabs`.
     public var sidebar: [SidebarSection] {
         func item(_ t: (view: ReviewView, title: String, help: String)) -> SidebarItem {
-            let n: Int? = switch t.view {
-            case .all: counts["all"] ?? nil
-            case .pass(let k): counts[k] ?? nil
-            case .deleted: deleted.count
-            }
+            let n: Int? =
+                switch t.view {
+                case .all: counts["all"] ?? nil
+                case .pass(let k): counts[k] ?? nil
+                case .deleted: deleted.count
+                }
             return SidebarItem(view: t.view, title: t.title, help: t.help, badge: n.flatMap { $0 > 0 ? $0 : nil })
         }
         func items(_ keep: (ReviewView) -> Bool) -> [SidebarItem] { Self.tabs.filter { keep($0.view) }.map(item) }
@@ -151,7 +153,9 @@ public final class ReviewModel {
     /// "N candidates · M to delete", "N photos" or "N queued for deletion".
     public var summary: String {
         if view == .deleted { return "\(deleted.count) queued for deletion" }
-        if inPass { return "\(photos.count) \(photos.count == 1 ? "candidate" : "candidates") · \(doomed.count) to delete" }
+        if inPass {
+            return "\(photos.count) \(photos.count == 1 ? "candidate" : "candidates") · \(doomed.count) to delete"
+        }
         return "\(photos.count.formatted()) \(photos.count == 1 ? "photo" : "photos")"
     }
 
@@ -260,7 +264,8 @@ public final class ReviewModel {
         } else {
             let fresh = Dictionary(r.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             let have = Set(photos.map(\.id))
-            photos = photos.map { p in fresh[p.id].map { PassPhoto(photo: p.photo, verdict: $0.verdict) } ?? p }
+            photos =
+                photos.map { p in fresh[p.id].map { PassPhoto(photo: p.photo, verdict: $0.verdict) } ?? p }
                 + r.photos.filter { !have.contains($0.id) }
         }
         for p in photos where !touched.contains(p.id) { decisions[p.id] = initialDecision(p) }
@@ -299,7 +304,9 @@ public final class ReviewModel {
 
     /// Marks `ids` Keep or Delete as the user's choice.
     public func mark(_ ids: some Collection<String>, _ d: Decision) {
-        apply(Dictionary(ids.map { ($0, (d, true)) }, uniquingKeysWith: { a, _ in a }), name: d == .keep ? "Keep" : "Delete")
+        apply(
+            Dictionary(ids.map { ($0, (d, true)) }, uniquingKeysWith: { a, _ in a }),
+            name: d == .keep ? "Keep" : "Delete")
     }
 
     /// Sets each photo's decision and touched flag, and registers the reverse with the undo manager.
@@ -330,7 +337,9 @@ public final class ReviewModel {
     }
 
     public func setAll(_ d: Decision) {
-        apply(Dictionary(photos.map { ($0.id, (d, true)) }, uniquingKeysWith: { a, _ in a }), name: d == .keep ? "Keep All" : "Delete All")
+        apply(
+            Dictionary(photos.map { ($0.id, (d, true)) }, uniquingKeysWith: { a, _ in a }),
+            name: d == .keep ? "Keep All" : "Delete All")
     }
 
     // MARK: Selection
@@ -396,18 +405,25 @@ public final class ReviewModel {
     /// The single selected photo, nil with none or several selected.
     public func inspectorInfo(locale: Locale = .current, timeZone: TimeZone = .current) -> Info? {
         guard selected.count == 1, let id = anchor, selected.contains(id),
-              let p = view == .deleted ? deleted.first(where: { $0.id == id }).map({ PassPhoto(photo: $0) }) : photos.first(where: { $0.id == id })
+            let p = view == .deleted
+                ? deleted.first(where: { $0.id == id }).map({ PassPhoto(photo: $0) })
+                : photos.first(where: { $0.id == id })
         else { return nil }
         let style = Date.FormatStyle(date: .long, time: .shortened, locale: locale, timeZone: timeZone)
         var target: String?
         if let key = view.passKey, let d = decisions[id] {
-            if d == .delete { target = Passes.deleteAlbum(key) } else if keepers.contains(where: { $0.id == id }) { target = Passes.keepAlbum(key) }
+            if d == .delete {
+                target = Passes.deleteAlbum(key)
+            } else if keepers.contains(where: { $0.id == id }) {
+                target = Passes.keepAlbum(key)
+            }
         }
         return Info(
             id: id, date: p.photo.date.map { $0.formatted(style) } ?? "Unknown date",
             kind: p.photo.screenshot ? "Screenshot" : "Photo",
             verdict: p.verdict.map { "\($0.kind): \($0.reason)" },
-            albums: p.photo.albums.isEmpty ? "In no album"
+            albums: p.photo.albums.isEmpty
+                ? "In no album"
                 : "In \(p.photo.albums.count == 1 ? "album" : "albums"): \(p.photo.albums.sorted().joined(separator: ", "))",
             target: target.map { "→ \($0)" }, decision: inPass ? decisions[id] : nil)
     }
@@ -445,7 +461,8 @@ public final class ReviewModel {
 
     public func commit() async {
         guard let key = view.passKey else { return }
-        let doomed = doomed, keep = keepers.map(\.id)
+        let doomed = doomed
+        let keep = keepers.map(\.id)
         if doomed.isEmpty && keep.isEmpty { return }
         committing = true
         status = nil

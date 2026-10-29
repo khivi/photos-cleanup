@@ -94,8 +94,10 @@ public enum Passes {
     /// What each pass finds and how its photos start; the tab's tooltip.
     public static let about: [String: String] = [
         "screenshots": "Screenshots. The on-device model preselects the ones not worth keeping.",
-        "paperwork": "Receipts, tickets, tracking, promos, documents, notes and labels. The on-device model preselects the ones not worth keeping.",
-        "bursts": "Near-identical shots taken within a minute. The best of each group starts as Keep, the rest as Delete.",
+        "paperwork":
+            "Receipts, tickets, tracking, promos, documents, notes and labels. The on-device model preselects the ones not worth keeping.",
+        "bursts":
+            "Near-identical shots taken within a minute. The best of each group starts as Keep, the rest as Delete.",
         "low-quality": "Blurry, dark or accidental shots, by Vision's aesthetics score. All start as Delete.",
     ]
 

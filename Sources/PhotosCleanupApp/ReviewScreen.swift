@@ -80,7 +80,9 @@ struct ReviewScreen: View {
             ToolbarItem {
                 ProgressView(value: Double(model.progressDone), total: Double(max(model.progressTotal, 1)))
                     .frame(width: 100)
-                    .help("Analysing photos on this Mac: \(model.progressDone.formatted()) of \(model.progressTotal.formatted())")
+                    .help(
+                        "Analysing photos on this Mac: \(model.progressDone.formatted()) of \(model.progressTotal.formatted())"
+                    )
             }
         }
         ToolbarItem {
@@ -104,8 +106,10 @@ struct ReviewScreen: View {
 
     /// One line under the grid for what used to be banners: after a move, To be deleted's albums, errors.
     @ViewBuilder private var statusBar: some View {
-        let lines = [model.banner, model.error, model.progressError, model.verdictsOff.map { "\($0). Everything else works." }]
-            .compactMap { $0 }
+        let lines = [
+            model.banner, model.error, model.progressError, model.verdictsOff.map { "\($0). Everything else works." },
+        ]
+        .compactMap { $0 }
         if !lines.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(lines, id: \.self) { Text($0) }
@@ -162,27 +166,37 @@ struct ReviewScreen: View {
     }
 
     private func cell(_ p: PassPhoto) -> some View {
-        let mark: PhotoCell.Mark = switch model.view {
-        case .all: .none
-        case .deleted: .deleteMe
-        case .pass: model.decision(p.id).map { .decision($0) } ?? .none
-        }
-        return PhotoCell(photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id), thumbnails: thumbnails,
-                         onTap: {
-                             focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
-                             let mods = NSEvent.modifierFlags
-                             model.click(p.id, extend: mods.contains(.shift), toggle: mods.contains(.command))
-                         })
-            .help(model.view == .deleted ? model.deletedAlbum[p.id] ?? "" : "")
+        let mark: PhotoCell.Mark =
+            switch model.view {
+            case .all: .none
+            case .deleted: .deleteMe
+            case .pass: model.decision(p.id).map { .decision($0) } ?? .none
+            }
+        return PhotoCell(
+            photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id),
+            thumbnails: thumbnails,
+            onTap: {
+                focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
+                let mods = NSEvent.modifierFlags
+                model.click(p.id, extend: mods.contains(.shift), toggle: mods.contains(.command))
+            }
+        )
+        .help(model.view == .deleted ? model.deletedAlbum[p.id] ?? "" : "")
     }
 }
 
 extension View {
     /// The grid takes keyboard focus: arrows move the selection, Space toggles the preview, ⌘A selects all. K and ⌫ are menu commands.
-    fileprivate func keyboardSelection(model: ReviewModel, focused: FocusState<Bool>.Binding, width: Binding<CGFloat>,
-                                       move: @escaping (KeyEquivalent) -> Void) -> some View {
+    fileprivate func keyboardSelection(
+        model: ReviewModel, focused: FocusState<Bool>.Binding, width: Binding<CGFloat>,
+        move: @escaping (KeyEquivalent) -> Void
+    ) -> some View {
         self
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width.wrappedValue = $0 }
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.width
+            } action: {
+                width.wrappedValue = $0
+            }
             .focusable()
             .focused(focused)
             .focusEffectDisabled()
@@ -282,7 +296,15 @@ struct InspectorView: View {
                     Text(info.albums).foregroundStyle(.secondary)
                     if let t = info.target { Text(t) }
                     if let d = info.decision {
-                        Picker("Mark", selection: Binding(get: { d }, set: { model.mark([info.id], $0); refocus() })) {
+                        Picker(
+                            "Mark",
+                            selection: Binding(
+                                get: { d },
+                                set: {
+                                    model.mark([info.id], $0)
+                                    refocus()
+                                })
+                        ) {
                             Text("Keep").tag(Decision.keep)
                             Text("Delete").tag(Decision.delete)
                         }

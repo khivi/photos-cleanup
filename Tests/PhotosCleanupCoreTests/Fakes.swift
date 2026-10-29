@@ -63,7 +63,7 @@ final class Gate: Sendable {
     func wait() { while closed.withLock({ $0 }) { usleep(2000) } }
 }
 
-func V(_ score: Double = 0.5, utility: Bool = false, _ vec: [Float] = [0]) -> VisionResult {
+func vr(_ score: Double = 0.5, utility: Bool = false, _ vec: [Float] = [0]) -> VisionResult {
     VisionResult(print: vec, utility: utility, score: score)
 }
 
@@ -94,8 +94,9 @@ func makeCleanup(
         let lines = verdicts.map { Cleanup.verdictLine($0.key, $0.value) }.joined(separator: "\n") + "\n"
         try lines.write(to: cacheDir.appendingPathComponent(Cleanup.verdictCache), atomically: true, encoding: .utf8)
     }
-    let c = Cleanup(library: lib, judge: judge, cacheDir: cacheDir, ignoreAlbums: loadIgnoreAlbums(dir: cacheDir),
-                    keepAlbumPhotos: keepAlbumPhotos, verdictsOff: judge.off)
+    let c = Cleanup(
+        library: lib, judge: judge, cacheDir: cacheDir, ignoreAlbums: loadIgnoreAlbums(dir: cacheDir),
+        keepAlbumPhotos: keepAlbumPhotos, verdictsOff: judge.off)
     try await c.load()
     return (c, lib)
 }

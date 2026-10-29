@@ -9,12 +9,18 @@ import Foundation
 import Vision
 
 while let path = readLine(strippingNewline: true) {
-    if path.isEmpty { print("ERR\tempty"); continue }
+    if path.isEmpty {
+        print("ERR\tempty")
+        continue
+    }
     let request = VNCalculateImageAestheticsScoresRequest()
     let handler = VNImageRequestHandler(url: URL(fileURLWithPath: path), options: [:])
     do {
         try handler.perform([request])
-        guard let obs = request.results?.first else { print("ERR\tno-result"); continue }
+        guard let obs = request.results?.first else {
+            print("ERR\tno-result")
+            continue
+        }
         print("\(obs.overallScore)\t\(obs.isUtility ? 1 : 0)")
     } catch {
         print("ERR\t\(error.localizedDescription)")

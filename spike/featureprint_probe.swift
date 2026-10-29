@@ -11,12 +11,18 @@ import Foundation
 import Vision
 
 while let path = readLine(strippingNewline: true) {
-    if path.isEmpty { print("ERR\tempty"); continue }
+    if path.isEmpty {
+        print("ERR\tempty")
+        continue
+    }
     let request = VNGenerateImageFeaturePrintRequest()
     let handler = VNImageRequestHandler(url: URL(fileURLWithPath: path), options: [:])
     do {
         try handler.perform([request])
-        guard let obs = request.results?.first else { print("ERR\tno-result"); continue }
+        guard let obs = request.results?.first else {
+            print("ERR\tno-result")
+            continue
+        }
         print("\(obs.elementType.rawValue)\t\(obs.elementCount)\t\(obs.data.base64EncodedString())")
     } catch {
         print("ERR\t\(error.localizedDescription)")

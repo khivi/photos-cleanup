@@ -5,7 +5,7 @@ let package = Package(
     name: "photos-cleanup",
     platforms: [.macOS(.v15)],
     products: [
-        .executable(name: "PhotosCleanupApp", targets: ["PhotosCleanupApp"]),
+        .executable(name: "PhotosCleanupApp", targets: ["PhotosCleanupApp"])
     ],
     targets: [
         // No UI framework: PhotoKit, Vision, the passes, verdicts, job state and the review

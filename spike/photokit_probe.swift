@@ -35,13 +35,19 @@ case "auth":
     print("after: \(name(after))")
 
 case "read":
-    guard status() == .authorized else { print("not authorized: \(name(status()))"); exit(1) }
+    guard status() == .authorized else {
+        print("not authorized: \(name(status()))")
+        exit(1)
+    }
     var t = ContinuousClock.now
     let all = PHAsset.fetchAssets(with: nil)
     print("fetch \(all.count) assets: \(elapsed(t))")
 
     t = ContinuousClock.now
-    var shots = 0, live = 0, fav = 0, videos = 0
+    var shots = 0
+    var live = 0
+    var fav = 0
+    var videos = 0
     all.enumerateObjects { a, _, _ in
         if a.mediaSubtypes.contains(.photoScreenshot) { shots += 1 }
         if a.mediaSubtypes.contains(.photoLive) { live += 1 }
@@ -58,7 +64,8 @@ case "read":
 
     t = ContinuousClock.now
     let n = min(500, all.count)
-    var withSize = 0, bytes: Int64 = 0
+    var withSize = 0
+    var bytes: Int64 = 0
     for i in 0..<n {
         let res = PHAssetResource.assetResources(for: all.object(at: i))
         // "fileSize" is not public API; this measures whether it works and what it costs.
@@ -67,11 +74,19 @@ case "read":
             bytes += size
         }
     }
-    print("resources for \(n): \(elapsed(t))  fileSize readable=\(withSize)  sample id=\(all.firstObject?.localIdentifier ?? "-")")
+    print(
+        "resources for \(n): \(elapsed(t))  fileSize readable=\(withSize)  sample id=\(all.firstObject?.localIdentifier ?? "-")"
+    )
 
 case "add":
-    guard status() == .authorized else { print("not authorized: \(name(status()))"); exit(1) }
-    guard let album = args.dropFirst().first else { print("usage: add <album>"); exit(2) }
+    guard status() == .authorized else {
+        print("not authorized: \(name(status()))")
+        exit(1)
+    }
+    guard let album = args.dropFirst().first else {
+        print("usage: add <album>")
+        exit(2)
+    }
     var uuids: [String] = []
     while let line = readLine(strippingNewline: true), !line.isEmpty { uuids.append(line) }
     let ids = uuids.map { "\($0)/L0/001" }
@@ -81,10 +96,12 @@ case "add":
 
     let opts = PHFetchOptions()
     opts.predicate = NSPredicate(format: "title == %@", album)
-    let existing = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: opts).firstObject
+    let existing = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: opts)
+        .firstObject
     t = ContinuousClock.now
     try PHPhotoLibrary.shared().performChangesAndWait {
-        let req = existing.flatMap { PHAssetCollectionChangeRequest(for: $0) }
+        let req =
+            existing.flatMap { PHAssetCollectionChangeRequest(for: $0) }
             ?? PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: album)
         req.addAssets(assets)
     }

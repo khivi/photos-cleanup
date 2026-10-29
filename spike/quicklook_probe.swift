@@ -53,8 +53,9 @@ struct Timing {
     var failures: [String] = []
     var bytes: Int64 = 0
     var line: String {
-        String(format: "%d ok, %d failed; ms p50 %.0f p95 %.0f max %.0f; %.1fMB", ms.count, failures.count,
-               pct(ms, 0.5), pct(ms, 0.95), ms.max() ?? 0, Double(bytes) / 1_048_576)
+        String(
+            format: "%d ok, %d failed; ms p50 %.0f p95 %.0f max %.0f; %.1fMB", ms.count, failures.count,
+            pct(ms, 0.5), pct(ms, 0.95), ms.max() ?? 0, Double(bytes) / 1_048_576)
     }
 }
 
@@ -67,7 +68,8 @@ func isRAW(_ r: PHAssetResource) -> Bool {
     UTType(r.uniformTypeIdentifier)?.conforms(to: UTType("public.camera-raw-image")!) == true
 }
 
-func localOnly(_ r: PHAssetResource) -> Bool? { r.value(forKey: "locallyAvailable") as? Bool }  // private KVC, spike only
+// Private KVC: spike only.
+func localOnly(_ r: PHAssetResource) -> Bool? { r.value(forKey: "locallyAvailable") as? Bool }
 
 func fileSize(_ u: URL) -> Int64 {
     Int64((try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
@@ -93,13 +95,17 @@ func writeB(_ s: Sample, to dir: URL) async -> (URL?, String?) {
     return await withCheckedContinuation { c in
         PHImageManager.default().requestImageDataAndOrientation(for: s.asset, options: opts) { data, uti, _, info in
             guard let data else {
-                let why = (info?[PHImageErrorKey] as? NSError)?.localizedDescription
+                let why =
+                    (info?[PHImageErrorKey] as? NSError)?.localizedDescription
                     ?? ((info?[PHImageResultIsInCloudKey] as? Bool) == true ? "in iCloud" : "no data")
                 return c.resume(returning: (nil, why))
             }
             let ext = uti.flatMap { UTType($0)?.preferredFilenameExtension } ?? "jpg"
             let url = dir.appendingPathComponent((name as NSString).deletingPathExtension + "." + ext)
-            do { try data.write(to: url); c.resume(returning: (url, nil)) } catch { c.resume(returning: (nil, "\(error)")) }
+            do {
+                try data.write(to: url)
+                c.resume(returning: (url, nil))
+            } catch { c.resume(returning: (nil, "\(error)")) }
         }
     }
 }
@@ -112,28 +118,50 @@ final class Probe: ObservableObject {
 
     func run() async {
         let auth = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
-        guard auth == .authorized || auth == .limited else { status = "Photos access: \(auth.rawValue)"; print(status); return }
+        guard auth == .authorized || auth == .limited else {
+            status = "Photos access: \(auth.rawValue)"
+            print(status)
+            return
+        }
         let opts = PHFetchOptions()
         opts.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         let all = PHAsset.fetchAssets(with: opts)
         var sample = (0..<min(count, all.count)).map { Sample(asset: all.object(at: $0), tag: "recent") }
         var seen = Set(sample.map(\.asset.localIdentifier))
-        var heic = 0, live = false, raw = false, cloud = false
+        var heic = 0
+        var live = false
+        var raw = false
+        var cloud = false
         for i in 0..<all.count {  // scan the whole library for the odd cases
             let a = all.object(at: i)
             guard !seen.contains(a.localIdentifier), let r = primary(a), a.mediaType == .image else { continue }
             var tag: String?
-            if r.uniformTypeIdentifier == "public.heic", heic < 3 { heic += 1; tag = "heic" }
-            else if a.mediaSubtypes.contains(.photoLive), !live { live = true; tag = "live" }
-            else if isRAW(r), !raw { raw = true; tag = "raw" }
-            else if localOnly(r) == false, !cloud { cloud = true; tag = "icloud-only" }
-            if let tag { sample.append(Sample(asset: a, tag: tag)); seen.insert(a.localIdentifier) }
+            if r.uniformTypeIdentifier == "public.heic", heic < 3 {
+                heic += 1
+                tag = "heic"
+            } else if a.mediaSubtypes.contains(.photoLive), !live {
+                live = true
+                tag = "live"
+            } else if isRAW(r), !raw {
+                raw = true
+                tag = "raw"
+            } else if localOnly(r) == false, !cloud {
+                cloud = true
+                tag = "icloud-only"
+            }
+            if let tag {
+                sample.append(Sample(asset: a, tag: tag))
+                seen.insert(a.localIdentifier)
+            }
         }
         try? FileManager.default.removeItem(at: tmp)
-        let dirA = tmp.appendingPathComponent("a"), dirB = tmp.appendingPathComponent("b")
+        let dirA = tmp.appendingPathComponent("a")
+        let dirB = tmp.appendingPathComponent("b")
         for d in [dirA, dirB] { try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true) }
         status = "writing \(sample.count) files"
-        var ta = Timing(), tb = Timing(), good: [URL] = []
+        var ta = Timing()
+        var tb = Timing()
+        var good: [URL] = []
         var byTag: [String: [String]] = [:]
         for s in sample {
             for (name, fn, dir) in [("a", writeA, dirA), ("b", writeB, dirB)] {
@@ -141,14 +169,33 @@ final class Probe: ObservableObject {
                 let (url, err) = await fn(s, dir)
                 let ms = seconds(ContinuousClock.now - t) * 1000
                 if name == "a" {
-                    if let url { ta.ms.append(ms); ta.bytes += fileSize(url); good.append(url) } else { ta.failures.append("\(s.tag) \(err ?? "")") }
+                    if let url {
+                        ta.ms.append(ms)
+                        ta.bytes += fileSize(url)
+                        good.append(url)
+                    } else {
+                        ta.failures.append("\(s.tag) \(err ?? "")")
+                    }
                 } else {
-                    if let url { tb.ms.append(ms); tb.bytes += fileSize(url) } else { tb.failures.append("\(s.tag) \(err ?? "")") }
+                    if let url {
+                        tb.ms.append(ms)
+                        tb.bytes += fileSize(url)
+                    } else {
+                        tb.failures.append("\(s.tag) \(err ?? "")")
+                    }
                 }
-                if s.tag != "recent" { byTag[s.tag, default: []].append(String(format: "%@ %.0fms %@ %dx%d", name, ms, url == nil ? "FAIL \(err ?? "")" : "ok \(fileSize(url!) / 1024)KB", s.asset.pixelWidth, s.asset.pixelHeight)) }
+                if s.tag != "recent" {
+                    byTag[s.tag, default: []].append(
+                        String(
+                            format: "%@ %.0fms %@ %dx%d", name, ms,
+                            url == nil ? "FAIL \(err ?? "")" : "ok \(fileSize(url!) / 1024)KB", s.asset.pixelWidth,
+                            s.asset.pixelHeight))
+                }
             }
         }
-        print("library \(all.count) assets, sample \(sample.count): heic \(heic), live \(live), raw \(raw), icloud-only \(cloud)")
+        print(
+            "library \(all.count) assets, sample \(sample.count): heic \(heic), live \(live), raw \(raw), icloud-only \(cloud)"
+        )
         print("(a) writeData              \(ta.line)")
         print("(b) requestImageData+write \(tb.line)")
         for (t, l) in byTag.sorted(by: { $0.key < $1.key }) { print("  \(t): \(l.joined(separator: "; "))") }
@@ -165,7 +212,8 @@ final class Probe: ObservableObject {
             for _ in 0..<300 {
                 try? await Task.sleep(for: .milliseconds(10))
                 if QLPreviewPanel.sharedPreviewPanelExists(), QLPreviewPanel.shared()!.isVisible {
-                    print(String(format: "space → panel visible %.0fms", seconds(.now - pressed!) * 1000)); return
+                    print(String(format: "space → panel visible %.0fms", seconds(.now - pressed!) * 1000))
+                    return
                 }
             }
             print("space → panel never became visible in 3s")

@@ -118,9 +118,14 @@ public actor Cleanup {
     func candidates(_ kind: String) throws -> [Photo] {
         let found: [Photo]
         switch kind {
-        case "screenshots": found = candidatePhotos(photos, ignoring: ignoreAlbums, onlyScreenshots: true, keepAlbumPhotos: keepAlbumPhotos)
-        case "paperwork", "low-quality": found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos)
-        case "bursts": found = candidatePhotos(photos, ignoring: ignoreAlbums, requireValidDate: true, keepAlbumPhotos: keepAlbumPhotos)
+        case "screenshots":
+            found = candidatePhotos(
+                photos, ignoring: ignoreAlbums, onlyScreenshots: true, keepAlbumPhotos: keepAlbumPhotos)
+        case "paperwork", "low-quality":
+            found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos)
+        case "bursts":
+            found = candidatePhotos(
+                photos, ignoring: ignoreAlbums, requireValidDate: true, keepAlbumPhotos: keepAlbumPhotos)
         default: throw CleanupError.unknownPass
         }
         let filed = Set([Passes.deleteAlbum(kind)!, Passes.keepAlbum(kind)!])
@@ -169,7 +174,8 @@ public actor Cleanup {
             photos = photos.filter { (verdicts[$0.uuid]?.kind ?? "picture") != "picture" }
         }
         result.photos = photos.map {
-            PassPhoto(photo: $0, verdict: Passes.verdictKinds.contains(kind) ? passVerdict(kind, verdicts[$0.uuid]) : nil)
+            PassPhoto(
+                photo: $0, verdict: Passes.verdictKinds.contains(kind) ? passVerdict(kind, verdicts[$0.uuid]) : nil)
         }
         return result
     }
@@ -228,7 +234,9 @@ public actor Cleanup {
             record(results, count: batch.count)
             done += batch.count
         }
-        print("Vision: \(done) photos in \((ContinuousClock.now - start).formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 1))))")
+        print(
+            "Vision: \(done) photos in \((ContinuousClock.now - start).formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 1))))"
+        )
         fflush(stdout)
     }
 
@@ -339,12 +347,16 @@ public actor Cleanup {
     /// One line per committed photo that has a verdict, to measure the model's accuracy.
     func logDecisions(_ kind: String, _ decided: [(String, String)]) {
         let now = ISO8601DateFormatter().string(from: .now)
-        appendLines(Self.decisionsLog, decided.compactMap { uuid, decision in
-            passVerdict(kind, verdicts[uuid]).map { v in
-                jsonLine(["uuid": uuid, "kind": kind, "verdict_kind": v.kind, "verdict_keep": v.keep,
-                          "decision": decision, "ts": now])
-            }
-        })
+        appendLines(
+            Self.decisionsLog,
+            decided.compactMap { uuid, decision in
+                passVerdict(kind, verdicts[uuid]).map { v in
+                    jsonLine([
+                        "uuid": uuid, "kind": kind, "verdict_kind": v.kind, "verdict_keep": v.keep,
+                        "decision": decision, "ts": now,
+                    ])
+                }
+            })
     }
 
     /// Per pass: how many committed photos matched the model's verdict.
@@ -382,8 +394,10 @@ public actor Cleanup {
     static func visionLine(_ uuid: String, _ v: VisionResult?) -> String {
         guard let v else { return jsonLine(["uuid": uuid, "error": "no local image"]) }
         let data = v.print.withUnsafeBufferPointer { Data(buffer: $0) }
-        return jsonLine(["uuid": uuid, "print": data.base64EncodedString(), "ptype": 1,
-                         "utility": v.utility, "score": v.score])
+        return jsonLine([
+            "uuid": uuid, "print": data.base64EncodedString(), "ptype": 1,
+            "utility": v.utility, "score": v.score,
+        ])
     }
 
     static func readVision(_ url: URL) -> [String: VisionResult?] {
