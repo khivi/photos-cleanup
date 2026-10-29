@@ -170,7 +170,8 @@ struct ReviewScreen: View {
     private func cell(_ p: PassPhoto) -> some View {
         let mark: PhotoCell.Mark =
             switch model.view {
-            case .all: model.decision(p.id).map { .decision($0) } ?? (model.deletedAlbum[p.id] != nil ? .deleteMe : .none)
+            case .all:
+                model.decision(p.id).map { .decision($0) } ?? (model.deletedAlbum[p.id] != nil ? .deleteMe : .none)
             case .deleted: .deleteMe
             case .pass: model.decision(p.id).map { .decision($0) } ?? .none
             }

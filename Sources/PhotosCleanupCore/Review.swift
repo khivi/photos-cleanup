@@ -100,7 +100,12 @@ public final class ReviewModel {
     // MARK: Labels (what the screen shows; views only lay them out)
 
     public static let tabs: [(view: ReviewView, title: String, help: String)] =
-        [(.all, Passes.allTitle, "Every photo in your library. Mark photos Delete to move them to “\(Passes.allDeleteAlbum)”.")]
+        [
+            (
+                .all, Passes.allTitle,
+                "Every photo in your library. Mark photos Delete to move them to “\(Passes.allDeleteAlbum)”."
+            )
+        ]
         + Passes.all.map { (.pass($0.key), $0.title, Passes.about[$0.key] ?? "") }
         + [(.deleted, "To be deleted", "Photos waiting in a Delete Me album. Delete them there in Photos.")]
 
@@ -310,7 +315,9 @@ public final class ReviewModel {
     public func mark(_ ids: some Collection<String>, _ d: Decision) {
         let inAll = view == .all
         apply(
-            Dictionary(ids.map { ($0, (inAll && d == .keep ? nil : d, !inAll || d == .delete)) }, uniquingKeysWith: { a, _ in a }),
+            Dictionary(
+                ids.map { ($0, (inAll && d == .keep ? nil : d, !inAll || d == .delete)) },
+                uniquingKeysWith: { a, _ in a }),
             name: d == .keep ? "Keep" : "Delete")
     }
 

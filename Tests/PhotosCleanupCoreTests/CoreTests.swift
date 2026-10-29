@@ -296,7 +296,9 @@ import Testing
     let filed = Photo(uuid: "a", screenshot: true, albums: [Passes.allDeleteAlbum])
     let other = Photo(uuid: "b", screenshot: true)
     let (c, _) = try await makeCleanup([filed, other], judge: FakeJudge(off: "off"), keepAlbumPhotos: false)
-    for kind in ["screenshots", "bursts"] { #expect(try await c.candidates(kind).map(\.uuid).filter { $0 == "a" }.isEmpty) }
+    for kind in ["screenshots", "bursts"] {
+        #expect(try await c.candidates(kind).map(\.uuid).filter { $0 == "a" }.isEmpty)
+    }
     #expect(try await c.pass("screenshots").photos.map(\.photo.uuid) == ["b"])
     let plain = [Photo(uuid: "a", albums: [Passes.allDeleteAlbum]), Photo(uuid: "b")]
     let (d, _) = try await makeCleanup(plain, keepAlbumPhotos: false)
