@@ -3,27 +3,6 @@ version: 2
 # 7-day cooldown on every entry: a compromised release is usually yanked within
 # days, so the delay costs nothing at a monthly interval.
 updates:
-  # Package.swift / Package.resolved (Hummingbird and its tree).
-  - package-ecosystem: swift
-    directory: "/"
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 5
-    cooldown:
-      default-days: 7
-
-  - package-ecosystem: npm
-    directory: "/"
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 5
-    cooldown:
-      default-days: 7
-    # react and react-dom must match exactly; split PRs leave a blank page (React error #527).
-    groups:
-      react:
-        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
-
   # Action versions in .github/workflows/*.yml
   - package-ecosystem: github-actions
     directory: "/"

@@ -24,44 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # package.json has no `packageManager`, so pin the major here.
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      # Writes the UI to Sources/PhotosCleanup/ui/dist. Package.swift has
-      # `.copy("ui")`, so swift build needs it to exist first.
-      - run: pnpm build
-
-      - name: UI was built
-        run: test -f Sources/PhotosCleanup/ui/dist/index.html
-
-      # Compiling the dependencies (Hummingbird, SwiftNIO) is most of the run. The key
-      # changes with Package.resolved or the toolchain; a miss rebuilds and saves anew.
-      - id: toolchain
-        run: echo "hash=$(swift --version 2>&1 | shasum | cut -c1-8)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v6
-        with:
-          path: .build
-          key: swiftpm-${{ matrix.runner }}-${{ steps.toolchain.outputs.hash }}-${{ hashFiles('Package.resolved') }}
-          restore-keys: swiftpm-${{ matrix.runner }}-${{ steps.toolchain.outputs.hash }}-
-
       # One build for the app and the tests; `swift test` alone would compile again.
       - run: swift build --build-tests
       - run: swift test --skip-build
 
-      - name: AI verdicts compiled in
-        if: matrix.runner == 'xcode-27'
-        run: strings .build/debug/photos-cleanup | grep -q "photo library and decide whether each is still worth keeping"
-
-      # The release's build path, ad hoc signed: catches bundling and entitlement breakage.
+      # The release's build path, ad hoc signed: catches bundling and entitlement breakage,
+      # and a build without AI verdicts.
       - name: App bundle builds
         if: matrix.runner == 'xcode-27'
         run: |
