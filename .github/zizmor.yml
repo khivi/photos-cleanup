@@ -1,0 +1,9 @@
+# zizmor (https://docs.zizmor.sh): GitHub Actions security audits, run as a pre-commit hook.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # GitHub's own actions stay tag-pinned: their tag namespace is not a third-party
+        # supply-chain surface. Anything else is hash-pinned; Dependabot keeps the SHAs current.
+        actions/*: ref-pin
+        "*": hash-pin

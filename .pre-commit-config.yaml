@@ -21,6 +21,23 @@ repos:
       - id: check-shebang-scripts-are-executable
       - id: detect-private-key
 
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
+
+  # actionlint checks that a workflow is correct, zizmor that it is safe: release.yml
+  # holds the Developer ID certificate, the notary key and HOMEBREW_TAP_TOKEN.
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.30.0
+    hooks:
+      - id: zizmor
+
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.43.0
     hooks:

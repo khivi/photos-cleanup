@@ -13,6 +13,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The hooks only run locally where someone ran `pre-commit install`; this enforces them.
+  # The Swift hooks need macOS, and the ci job below builds and tests on it.
+  pre-commit:
+    runs-on: ubuntu-latest
+    env:
+      SKIP: swift-typecheck,swift-build
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+
   ci:
     # macos-latest lacks the macOS 27 SDK, so it builds the no-verdicts fallback;
     # xcode-27 (preview) compiles the Foundation Models code the release ships.
@@ -23,6 +38,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # One build for the app and the tests; `swift test` alone would compile again.
       - run: swift build --build-tests

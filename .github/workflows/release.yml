@@ -39,6 +39,8 @@ jobs:
       contents: write # create the tag and Release with GITHUB_TOKEN
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Read version and skip if already released
         id: ver
@@ -80,7 +82,9 @@ jobs:
           security unlock-keychain -p "$kcpw" "$kc"
           security import "$k/cert.p12" -k "$kc" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -k "$kcpw" "$kc" >/dev/null
-          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          kcs=("$kc")
+          while read -r line; do kcs+=("${line//\"/}"); done < <(security list-keychains -d user)
+          security list-keychains -d user -s "${kcs[@]}"
 
           SIGN_IDENTITY="Developer ID Application: Amit Khivesara (3WD7XPJ5M5)" KEYCHAIN="$kc" \
             scripts/app.sh --universal
