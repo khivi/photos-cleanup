@@ -407,7 +407,8 @@ public final class ReviewModel {
             id: id, date: p.photo.date.map { $0.formatted(style) } ?? "Unknown date",
             kind: p.photo.screenshot ? "Screenshot" : "Photo",
             verdict: p.verdict.map { "\($0.kind): \($0.reason)" },
-            albums: p.photo.albums.isEmpty ? "In no album" : p.photo.albums.sorted().joined(separator: ", "),
+            albums: p.photo.albums.isEmpty ? "In no album"
+                : "In \(p.photo.albums.count == 1 ? "album" : "albums"): \(p.photo.albums.sorted().joined(separator: ", "))",
             target: target.map { "→ \($0)" }, decision: inPass ? decisions[id] : nil)
     }
 

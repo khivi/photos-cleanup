@@ -416,7 +416,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
 
         await m.select(.all)
         m.click("c")
-        #expect(m.inspectorInfo()?.albums == "Trip" && m.inspectorInfo()?.kind == "Photo")
+        #expect(m.inspectorInfo()?.albums == "In album: Trip" && m.inspectorInfo()?.kind == "Photo")
     }
 
     @Test func noMarkOutsideAPass() async throws {
