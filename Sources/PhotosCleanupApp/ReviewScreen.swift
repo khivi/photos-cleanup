@@ -146,7 +146,7 @@ struct ReviewScreen: View {
         case .deleted: .deleteMe
         case .pass: model.decision(p.id).map { .decision($0) } ?? .none
         }
-        return PhotoCell(photo: p, mark: mark, selected: model.selected.contains(p.id), thumbnails: thumbnails,
+        return PhotoCell(photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id), thumbnails: thumbnails,
                          onTap: {
                              focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
                              let mods = NSEvent.modifierFlags

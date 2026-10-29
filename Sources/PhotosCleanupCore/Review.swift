@@ -60,6 +60,9 @@ public final class ReviewModel {
 
     public var best: Set<String> { Set(groups.map(\.best)) }
 
+    /// Vision's pick of a burst, shown with a star in the Bursts view only.
+    public func isBest(_ id: String) -> Bool { view == .pass("bursts") && best.contains(id) }
+
     func initialDecision(_ p: PassPhoto) -> Decision {
         switch view {
         case .pass("bursts"): return best.contains(p.id) ? .keep : .delete

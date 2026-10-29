@@ -65,6 +65,7 @@ struct PhotoCell: View {
     let photo: PassPhoto
     let mark: Mark
     var selected = false
+    var best = false
     let thumbnails: Thumbnails
     var onTap: (() -> Void)?
     @State private var image: NSImage?
@@ -83,6 +84,9 @@ struct PhotoCell: View {
             .frame(maxWidth: .infinity)
             .overlay { if let image { Image(nsImage: image).resizable().scaledToFill().opacity(dim ? 0.5 : 1) } }
             .overlay(alignment: .topLeading) { badge.padding(6) }
+            .overlay(alignment: .topTrailing) {
+                if best { Image(systemName: "star.fill").foregroundStyle(.yellow).shadow(radius: 2).padding(6).help("Vision's pick") }
+            }
             .overlay(alignment: .bottomLeading) {
                 if case .decision = mark, let v = photo.verdict {
                     Text(v.kind).font(.caption2).foregroundStyle(.white)

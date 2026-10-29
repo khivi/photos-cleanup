@@ -23,6 +23,9 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m2 = ReviewModel(cleanup: c2)
         await m2.select(.pass("bursts"))
         #expect(m2.decisions == ["x": .delete, "y": .keep, "z": .delete])
+        #expect(["x", "y", "z"].map(m2.isBest) == [false, true, false])
+        await m2.select(.all)
+        #expect(!m2.isBest("y"))  // the star is a Bursts-view mark
 
         // Low quality: everything starts delete.
         let (c3, _) = try await makeCleanup([Photo(uuid: "q")], vision: ["q": V(-0.9)])
