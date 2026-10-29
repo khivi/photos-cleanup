@@ -143,11 +143,19 @@ struct ReviewScreen: View {
         switch key {
         case .leftArrow: model.moveSelection(by: -1)
         case .rightArrow: model.moveSelection(by: 1)
-        // ponytail: up/down step a row of the flat list, so they drift across burst sections; per-section rows if it matters
-        case .upArrow: model.moveSelection(by: -columns)
-        default: model.moveSelection(by: columns)
+        case .upArrow: step(-1)
+        default: step(1)
         }
         if let a = model.anchor { position.scrollTo(id: a) }
+    }
+
+    /// Up/down: by visual rows inside each burst section, by `columns` places elsewhere.
+    private func step(_ direction: Int) {
+        if model.view == .pass("bursts") {
+            model.moveSelectionRows(by: direction, columns: columns)
+        } else {
+            model.moveSelection(by: direction * columns)
+        }
     }
 
     private func cell(_ p: PassPhoto) -> some View {
@@ -156,7 +164,7 @@ struct ReviewScreen: View {
         case .deleted: .deleteMe
         case .pass: model.decision(p.id).map { .decision($0) } ?? .none
         }
-        return PhotoCell(photo: p, mark: mark, selected: model.selected.contains(p.id), thumbnails: thumbnails,
+        return PhotoCell(photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id), thumbnails: thumbnails,
                          onTap: {
                              focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
                              let mods = NSEvent.modifierFlags

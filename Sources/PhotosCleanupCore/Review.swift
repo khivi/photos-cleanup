@@ -60,6 +60,9 @@ public final class ReviewModel {
 
     public var best: Set<String> { Set(groups.map(\.best)) }
 
+    /// Vision's pick of a burst, shown with a star in the Bursts view only.
+    public func isBest(_ id: String) -> Bool { view == .pass("bursts") && best.contains(id) }
+
     func initialDecision(_ p: PassPhoto) -> Decision {
         switch view {
         case .pass("bursts"): return best.contains(p.id) ? .keep : .delete
@@ -346,6 +349,22 @@ public final class ReviewModel {
         guard !ids.isEmpty else { return }
         let from = anchor.flatMap { ids.firstIndex(of: $0) } ?? (delta > 0 ? -1 : ids.count)
         let id = ids[min(ids.count - 1, max(0, from + delta))]
+        selected = [id]
+        anchor = id
+    }
+
+    // MARK: Rows in sections
+
+    /// Up (-1) or down (1) a visual row when each group starts on a fresh row of `columns` cells.
+    /// Keeps the column, clamped to a shorter row; at the first or last row it stays put.
+    public func moveSelectionRows(by direction: Int, columns: Int) {
+        let cols = max(1, columns)
+        let rows = groups.map { $0.photos.map(\.uuid) }.flatMap { ids in stride(from: 0, to: ids.count, by: cols).map { Array(ids[$0..<min($0 + cols, ids.count)]) } }
+        guard !rows.isEmpty else { return }
+        let at = anchor.flatMap { a in rows.firstIndex { $0.contains(a) } }
+        let r = at.map { min(rows.count - 1, max(0, $0 + direction)) } ?? (direction > 0 ? 0 : rows.count - 1)
+        let col = at.flatMap { rows[$0].firstIndex(of: anchor!) } ?? 0
+        let id = rows[r][min(col, rows[r].count - 1)]
         selected = [id]
         anchor = id
     }
