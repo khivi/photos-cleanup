@@ -30,7 +30,7 @@ Each phase ends in something that runs. The server and React UI stay working unt
 
 - [x] Add the `PhotosCleanupApp` executable target: SwiftUI `@main`, depends on Core only. Its own `Info.plist` with a bundle ID, `CFBundleShortVersionString` (the one version source), `LSMinimumSystemVersion` and `NSPhotoLibraryUsageDescription`.
 - [x] `scripts/app.sh`: `swift build -c release`, assemble `Photos Cleanup.app`, sign it. `scripts/app.sh run` builds, then `open`s it with stdout to a log. The spike showed a bare binary from a shell never gets its window in front.
-- [ ] Window: ask for Photos access, `Cleanup.load()`, show the photo count.
+- [x] Window: ask for Photos access, `Cleanup.load()`, show the photo count.
 - [ ] **Risk:** the hardened runtime may need the `com.apple.security.personal-information.photos-library` entitlement. Check with a Developer ID build before phase 3.
 - [ ] **Risk:** TCC keys an ad-hoc signature on the binary hash, so every rebuild may ask for Photos access again. If it does, sign dev builds with a stable Apple Development identity.
 
@@ -40,14 +40,14 @@ Done when: the app opens from Finder, macOS asks Photos access for the app (not 
 
 - [x] Core: make `Photo` `Identifiable` and `Hashable`. Replace `PassResult`'s tuples with small structs. Update the routes and their tests in the same commit.
 - [x] Core: expose the `PHAsset` lookup (`PhotoKitLibrary.assets`) for the app's thumbnail cache.
-- [ ] `ReviewModel` (`@Observable`, `@MainActor`) in Core, next to `Cleanup`: it imports Observation, not SwiftUI, and the Core tests' fakes cover it. Port the state from `src/App.tsx`: current tab, decisions and `touched`, `initialDecision`, toggle, Select all, which keeps Commit sends (touched, has a verdict, or a burst's best), the commit and the session's "To be deleted" list, counts, and polling while Vision or verdicts run (new candidates merge in, touched choices stay).
-- [ ] Tests for each rule above, with Swift Testing. No Vitest suite and no OpenAPI contract (decided 2026-10-28): HTTP and React go away.
+- [x] `ReviewModel` (`@Observable`, `@MainActor`) in Core, next to `Cleanup`: it imports Observation, not SwiftUI, and the Core tests' fakes cover it. Port the state from `src/App.tsx`: current tab, decisions and `touched`, `initialDecision`, toggle, Select all, which keeps Commit sends (touched, has a verdict, or a burst's best), the commit and the session's "To be deleted" list, counts, and polling while Vision or verdicts run (new candidates merge in, touched choices stay).
+- [x] Tests for each rule above, with Swift Testing. No Vitest suite and no OpenAPI contract (decided 2026-10-28): HTTP and React go away.
 
 Done when: `swift test` covers the view model with no window and no library.
 
 ### Phase 2: screens, to parity with the browser UI
 
-- [ ] Thumbnails: lift the spike's loader: `PHCachingImageManager`, `.highQualityFormat`, network off, cache ~30 rows ahead.
+- [x] Thumbnails: lift the spike's loader: `PHCachingImageManager`, `.highQualityFormat`, network off, cache ~30 rows ahead.
 - [ ] Tabs with counts: All, the four passes, To be deleted. A 170pt `LazyVGrid`; Bursts as one horizontal row per group.
 - [ ] Cell: Keep/Delete badge, verdict kind, dimmed when delete, the verdict reason as `.help`. Click toggles.
 - [ ] Toolbar: Select all Keep/Delete, progress bar, "verdicts unavailable" message, totals, `Commit: N delete · M keep`, status line after commit, empty state, the To be deleted explainer.
