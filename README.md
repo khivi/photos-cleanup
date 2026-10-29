@@ -1,5 +1,7 @@
 # photos-cleanup
 
+![Photos Cleanup icon](Sources/PhotosCleanupApp/AppIcon.svg)
+
 Photos Cleanup is a Mac app. It helps you clear unwanted photos from your Photos library.
 You review each cleanup pass as a thumbnail grid and mark every photo keep or delete.
 When you commit, the app files the photos into albums in Photos.

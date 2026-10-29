@@ -22,8 +22,15 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"
 cp "$bin/PhotosCleanupApp" "$app/Contents/MacOS/"
 cp Sources/PhotosCleanupApp/Info.plist "$app/Contents/Info.plist"
-# This target's own SwiftPM resource bundles (none yet); $bin also holds every other target's.
 mkdir -p "$app/Contents/Resources"
+iconset=$(mktemp -d)/AppIcon.iconset
+mkdir "$iconset"
+for n in 16 32 128 256 512; do
+  sips -z $n $n -s format png Sources/PhotosCleanupApp/AppIcon.svg --out "$iconset/icon_${n}x${n}.png" >/dev/null
+  sips -z $((n * 2)) $((n * 2)) -s format png Sources/PhotosCleanupApp/AppIcon.svg --out "$iconset/icon_${n}x${n}@2x.png" >/dev/null
+done
+iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
+# This target's own SwiftPM resource bundles (none yet); $bin also holds every other target's.
 for b in "$bin"/photos-cleanup_PhotosCleanup{App,Core}.bundle; do [ -e "$b" ] && cp -R "$b" "$app/Contents/Resources/"; done
 # The hardened runtime denies Photos access without this entitlement, even when TCC allows it.
 ent=Sources/PhotosCleanupApp/PhotosCleanup.entitlements

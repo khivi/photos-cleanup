@@ -42,7 +42,7 @@ let package = Package(
         .executableTarget(
             name: "PhotosCleanupApp",
             dependencies: ["PhotosCleanupCore"],
-            exclude: ["Info.plist", "PhotosCleanup.entitlements"]
+            exclude: ["Info.plist", "PhotosCleanup.entitlements", "AppIcon.svg"]
         ),
         .testTarget(name: "PhotosCleanupCoreTests", dependencies: ["PhotosCleanupCore"]),
         .testTarget(
