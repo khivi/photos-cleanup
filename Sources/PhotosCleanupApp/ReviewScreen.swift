@@ -9,7 +9,6 @@ struct ReviewScreen: View {
     @State private var position = ScrollPosition(edge: .top)
     @State private var width: CGFloat = 800
     @FocusState private var focused: Bool
-    @Environment(\.undoManager) private var windowUndo
 
     /// The adaptive grid fits as many columns as the width allows.
     private var columns: Int { max(1, Int((width - 2 * gridPadding + 4) / (cellSize + 4))) }
@@ -51,9 +50,7 @@ struct ReviewScreen: View {
                 content
             }
         }
-        .onChange(of: windowUndo.map(ObjectIdentifier.init), initial: true) {  // Edit > Undo and ⌘Z reach the marks
-            if let windowUndo { model.undoManager = windowUndo }
-        }
+        .focusedSceneValue(\.reviewModel, model)
         .task(id: pollKey) {
             while model.inPass && model.progress.pending > 0 {
                 try? await Task.sleep(for: .seconds(2))
@@ -105,19 +102,14 @@ struct ReviewScreen: View {
             ContentUnavailableView(ReviewModel.emptyState, systemImage: "checkmark.circle")
         } else if model.view == .pass("bursts") {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(model.groups.enumerated()), id: \.offset) { n, group in
-                        ScrollViewReader { proxy in
-                            ScrollView(.horizontal) {
-                                LazyHStack(spacing: 4) {
-                                    ForEach(group.photos) { cell(PassPhoto(photo: $0)).frame(width: cellSize, height: cellSize) }
-                                }
-                            }
-                            .onChange(of: model.anchor, initial: true) { _, a in
-                                if let a, group.photos.contains(where: { $0.id == a }) { proxy.scrollTo(a) }
-                            }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize), spacing: 4)], spacing: 4) {
+                    ForEach(model.groups, id: \.best) { group in
+                        Section {
+                            ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
+                        } header: {
+                            Text(group.headerLabel()).font(.headline)
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
                         }
-                        .id(n)
                     }
                 }
                 .padding(.horizontal, gridPadding)
@@ -138,19 +130,14 @@ struct ReviewScreen: View {
 
     /// An arrow key: the model moves the selection, then the grid scrolls it into view.
     private func move(_ key: KeyEquivalent) {
-        let bursts = model.view == .pass("bursts")  // rows scroll sideways: every arrow steps one photo
         switch key {
         case .leftArrow: model.moveSelection(by: -1)
         case .rightArrow: model.moveSelection(by: 1)
-        case .upArrow: model.moveSelection(by: bursts ? -1 : -columns)
-        default: model.moveSelection(by: bursts ? 1 : columns)
+        // ponytail: up/down step a row of the flat list, so they drift across burst sections; per-section rows if it matters
+        case .upArrow: model.moveSelection(by: -columns)
+        default: model.moveSelection(by: columns)
         }
-        guard let a = model.anchor else { return }
-        if bursts {
-            if let n = model.groups.firstIndex(where: { $0.photos.contains { $0.id == a } }) { position.scrollTo(id: n) }
-        } else {
-            position.scrollTo(id: a)
-        }
+        if let a = model.anchor { position.scrollTo(id: a) }
     }
 
     private func cell(_ p: PassPhoto) -> some View {
@@ -161,6 +148,7 @@ struct ReviewScreen: View {
         }
         return PhotoCell(photo: p, mark: mark, selected: model.selected.contains(p.id), thumbnails: thumbnails,
                          onTap: {
+                             focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
                              let mods = NSEvent.modifierFlags
                              model.click(p.id, extend: mods.contains(.shift), toggle: mods.contains(.command))
                          })
@@ -186,12 +174,27 @@ extension View {
                 model.markSelection(.keep)
                 return .handled
             }
-            .onKeyPress(keys: [.delete, .deleteForward]) { _ in
-                model.markSelection(.delete)
-                return .handled
-            }
+            .onDeleteCommand { model.markSelection(.delete) }  // onKeyPress(.delete) never sees the ⌫ key (U+7F) on macOS
             .background {
                 Button("Select All") { model.selectAll() }.keyboardShortcut("a").hidden()
             }
+    }
+}
+
+extension FocusedValues {
+    @Entry var reviewModel: ReviewModel?
+}
+
+/// Edit > Undo and Redo drive the model's UndoManager directly, not the window's.
+struct UndoCommands: Commands {
+    @FocusedValue(\.reviewModel) private var model
+
+    var body: some Commands {
+        CommandGroup(replacing: .undoRedo) {
+            Button("Undo") { if let u = model?.undoManager, u.canUndo { u.undo() } }
+                .keyboardShortcut("z")
+            Button("Redo") { if let u = model?.undoManager, u.canRedo { u.redo() } }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+        }
     }
 }

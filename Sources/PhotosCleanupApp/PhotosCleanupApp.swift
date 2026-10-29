@@ -7,6 +7,7 @@ import SwiftUI
 struct PhotosCleanupApp: App {
     var body: some Scene {
         WindowGroup { ContentView() }
+            .commands { UndoCommands() }
         Settings { SettingsView() }
     }
 }
