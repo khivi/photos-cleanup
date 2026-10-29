@@ -52,6 +52,8 @@ Done when: `swift test` covers the view model with no window and no library.
 - [ ] Cell: Keep/Delete badge, verdict kind, dimmed when delete, the verdict reason as `.help`. Click toggles.
 - [ ] Toolbar: Select all Keep/Delete, progress bar, "verdicts unavailable" message, totals, `Commit: N delete · M keep`, status line after commit, empty state, the To be deleted explainer.
 - [ ] Startup: access denied shows an "Open Privacy Settings" button; load errors and `verdictsOff` show in the window.
+- [ ] **Rename the Utility pass.** "Utility" (Vision's `isUtility`) means nothing to a user. It holds receipts, tickets, tracking, promos, documents, notes and labels. Candidates: "Paperwork" (recommended), "Receipts & Docs", "Documents". Rename the title in `Passes.all` and add "Utility - Delete Me" and "Utility - Keep" to `Passes.legacyAlbums`, so photos already filed under them stay hidden. Decide whether the key (`utility`) changes too.
+- [ ] **Tab tooltips.** On hover, each tab says what the pass finds and how photos start: e.g. Screenshots "Screen captures. The on-device model preselects ones not worth keeping." Bursts "Similar shots taken within a minute. The best one starts as Keep." Low Quality "Blurry or accidental shots, by Vision's aesthetics score. All start as Delete." Keep the texts with the pass in `Passes.all`, next to its title.
 - [x] `albums_ignore`: it is read from the working directory, which means nothing for a Finder launch. Move it to `~/Library/Application Support/photos-cleanup/`.
 
 Done when: every pass gives the same candidates as the browser UI on the real library, and one real commit files photos into both albums.
