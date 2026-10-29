@@ -41,6 +41,19 @@ final class Thumbnails {
         }
     }
 
+    /// A large aspect-fit image for the preview. Own options: the cache only holds grid-sized images.
+    func requestLarge(_ uuid: String, side: CGFloat, done: @escaping (NSImage?) -> Void) -> PHImageRequestID? {
+        guard let asset = assets[uuid] else { return nil }
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let o = PHImageRequestOptions()
+        o.deliveryMode = .highQualityFormat
+        o.isNetworkAccessAllowed = false
+        return manager.requestImage(for: asset, targetSize: CGSize(width: side * scale, height: side * scale),
+                                    contentMode: .aspectFit, options: o) { image, _ in
+            MainActor.assumeIsolated { done(image) }
+        }
+    }
+
     func cancel(_ id: PHImageRequestID) { manager.cancelImageRequest(id) }
 
     /// Called as a cell appears: slide the caching window when it nears either edge.
@@ -123,5 +136,44 @@ struct PhotoCell: View {
         Text(text).font(.caption.weight(.semibold)).foregroundStyle(.white)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(color, in: .rect(cornerRadius: 4))
+    }
+}
+
+/// The large preview over the grid. It has no focus of its own: the grid keeps handling keys.
+struct PhotoPreview: View {
+    let preview: ReviewModel.Preview
+    let thumbnails: Thumbnails
+    @State private var image: NSImage?
+    @State private var requestID: PHImageRequestID?
+
+    var body: some View {
+        GeometryReader { geo in
+            Color.black
+                .overlay { if let image { Image(nsImage: image).resizable().scaledToFit().padding(12) } }
+                .overlay(alignment: .topLeading) {
+                    HStack(spacing: 6) {
+                        if let badge = preview.badge { chip(badge, preview.badge == "✓ Keep" ? .green : .red) }
+                        if preview.best { Image(systemName: "star.fill").foregroundStyle(.yellow) }
+                    }
+                    .padding(16)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if let reason = preview.reason { chip(reason, .black.opacity(0.6)).padding(16) }
+                }
+                .task(id: preview.id) {
+                    if let requestID { thumbnails.cancel(requestID) }
+                    let id = preview.id
+                    requestID = thumbnails.requestLarge(id, side: max(geo.size.width, geo.size.height)) { img in
+                        if id == preview.id { image = img ?? image }
+                    }
+                }
+                .onDisappear { if let requestID { thumbnails.cancel(requestID) } }
+        }
+    }
+
+    private func chip(_ text: String, _ color: Color) -> some View {
+        Text(text).font(.callout.weight(.semibold)).foregroundStyle(.white)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(color, in: .rect(cornerRadius: 5))
     }
 }

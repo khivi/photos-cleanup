@@ -49,6 +49,8 @@ public final class ReviewModel {
     public private(set) var selected: Set<String> = []
     /// Where a ⇧-click range starts and arrow keys move from.
     public private(set) var anchor: String?
+    /// The large in-window preview of the anchor photo is open.
+    public private(set) var previewing = false
 
     /// Marks register their undo here. The app swaps in the window's manager so ⌘Z reaches it.
     public var undoManager = UndoManager()
@@ -205,6 +207,7 @@ public final class ReviewModel {
 
     public func select(_ v: ReviewView) async {
         status = nil
+        previewing = false
         if v == .deleted {
             await loadWaiting()
             view = v
@@ -341,6 +344,28 @@ public final class ReviewModel {
         }
     }
 
+    /// Space: opens the preview of the anchor photo, or closes it. Needs exactly one selected photo.
+    public func togglePreview() {
+        previewing = !previewing && selected.count == 1 && anchor != nil
+    }
+
+    public func closePreview() { previewing = false }
+
+    /// What the preview shows: the anchor photo, its mark badge, the star and the verdict reason.
+    public struct Preview: Sendable, Equatable {
+        public let id: String
+        public let badge: String?
+        public let best: Bool
+        public let reason: String?
+    }
+
+    public var preview: Preview? {
+        guard previewing, let id = anchor else { return nil }
+        let verdict = photos.first { $0.id == id }?.verdict
+        let badge: String? = view == .deleted ? "✗ Delete Me" : decision(id).map { $0 == .keep ? "✓ Keep" : "✗ Delete" }
+        return Preview(id: id, badge: badge, best: isBest(id), reason: verdict.map { "\($0.kind): \($0.reason)" })
+    }
+
     public func selectAll() { selected = Set(order) }
 
     /// An arrow key: selects the photo `delta` places from the anchor (1 is next, a row is the column count).
@@ -356,6 +381,7 @@ public final class ReviewModel {
     public func clearSelection() {
         selected = []
         anchor = nil
+        previewing = false
     }
 
     /// Drops photos that left the list (committed, or no longer a candidate).
@@ -363,6 +389,7 @@ public final class ReviewModel {
         let ids = Set(order)
         selected.formIntersection(ids)
         if let a = anchor, !ids.contains(a) { anchor = nil }
+        if selected.isEmpty { previewing = false }
     }
 
     // MARK: Commit
