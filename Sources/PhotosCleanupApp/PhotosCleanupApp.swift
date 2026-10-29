@@ -7,6 +7,7 @@ import SwiftUI
 struct PhotosCleanupApp: App {
     var body: some Scene {
         WindowGroup { ContentView() }
+        Settings { SettingsView() }
     }
 }
 
@@ -60,7 +61,8 @@ struct ContentView: View {
         let cleanup = Cleanup(
             library: library, judge: judge,
             cacheDir: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Caches/photos-cleanup"),
-            ignoreAlbums: loadIgnoreAlbums(), verdictsOff: verdictsOff)
+            ignoreAlbums: loadIgnoreAlbums(),
+            keepAlbumPhotos: UserDefaults.standard.object(forKey: keepAlbumPhotosKey) as? Bool ?? true, verdictsOff: verdictsOff)
         do { try await cleanup.load() } catch { return .failed("\(error)") }
         let photos = await cleanup.photos
         await cleanup.startVision(photos.filter { !$0.isMovie && !$0.screenshot })

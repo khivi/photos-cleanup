@@ -57,6 +57,8 @@ public actor Cleanup {
     let judge: any Judge
     let cacheDir: URL
     let ignoreAlbums: Set<String>
+    /// False: photos in the user's own albums can be candidates too.
+    let keepAlbumPhotos: Bool
     /// Set at startup when verdicts can't run here; shown in the UI instead of verdicts.
     public let verdictsOff: String?
 
@@ -88,12 +90,13 @@ public actor Cleanup {
 
     public init(
         library: any PhotoLibrary, judge: any Judge, cacheDir: URL, ignoreAlbums: Set<String>,
-        verdictsOff: String? = nil
+        keepAlbumPhotos: Bool = true, verdictsOff: String? = nil
     ) {
         self.library = library
         self.judge = judge
         self.cacheDir = cacheDir
         self.ignoreAlbums = ignoreAlbums
+        self.keepAlbumPhotos = keepAlbumPhotos
         self.verdictsOff = verdictsOff
         vision = Self.readVision(cacheDir.appendingPathComponent(Self.visionCache))
         verdicts = Self.readVerdicts(cacheDir.appendingPathComponent(Self.verdictCache))
@@ -115,9 +118,9 @@ public actor Cleanup {
     func candidates(_ kind: String) throws -> [Photo] {
         let found: [Photo]
         switch kind {
-        case "screenshots": found = candidatePhotos(photos, ignoring: ignoreAlbums, onlyScreenshots: true)
-        case "paperwork", "low-quality": found = candidatePhotos(photos, ignoring: ignoreAlbums)
-        case "bursts": found = candidatePhotos(photos, ignoring: ignoreAlbums, requireValidDate: true)
+        case "screenshots": found = candidatePhotos(photos, ignoring: ignoreAlbums, onlyScreenshots: true, keepAlbumPhotos: keepAlbumPhotos)
+        case "paperwork", "low-quality": found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos)
+        case "bursts": found = candidatePhotos(photos, ignoring: ignoreAlbums, requireValidDate: true, keepAlbumPhotos: keepAlbumPhotos)
         default: throw CleanupError.unknownPass
         }
         let filed = Set([Passes.deleteAlbum(kind)!, Passes.keepAlbum(kind)!])
