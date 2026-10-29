@@ -14,9 +14,11 @@ for a in "$@"; do
   esac
 done
 
-# The default build system records SDK 15.0 in the binary whatever SDK it builds with, and macOS
-# then draws the window in its pre-macOS 26 style. The native one records the real SDK.
-build=(swift build -c release --build-system native --product PhotosCleanupApp ${arch[@]+"${arch[@]}"})
+# SwiftPM records SDK 15.0 in the binary whatever SDK it builds with, and macOS then draws the
+# window in its pre-macOS 26 style. Set the real SDK, and keep the minimum OS from Info.plist.
+min=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" Sources/PhotosCleanupApp/Info.plist)
+sdk=$(xcrun --sdk macosx --show-sdk-version)
+build=(swift build -c release --product PhotosCleanupApp -Xlinker -platform_version -Xlinker macos -Xlinker "$min" -Xlinker "$sdk" ${arch[@]+"${arch[@]}"})
 "${build[@]}"
 bin=$("${build[@]}" --show-bin-path)
 
