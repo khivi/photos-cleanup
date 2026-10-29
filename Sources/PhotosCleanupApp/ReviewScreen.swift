@@ -1,7 +1,7 @@
 import PhotosCleanupCore
 import SwiftUI
 
-/// The review screen: tabs, toolbar and grid. Every label and decision comes from `ReviewModel`.
+/// The review screen: sidebar, toolbar and grid. Every label and decision comes from `ReviewModel`.
 struct ReviewScreen: View {
     let model: ReviewModel
     let thumbnails: Thumbnails
@@ -13,17 +13,34 @@ struct ReviewScreen: View {
         model.view == .deleted ? model.deleted.map { PassPhoto(photo: $0) } : model.photos
     }
 
+    private var selection: Binding<ReviewView?> {
+        Binding(get: { model.view }, set: { v in if let v, v != model.view { Task { await model.select(v) } } })
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            if let banner = model.banner {
-                Text(banner).font(.callout).frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12).padding(.vertical, 6).background(.blue.opacity(0.1))
+        NavigationSplitView {
+            List(selection: selection) {
+                ForEach(model.sidebar) { section in
+                    Section(section.title) {
+                        ForEach(section.items) { item in
+                            Text(item.title).badge(item.badge ?? 0).help(item.help).tag(item.view)
+                        }
+                    }
+                }
             }
-            if let error = model.error {
-                Text(error).foregroundStyle(.red).padding(12)
+            .navigationSplitViewColumnWidth(min: 160, ideal: 200)
+        } detail: {
+            VStack(spacing: 0) {
+                header
+                if let banner = model.banner {
+                    Text(banner).font(.callout).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12).padding(.vertical, 6).background(.blue.opacity(0.1))
+                }
+                if let error = model.error {
+                    Text(error).foregroundStyle(.red).padding(12)
+                }
+                content
             }
-            content
         }
         .task(id: pollKey) {
             while model.inPass && model.progress.pending > 0 {
@@ -39,16 +56,6 @@ struct ReviewScreen: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                ForEach(ReviewModel.tabs, id: \.view) { tab in
-                    Button(model.tabLabel(tab.view, tab.title)) { Task { await model.select(tab.view) } }
-                        .buttonStyle(.bordered)
-                        .tint(model.view == tab.view ? .accentColor : nil)
-                        .disabled(model.view == tab.view || model.loading)
-                        .help(tab.help)
-                }
-                Spacer()
-            }
             HStack(spacing: 10) {
                 if model.inPass && !model.loading {
                     Group {
@@ -83,8 +90,7 @@ struct ReviewScreen: View {
 
     @ViewBuilder private var content: some View {
         if model.showsEmptyState {
-            Text(ReviewModel.emptyState).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(40)
-            Spacer()
+            ContentUnavailableView(ReviewModel.emptyState, systemImage: "checkmark.circle")
         } else if model.view == .pass("bursts") {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
