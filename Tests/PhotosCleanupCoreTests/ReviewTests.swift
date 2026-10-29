@@ -388,3 +388,46 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(BurstGroup(photos: [Photo(uuid: "a")], best: "a").headerLabel(locale: us, timeZone: utc) == "1 photo")
     }
 }
+
+@MainActor
+@Suite struct InspectorTests {
+    @Test func infoFollowsSelection() async throws {
+        let when = Date(timeIntervalSince1970: 0)
+        let photos = [Photo(uuid: "a", date: when, screenshot: true), Photo(uuid: "b", screenshot: true), Photo(uuid: "c", albums: ["Trip"])]
+        let (c, _) = try await makeCleanup(photos, verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("screenshots"))
+        #expect(m.inspectorInfo() == nil && m.inspectorPlaceholder == "No photo selected")
+        m.selectAll()
+        #expect(m.inspectorInfo() == nil && m.inspectorPlaceholder == "2 photos selected")
+
+        m.click("a")
+        let utc = TimeZone(identifier: "UTC")!
+        let i = try #require(m.inspectorInfo(locale: Locale(identifier: "en_US"), timeZone: utc))
+        #expect(i.date.hasPrefix("January 1, 1970") && i.kind == "Screenshot")
+        #expect(i.verdict == "junk: r" && i.albums == "In no album")
+        #expect(i.target == "→ \(Passes.deleteAlbum("screenshots")!)" && i.decision == .delete)
+
+        m.click("b")  // unjudged and untouched: stays put
+        let j = try #require(m.inspectorInfo())
+        #expect(j.albums == "In no album" && j.verdict == nil && j.target == nil && j.decision == .keep)
+        m.mark(["b"], .keep)  // an explicit keep goes to the Keep album
+        #expect(m.inspectorInfo()?.target == "→ \(Passes.keepAlbum("screenshots")!)")
+
+        await m.select(.all)
+        m.click("c")
+        #expect(m.inspectorInfo()?.albums == "In album: Trip" && m.inspectorInfo()?.kind == "Photo")
+    }
+
+    @Test func noMarkOutsideAPass() async throws {
+        let (c, _) = try await makeCleanup(shots("a"), judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.all)
+        m.click("a")
+        let i = try #require(m.inspectorInfo())
+        #expect(i.decision == nil && i.target == nil)
+        #expect(m.inspectorToggleLabel == "Show Info")
+        m.showsInspector = true
+        #expect(m.inspectorToggleLabel == "Hide Info")
+    }
+}

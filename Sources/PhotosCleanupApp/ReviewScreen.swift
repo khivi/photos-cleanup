@@ -1,4 +1,5 @@
 import AppKit
+import Photos
 import PhotosCleanupCore
 import SwiftUI
 
@@ -44,6 +45,10 @@ struct ReviewScreen: View {
                 .navigationTitle(model.windowTitle)
                 .navigationSubtitle(model.windowSubtitle)
                 .toolbar { toolbar }
+                .inspector(isPresented: $model.showsInspector) {
+                    InspectorView(model: model, thumbnails: thumbnails) { focused = true }
+                        .inspectorColumnWidth(min: 220, ideal: 260, max: 400)
+                }
                 .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
                 .confirmationDialog("Move to Albums?", isPresented: $model.confirmingMove) {
                     Button("Move", role: .destructive) { Task { await model.commit() } }
@@ -52,6 +57,7 @@ struct ReviewScreen: View {
                 }
         }
         .focusedSceneValue(\.reviewModel, model)
+        .onChange(of: model.showsInspector) { UserDefaults.standard.set(model.showsInspector, forKey: inspectorKey) }
         .task(id: pollKey) {
             while model.inPass && model.progress.pending > 0 {
                 try? await Task.sleep(for: .seconds(2))
@@ -76,6 +82,9 @@ struct ReviewScreen: View {
                     .frame(width: 100)
                     .help("Analysing photos on this Mac: \(model.progressDone.formatted()) of \(model.progressTotal.formatted())")
             }
+        }
+        ToolbarItem {
+            Button(model.inspectorToggleLabel, systemImage: "info.circle") { model.showsInspector.toggle() }
         }
         if model.inPass {
             ToolbarItemGroup {
@@ -226,6 +235,8 @@ struct ReviewCommands: Commands {
             .disabled(model?.canSetAll != true)
             Divider()
             // No shortcut here: the grid's own Space handler toggles the preview, and a bare-Space key equivalent would also catch Space in dialogs.
+            Button(model?.inspectorToggleLabel ?? "Show Info") { model?.showsInspector.toggle() }
+                .keyboardShortcut("i").disabled(model == nil)
             Button("Preview") { model?.togglePreview() }.disabled(model == nil)
             Button("Move to Albums…") { model?.confirmingMove = true }
                 .keyboardShortcut(.return)
@@ -244,6 +255,55 @@ struct ReviewCommands: Commands {
                 .keyboardShortcut("z")
             Button("Redo") { if let u = model?.undoManager, u.canRedo { u.redo() } }
                 .keyboardShortcut("z", modifiers: [.command, .shift])
+        }
+    }
+}
+
+let inspectorKey = "showsInspector"
+
+/// The Info panel. Nothing in it takes focus: marking hands focus back to the grid so the arrows keep working.
+struct InspectorView: View {
+    let model: ReviewModel
+    let thumbnails: Thumbnails
+    let refocus: () -> Void
+    @State private var image: NSImage?
+    @State private var requestID: PHImageRequestID?
+
+    var body: some View {
+        if let info = model.inspectorInfo() {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Color.gray.opacity(0.15).frame(height: 200)
+                        .overlay { if let image { Image(nsImage: image).resizable().scaledToFit() } }
+                        .clipShape(.rect(cornerRadius: 4))
+                    Text(info.date).font(.headline)
+                    Text(info.kind).foregroundStyle(.secondary)
+                    if let v = info.verdict { Text(v) }
+                    Text(info.albums).foregroundStyle(.secondary)
+                    if let t = info.target { Text(t) }
+                    if let d = info.decision {
+                        Picker("Mark", selection: Binding(get: { d }, set: { model.mark([info.id], $0); refocus() })) {
+                            Text("Keep").tag(Decision.keep)
+                            Text("Delete").tag(Decision.delete)
+                        }
+                        .pickerStyle(.segmented).labelsHidden().focusable(false)
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .task(id: info.id) {
+                image = nil
+                if let requestID { thumbnails.cancel(requestID) }
+                let id = info.id
+                requestID = thumbnails.requestLarge(id, side: 260) { img in
+                    if id == model.inspectorInfo()?.id { image = img ?? image }
+                }
+            }
+            .onDisappear { if let requestID { thumbnails.cancel(requestID) } }
+        } else {
+            Text(model.inspectorPlaceholder).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

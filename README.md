@@ -74,6 +74,7 @@ If access is off, the app shows an Open Privacy Settings button.
 | K / ⌫ | Mark the selection keep / delete |
 | ⌥⌘K / ⇧⌘⌫ | Mark every photo in the pass keep / delete |
 | Space, Esc | Show or close the large preview |
+| ⌘I | Show or hide the Info panel |
 | ⌘Z / ⇧⌘Z | Undo / redo a mark |
 | ⌘↩ | Move to Albums |
 | ⌘1 – ⌘6 | Go to a sidebar item |
