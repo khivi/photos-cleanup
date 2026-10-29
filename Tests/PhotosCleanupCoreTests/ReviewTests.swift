@@ -210,6 +210,34 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.selected == [ids[2]])
     }
 
+    @Test func previewOpensForOnePhotoAndClosesWithTheSelection() async throws {
+        let (c, _) = try await makeCleanup(shots("a", "b", "c"), verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("screenshots"))
+        m.togglePreview()  // nothing selected
+        #expect(!m.previewing && m.preview == nil)
+        m.selectAll()
+        m.togglePreview()  // several selected
+        #expect(!m.previewing)
+        let first = m.displayed[0].id
+        m.click(first)
+        m.togglePreview()
+        #expect(m.previewing && m.preview?.id == first)
+        #expect(m.preview?.badge == (m.decision(first) == .keep ? "✓ Keep" : "✗ Delete"))
+        #expect(m.preview?.reason == (m.photos.first { $0.id == first }?.verdict).map { "\($0.kind): \($0.reason)" })
+        m.moveSelection(by: 1)  // arrows move the preview along
+        #expect(m.previewing && m.preview?.id == m.displayed[1].id)
+        m.togglePreview()
+        #expect(!m.previewing)
+        m.togglePreview()
+        m.clearSelection()
+        #expect(!m.previewing)
+        m.click(first)
+        m.togglePreview()
+        await m.select(.all)  // a tab change closes it
+        #expect(!m.previewing)
+    }
+
     @Test func selectionFollowsTheListAndMarksNeedAPass() async throws {
         let (c, _) = try await makeCleanup(shots("a", "b", "c"), judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)

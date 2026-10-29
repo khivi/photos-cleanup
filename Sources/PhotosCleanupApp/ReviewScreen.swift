@@ -132,16 +132,22 @@ struct ReviewScreen: View {
             }
             .scrollPosition($position)
             .keyboardSelection(model: model, focused: $focused, width: $width) { move($0) }
+            .overlay {  // an overlay, not a swap: the grid stays in the hierarchy and keeps keyboard focus
+                if let p = model.preview {
+                    PhotoPreview(preview: p, thumbnails: thumbnails).onTapGesture { model.closePreview() }
+                }
+            }
         }
     }
 
     /// An arrow key: the model moves the selection, then the grid scrolls it into view.
     private func move(_ key: KeyEquivalent) {
+        let step = model.previewing ? 1 : columns  // in the preview, up and down are one photo like left and right
         switch key {
         case .leftArrow: model.moveSelection(by: -1)
         case .rightArrow: model.moveSelection(by: 1)
-        case .upArrow: model.moveSelection(by: -columns)
-        default: model.moveSelection(by: columns)
+        case .upArrow: model.moveSelection(by: -step)
+        default: model.moveSelection(by: step)
         }
         if let a = model.anchor { position.scrollTo(id: a) }
     }
@@ -163,7 +169,7 @@ struct ReviewScreen: View {
 }
 
 extension View {
-    /// The grid takes keyboard focus: arrows move the selection, ⌘A selects all. K and ⌫ are menu commands.
+    /// The grid takes keyboard focus: arrows move the selection, Space toggles the preview, ⌘A selects all. K and ⌫ are menu commands.
     fileprivate func keyboardSelection(model: ReviewModel, focused: FocusState<Bool>.Binding, width: Binding<CGFloat>,
                                        move: @escaping (KeyEquivalent) -> Void) -> some View {
         self
@@ -174,6 +180,15 @@ extension View {
             .onAppear { focused.wrappedValue = true }
             .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
                 move(press.key)
+                return .handled
+            }
+            .onKeyPress(.space) {
+                model.togglePreview()
+                return .handled
+            }
+            .onKeyPress(.escape) {
+                guard model.previewing else { return .ignored }
+                model.closePreview()
                 return .handled
             }
             .background {
