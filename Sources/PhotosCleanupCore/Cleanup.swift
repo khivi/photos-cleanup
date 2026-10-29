@@ -217,11 +217,16 @@ public actor Cleanup {
 
     func drainVision() async {
         let library = library
+        let start = ContinuousClock.now
+        var done = 0
         // Batches stay queued until saved, so a request meanwhile doesn't queue them again.
         while let batch = nextVisionBatch() {
             guard let results = try? await offload({ library.vision(batch) }) else { return finishVision() }
             record(results, count: batch.count)
+            done += batch.count
         }
+        print("Vision: \(done) photos in \((ContinuousClock.now - start).formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 1))))")
+        fflush(stdout)
     }
 
     func nextVisionBatch() -> [String]? {

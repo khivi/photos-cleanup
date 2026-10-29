@@ -110,11 +110,18 @@ public struct PhotoKitLibrary: PhotoLibrary {
     /// was calibrated on prints of roughly this size.
     public func vision(_ uuids: [String]) -> [String: VisionResult?] {
         let found = assets(uuids)
-        var out: [String: VisionResult?] = [:]
-        for id in uuids {
-            out[id] = found[id].flatMap { cgImage($0, maxSide: 1024) }.flatMap(analyse)
+        // Each worker takes every 4th photo and writes only its own slots, so no lock is needed.
+        let workers = 4
+        var results = [VisionResult?](repeating: nil, count: uuids.count)
+        results.withUnsafeMutableBufferPointer { buf in
+            nonisolated(unsafe) let slots = buf
+            DispatchQueue.concurrentPerform(iterations: workers) { w in
+                for i in stride(from: w, to: uuids.count, by: workers) {
+                    slots[i] = found[uuids[i]].flatMap { cgImage($0, maxSide: 1024) }.flatMap(analyse)
+                }
+            }
         }
-        return out
+        return Dictionary(zip(uuids, results)) { $1 }
     }
 
     public func add(album: String, uuids: [String]) throws -> Int {
