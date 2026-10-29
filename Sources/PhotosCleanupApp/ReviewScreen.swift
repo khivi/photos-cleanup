@@ -1,3 +1,4 @@
+import AppKit
 import PhotosCleanupCore
 import SwiftUI
 
@@ -5,6 +6,13 @@ import SwiftUI
 struct ReviewScreen: View {
     let model: ReviewModel
     let thumbnails: Thumbnails
+    @State private var position = ScrollPosition(edge: .top)
+    @State private var width: CGFloat = 800
+    @FocusState private var focused: Bool
+
+    /// The adaptive grid fits as many columns as the width allows.
+    private var columns: Int { max(1, Int((width - 2 * gridPadding + 4) / (cellSize + 4))) }
+    private let gridPadding: CGFloat = 12
 
     private var pollKey: String { "\(model.view.passKey ?? "")\(model.progress.pending > 0)" }
     private var countsKey: [Bool] { [model.loading, model.committing, model.progress.pending == 0] }
@@ -94,23 +102,50 @@ struct ReviewScreen: View {
         } else if model.view == .pass("bursts") {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(model.groups.enumerated()), id: \.offset) { _, group in
-                        ScrollView(.horizontal) {
-                            LazyHStack(spacing: 4) {
-                                ForEach(group.photos) { cell(PassPhoto(photo: $0)).frame(width: cellSize, height: cellSize) }
+                    ForEach(Array(model.groups.enumerated()), id: \.offset) { n, group in
+                        ScrollViewReader { proxy in
+                            ScrollView(.horizontal) {
+                                LazyHStack(spacing: 4) {
+                                    ForEach(group.photos) { cell(PassPhoto(photo: $0)).frame(width: cellSize, height: cellSize) }
+                                }
+                            }
+                            .onChange(of: model.anchor, initial: true) { _, a in
+                                if let a, group.photos.contains(where: { $0.id == a }) { proxy.scrollTo(a) }
                             }
                         }
+                        .id(n)
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, gridPadding)
             }
+            .scrollPosition($position)
+            .keyboardSelection(model: model, focused: $focused, width: $width) { move($0) }
         } else {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize), spacing: 4)], spacing: 4) {
                     ForEach(items) { cell($0) }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, gridPadding)
             }
+            .scrollPosition($position)
+            .keyboardSelection(model: model, focused: $focused, width: $width) { move($0) }
+        }
+    }
+
+    /// An arrow key: the model moves the selection, then the grid scrolls it into view.
+    private func move(_ key: KeyEquivalent) {
+        let bursts = model.view == .pass("bursts")  // rows scroll sideways: every arrow steps one photo
+        switch key {
+        case .leftArrow: model.moveSelection(by: -1)
+        case .rightArrow: model.moveSelection(by: 1)
+        case .upArrow: model.moveSelection(by: bursts ? -1 : -columns)
+        default: model.moveSelection(by: bursts ? 1 : columns)
+        }
+        guard let a = model.anchor else { return }
+        if bursts {
+            if let n = model.groups.firstIndex(where: { $0.photos.contains { $0.id == a } }) { position.scrollTo(id: n) }
+        } else {
+            position.scrollTo(id: a)
         }
     }
 
@@ -120,8 +155,39 @@ struct ReviewScreen: View {
         case .deleted: .deleteMe
         case .pass: model.decision(p.id).map { .decision($0) } ?? .none
         }
-        return PhotoCell(photo: p, mark: mark, thumbnails: thumbnails,
-                         onTap: model.inPass ? { model.toggle(p.id) } : nil)
+        return PhotoCell(photo: p, mark: mark, selected: model.selected.contains(p.id), thumbnails: thumbnails,
+                         onTap: {
+                             let mods = NSEvent.modifierFlags
+                             model.click(p.id, extend: mods.contains(.shift), toggle: mods.contains(.command))
+                         })
             .help(model.view == .deleted ? model.deletedAlbum[p.id] ?? "" : "")
+    }
+}
+
+extension View {
+    /// The grid takes keyboard focus: arrows move the selection, ⌘A selects all, K keeps and ⌫ deletes it.
+    fileprivate func keyboardSelection(model: ReviewModel, focused: FocusState<Bool>.Binding, width: Binding<CGFloat>,
+                                       move: @escaping (KeyEquivalent) -> Void) -> some View {
+        self
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width.wrappedValue = $0 }
+            .focusable()
+            .focused(focused)
+            .focusEffectDisabled()
+            .onAppear { focused.wrappedValue = true }
+            .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
+                move(press.key)
+                return .handled
+            }
+            .onKeyPress("k") {
+                model.markSelection(.keep)
+                return .handled
+            }
+            .onKeyPress(keys: [.delete, .deleteForward]) { _ in
+                model.markSelection(.delete)
+                return .handled
+            }
+            .background {
+                Button("Select All") { model.selectAll() }.keyboardShortcut("a").hidden()
+            }
     }
 }

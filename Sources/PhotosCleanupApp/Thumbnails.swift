@@ -64,6 +64,7 @@ struct PhotoCell: View {
 
     let photo: PassPhoto
     let mark: Mark
+    var selected = false
     let thumbnails: Thumbnails
     var onTap: (() -> Void)?
     @State private var image: NSImage?
@@ -90,6 +91,7 @@ struct PhotoCell: View {
                 }
             }
             .clipped()
+            .overlay { if selected { Rectangle().strokeBorder(Color.accentColor, lineWidth: 4) } }
             .clipShape(.rect(cornerRadius: 4))
             .contentShape(.rect)
             .onTapGesture { onTap?() }
