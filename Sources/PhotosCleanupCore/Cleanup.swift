@@ -128,7 +128,7 @@ public actor Cleanup {
                 photos, ignoring: ignoreAlbums, requireValidDate: true, keepAlbumPhotos: keepAlbumPhotos)
         default: throw CleanupError.unknownPass
         }
-        let filed = Set([Passes.deleteAlbum(kind)!, Passes.keepAlbum(kind)!])
+        let filed = Set([Passes.deleteAlbum(kind)!, Passes.keepAlbum(kind)!, Passes.allDeleteAlbum])
             .union(Passes.legacyAlbums[kind] ?? [])
         return found.filter { !committed.contains($0.uuid) && filed.isDisjoint(with: $0.albums) }
     }
@@ -320,10 +320,14 @@ public actor Cleanup {
     }
 
     /// File photos into the pass's Delete Me (`delete`) and Keep (`keep`) albums. Never deletes.
+    /// `Passes.allKey` is the All view: only `delete` is filed, into "All - Delete Me"; `keep` is ignored
+    /// and nothing is logged, since All has no verdicts.
     public func commit(_ kind: String, delete: [String], keep: [String]) async throws -> Committed {
-        guard let album = Passes.deleteAlbum(kind), let keepAlbum = Passes.keepAlbum(kind) else {
-            throw CleanupError.unknownPass
-        }
+        let isAll = kind == Passes.allKey
+        guard let album = isAll ? Passes.allDeleteAlbum : Passes.deleteAlbum(kind),
+            let keepAlbum = isAll ? "" : Passes.keepAlbum(kind)
+        else { throw CleanupError.unknownPass }
+        let keep = isAll ? [] : keep
         let doomed = delete.filter { byUUID[$0] != nil }
         let kept = keep.filter { byUUID[$0] != nil }
         guard !doomed.isEmpty || !kept.isEmpty else { throw CleanupError.noMatchingPhotos }

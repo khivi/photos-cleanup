@@ -78,15 +78,20 @@ public enum Passes {
         ("low-quality", "Low Quality"),
     ]
 
+    /// The All view is not a pass, but it has a title and one Delete Me album, derived like a pass's.
+    public static let allKey = "all"
+    public static let allTitle = "All"
+    public static let allDeleteAlbum = "\(allTitle) - Delete Me"
+
     public static func title(_ key: String) -> String? { all.first { $0.key == key }?.title }
     public static func deleteAlbum(_ key: String) -> String? { title(key).map { "\($0) - Delete Me" } }
     // Not in cleanupAlbumNames, so they count as user albums and the candidate filter skips
     // their photos on every later run.
     public static func keepAlbum(_ key: String) -> String? { title(key).map { "\($0) - Keep" } }
 
-    /// The Delete Me album among a photo's albums (a pass's own, or a legacy one), if any.
+    /// The Delete Me album among a photo's albums (a pass's own, All's, or a legacy one), if any.
     public static func waitingAlbum(in albums: [String]) -> String? {
-        let names = Set(all.compactMap { deleteAlbum($0.key) }).union(
+        let names = Set(all.compactMap { deleteAlbum($0.key) }).union([allDeleteAlbum]).union(
             legacyAlbums.values.joined().filter { $0.hasSuffix(" - Delete Me") })
         return albums.sorted().first(where: names.contains)
     }

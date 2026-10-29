@@ -102,7 +102,7 @@ sequenceDiagram
 2. **Vision analysis.** A background job sends all still photos to `PhotoKitLibrary.vision` in batches of 20. Results go to a disk cache. Bursts, Low Quality and Paperwork read this cache.
 3. **Verdicts.** When you open Screenshots or Paperwork, the classifier queues the photos with no verdict. It renders each as a 1024 px image and asks Foundation Models. Verdicts go to a disk cache. A photo the model cannot judge is not queued again until the next launch.
 4. **Thumbnails and preview.** The views ask `PHCachingImageManager` directly. Nothing is written to disk. The preview shows the local copy first. If the full photo is only in iCloud, Photos downloads it.
-5. **Move to Albums.** After you confirm, `Cleanup.commit` adds the photos to each album. It also logs your decision against the model's verdict. Undo covers marks, not the move.
+5. **Move to Albums.** After you confirm, `Cleanup.commit` adds the photos to each album. It also logs your decision against the model's verdict. Undo covers marks, not the move. In All, only the Delete marks move, to one album ("All - Delete Me"); nothing is logged, because All has no verdicts.
 
 Blocking PhotoKit and Vision calls run off the actor, so the screen never waits behind a batch.
 
