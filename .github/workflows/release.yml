@@ -1,26 +1,27 @@
 name: release
 
-# When a commit to master changes `let version` in main.swift: build a
-# universal binary + the SwiftPM resource bundle, tar them, create the GitHub
-# Release v<version> with the tarball attached, then bump the Homebrew tap.
+# When a commit to master changes CFBundleShortVersionString in the app's
+# Info.plist (or on a manual run): build the universal app, sign it with
+# Developer ID, notarize and staple it, create the GitHub Release v<version>
+# with the zip attached, then write the cask in the Homebrew tap.
 #
 # Idempotent: if release v<version> exists, the whole job after the check is
 # skipped. To redo a release, delete the release and the tag first.
 #
 # Repo secret HOMEBREW_TAP_TOKEN (the fine-grained PAT shared with cockpit)
-# is used only for the tap bump. It needs Contents: write on
+# is used only for the tap. It needs Contents: write on
 # khivi/homebrew-photos-cleanup.
 #
-# The binary is signed with Developer ID (hardened runtime) and notarized, so a
-# copy downloaded from the Releases page passes Gatekeeper. Repo secrets, all
-# from fnox profile `cockpit`: MACOS_CERT_P12 (base64 .p12, Developer ID
-# Application: Amit Khivesara (3WD7XPJ5M5)), MACOS_CERT_PASSWORD, and the App
-# Store Connect API key NOTARY_KEY_P8 (base64), NOTARY_KEY_ID, NOTARY_ISSUER_ID.
+# Signing secrets, all from fnox profile `cockpit`: MACOS_CERT_P12 (base64
+# .p12, Developer ID Application: Amit Khivesara (3WD7XPJ5M5)),
+# MACOS_CERT_PASSWORD, and the App Store Connect API key NOTARY_KEY_P8
+# (base64), NOTARY_KEY_ID, NOTARY_ISSUER_ID.
 
 on:
   push:
     branches: [master]
-    paths: ["Sources/PhotosCleanup/main.swift"]
+    paths: ["Sources/PhotosCleanupApp/Info.plist"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -31,7 +32,7 @@ concurrency:
 
 jobs:
   release:
-    # xcode-27 (preview) has the macOS 27 SDK; on macos-latest the binary would
+    # xcode-27 (preview) has the macOS 27 SDK; on macos-latest the app would
     # ship without Foundation Models verdicts.
     runs-on: xcode-27
     permissions:
@@ -44,9 +45,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          v="$(sed -n 's/^let version = "\(.*\)"$/\1/p' Sources/PhotosCleanup/main.swift)"
+          v="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Sources/PhotosCleanupApp/Info.plist)"
           if [ -z "$v" ]; then
-            echo "::error::could not read 'let version' from main.swift"
+            echo "::error::could not read CFBundleShortVersionString"
             exit 1
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
@@ -57,44 +58,17 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # package.json has no `packageManager`, so pin the major here.
-      - if: steps.ver.outputs.skip == 'false'
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10
-
-      - if: steps.ver.outputs.skip == 'false'
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - if: steps.ver.outputs.skip == 'false'
-        run: pnpm install --frozen-lockfile
-
-      - if: steps.ver.outputs.skip == 'false'
-        run: pnpm build
-
-      # The UI is gitignored; without this check a release that skipped
-      # `pnpm build` would ship a binary that serves a blank page.
-      - name: UI was built
+      - name: Build, sign, notarize and staple the app
         if: steps.ver.outputs.skip == 'false'
-        run: test -f Sources/PhotosCleanup/ui/dist/index.html
-
-      - name: Build universal release binary
-        if: steps.ver.outputs.skip == 'false'
-        run: swift build -c release --arch arm64 --arch x86_64
-
-      - name: Sign and notarize the binary
-        if: steps.ver.outputs.skip == 'false'
+        id: pkg
         env:
+          V: ${{ steps.ver.outputs.version }}
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: |
-          bin="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
           k="$RUNNER_TEMP/signing"
           mkdir -p "$k"
           kc="$k/ci.keychain-db"
@@ -108,13 +82,18 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$kcpw" "$kc" >/dev/null
           security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
 
-          codesign --force --options runtime --timestamp --keychain "$kc" \
-            --identifier com.khivi.photos-cleanup \
-            --sign "Developer ID Application: Amit Khivesara (3WD7XPJ5M5)" "$bin/photos-cleanup"
-          codesign --verify --strict "$bin/photos-cleanup"
+          SIGN_IDENTITY="Developer ID Application: Amit Khivesara (3WD7XPJ5M5)" KEYCHAIN="$kc" \
+            scripts/app.sh --universal
+          app=".build/Photos Cleanup.app"
+          bin="$app/Contents/MacOS/PhotosCleanupApp"
+          codesign --verify --deep --strict "$app"
+          codesign -dv "$app" 2>&1 | grep -q "TeamIdentifier=3WD7XPJ5M5"
+          codesign -d --entitlements - "$app" 2>&1 | grep -q "personal-information.photos-library"
+          lipo -archs "$bin" | grep -q x86_64 && lipo -archs "$bin" | grep -q arm64
+          # Never ship a build without AI verdicts (an SDK older than macOS 27).
+          strings "$bin" | grep -q "photo library and decide whether each is still worth keeping"
 
-          # A bare binary can't carry a stapled ticket; Gatekeeper looks it up online.
-          ditto -c -k "$bin/photos-cleanup" "$k/notarize.zip"
+          ditto -c -k --keepParent "$app" "$k/notarize.zip"
           xcrun notarytool submit "$k/notarize.zip" --wait --output-format json \
             --key "$k/key.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" > "$k/result.json"
           cat "$k/result.json"
@@ -124,6 +103,13 @@ jobs:
             echo "::error::notarization was not accepted"
             exit 1
           fi
+          xcrun stapler staple "$app"
+          spctl -a -vv "$app"
+
+          out="Photos-Cleanup-$V.zip"
+          ditto -c -k --keepParent "$app" "$out"
+          echo "zip=$out" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(shasum -a 256 "$out" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Remove signing material
         if: always()
@@ -131,45 +117,52 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/signing/ci.keychain-db" 2>/dev/null || true
           rm -rf "$RUNNER_TEMP/signing"
 
-      - name: Package tarball
-        if: steps.ver.outputs.skip == 'false'
-        id: pkg
-        env:
-          V: ${{ steps.ver.outputs.version }}
-        run: |
-          bin="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
-          ls "$bin"
-          test -d "$bin/photos-cleanup_PhotosCleanup.bundle"
-          test -f "$bin/photos-cleanup_PhotosCleanup.bundle/ui/dist/index.html" \
-            || test -f "$bin/photos-cleanup_PhotosCleanup.bundle/Contents/Resources/ui/dist/index.html"
-          lipo -archs "$bin/photos-cleanup"
-          codesign -dv "$bin/photos-cleanup" 2>&1 | grep -q "TeamIdentifier=3WD7XPJ5M5"
-          # Never ship a build without AI verdicts (an SDK older than macOS 27).
-          strings "$bin/photos-cleanup" | grep -q "photo library and decide whether each is still worth keeping"
-          out="photos-cleanup-$V-macos-universal.tar.gz"
-          # Every bundle: Hummingbird's NIO dependencies look up their own via Bundle.module.
-          (cd "$bin" && tar -czf "$OLDPWD/$out" photos-cleanup *.bundle)
-          echo "tarball=$out" >> "$GITHUB_OUTPUT"
-          "$bin/photos-cleanup" --version | grep -q "$V"
-
       - name: Create tag and GitHub Release
         if: steps.ver.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           V: ${{ steps.ver.outputs.version }}
-          TARBALL: ${{ steps.pkg.outputs.tarball }}
+          ZIP: ${{ steps.pkg.outputs.zip }}
         run: |
-          gh release create "v$V" "$TARBALL" \
+          gh release create "v$V" "$ZIP" \
             --target "$GITHUB_SHA" --title "v$V" --generate-notes
 
-      - name: Bump Homebrew tap
+      # The cask is written whole from here, so this repo holds its only copy.
+      # The old formula of the same name goes: brew would prefer it over the cask.
+      - name: Write the Homebrew cask
         if: steps.ver.outputs.skip == 'false'
-        uses: mislav/bump-homebrew-formula-action@v4
-        with:
-          formula-name: photos-cleanup
-          homebrew-tap: khivi/homebrew-photos-cleanup
-          tag-name: v${{ steps.ver.outputs.version }}
-          download-url: https://github.com/${{ github.repository }}/releases/download/v${{ steps.ver.outputs.version }}/${{ steps.pkg.outputs.tarball }}
-          create-branch: false
         env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          V: ${{ steps.ver.outputs.version }}
+          SHA: ${{ steps.pkg.outputs.sha256 }}
+        run: |
+          git clone -q "https://x-access-token:$TOKEN@github.com/khivi/homebrew-photos-cleanup.git" tap
+          cd tap
+          mkdir -p Casks
+          cat > Casks/photos-cleanup.rb <<EOF
+          # Homebrew cask for Photos Cleanup. Written by the release workflow in
+          # khivi/photos-cleanup on every release; don't edit it here.
+          cask "photos-cleanup" do
+            version "$V"
+            sha256 "$SHA"
+
+            url "https://github.com/khivi/photos-cleanup/releases/download/v#{version}/Photos-Cleanup-#{version}.zip"
+            name "Photos Cleanup"
+            desc "Review and clear unwanted photos in the macOS Photos library"
+            homepage "https://github.com/khivi/photos-cleanup"
+
+            depends_on macos: ">= :sequoia"
+
+            app "Photos Cleanup.app"
+
+            zap trash: [
+              "~/Library/Application Support/photos-cleanup",
+              "~/Library/Caches/photos-cleanup",
+            ]
+          end
+          EOF
+          git rm -q --ignore-unmatch Formula/photos-cleanup.rb
+          git add Casks/photos-cleanup.rb
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "photos-cleanup $V (cask)"
+          git push -q

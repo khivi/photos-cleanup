@@ -60,3 +60,12 @@ jobs:
       - name: AI verdicts compiled in
         if: matrix.runner == 'xcode-27'
         run: strings .build/debug/photos-cleanup | grep -q "photo library and decide whether each is still worth keeping"
+
+      # The release's build path, ad hoc signed: catches bundling and entitlement breakage.
+      - name: App bundle builds
+        if: matrix.runner == 'xcode-27'
+        run: |
+          scripts/app.sh
+          codesign --verify --strict ".build/Photos Cleanup.app"
+          codesign -d --entitlements - ".build/Photos Cleanup.app" 2>&1 | grep -q "personal-information.photos-library"
+          strings ".build/Photos Cleanup.app/Contents/MacOS/PhotosCleanupApp" | grep -q "photo library and decide whether each is still worth keeping"
