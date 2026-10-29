@@ -26,7 +26,12 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+      - run: pip install pre-commit
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      - run: pre-commit run --all-files --show-diff-on-failure
 
   ci:
     # macos-latest lacks the macOS 27 SDK, so it builds the no-verdicts fallback;
@@ -50,7 +55,27 @@ jobs:
       - name: App bundle builds
         if: matrix.runner == 'xcode-27'
         run: |
-          scripts/app.sh
+          scripts/app.sh --universal
+          bin=".build/Photos Cleanup.app/Contents/MacOS/PhotosCleanupApp"
           codesign --verify --strict ".build/Photos Cleanup.app"
           codesign -d --entitlements - ".build/Photos Cleanup.app" 2>&1 | grep -q "personal-information.photos-library"
-          strings ".build/Photos Cleanup.app/Contents/MacOS/PhotosCleanupApp" | grep -q "photo library and decide whether each is still worth keeping"
+          strings "$bin" | grep -q "photo library and decide whether each is still worth keeping"
+          # Both slices, each built against SDK 26+, or macOS draws the window in its old style.
+          archs=$(lipo -archs "$bin")
+          [[ " $archs " == *" arm64 "* && " $archs " == *" x86_64 "* ]]
+          # awk's END runs even after `exit 1` in a rule, so the verdict is decided in END alone.
+          for a in arm64 x86_64; do
+            vtool -arch "$a" -show-build "$bin" | awk '$1 == "sdk" { n++; if ($2 + 0 < 26) bad = 1 } END { exit (n == 0 || bad) }'
+          done
+
+      # The ubuntu pre-commit job skips swift-typecheck, so spike/ is only type-checked here.
+      # setup-python: the runner's Homebrew Python refuses a global `pip install` (PEP 668).
+      - uses: actions/setup-python@v7
+        if: matrix.runner == 'xcode-27'
+        with:
+          python-version: "3.13"
+      - name: Swift type-check hooks
+        if: matrix.runner == 'xcode-27'
+        run: |
+          pip install pre-commit
+          pre-commit run swift-typecheck --all-files
