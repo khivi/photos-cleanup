@@ -141,8 +141,8 @@ public final class ReviewModel {
     /// "N candidates · M to delete", "N photos" or "N queued for deletion".
     public var summary: String {
         if view == .deleted { return "\(deleted.count) queued for deletion" }
-        if inPass { return "\(photos.count) candidates · \(doomed.count) to delete" }
-        return "\(photos.count.formatted()) photos"
+        if inPass { return "\(photos.count) \(photos.count == 1 ? "candidate" : "candidates") · \(doomed.count) to delete" }
+        return "\(photos.count.formatted()) \(photos.count == 1 ? "photo" : "photos")"
     }
 
     public var commitLabel: String {

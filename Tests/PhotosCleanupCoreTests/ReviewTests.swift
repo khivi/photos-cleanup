@@ -315,7 +315,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("screenshots"))
         #expect(m.commitPreview.isEmpty)  // unjudged, untouched: nothing is sent
-        #expect(m.windowSubtitle == "1 candidates · 0 to delete")
+        #expect(m.windowSubtitle == "1 candidate · 0 to delete")
         m.setAll(.delete)
         #expect(m.commitPreview == [.init(count: 1, album: "Screenshots - Delete Me")])
         #expect(m.moveButtonLabel == "Move to Albums…")

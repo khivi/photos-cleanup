@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var ignored = userIgnoreAlbums()
     @State private var selection: String?
     @State private var newName = ""
+    @State private var saveError: String?
 
     var body: some View {
         Form {
@@ -35,6 +36,9 @@ struct SettingsView: View {
                     .disabled(selection == nil)
                 }
             }
+            if let saveError {
+                Text("Could not save the ignored albums: \(saveError)").font(.caption).foregroundStyle(.red)
+            }
             Text("Changes apply the next time Photos Cleanup opens.")
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -52,5 +56,12 @@ struct SettingsView: View {
         save()
     }
 
-    private func save() { try? saveIgnoreAlbums(ignored) }
+    private func save() {
+        do {
+            try saveIgnoreAlbums(ignored)
+            saveError = nil
+        } catch {
+            saveError = error.localizedDescription
+        }
+    }
 }
