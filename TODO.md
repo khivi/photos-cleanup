@@ -40,15 +40,12 @@ flowchart TD
     M4 --> V5
     V4 --> V5
     V4 --> V7
-    V2 --> V9
     V1 --> C1
     V2 --> C1
     V4 --> C1
     M5 --> C1
-    M6 --> C1
-    V3 & V7 & V9 --> C1
-    V4 --> A11y
-    V3 & V5 & V7 & V8 & V9 & V10 & C1 & A11y --> R1
+    V3 & V7 --> C1
+    V3 & V5 & V7 & V8 & V10 & C1 --> R1
 ```
 
 Spikes, first: each answer can change a view task.
@@ -64,7 +61,7 @@ Model (`Review.swift`, tests in `Tests/ReviewTests.swift`):
 - [x] **M3** Commit preview: photos per album ("12 → Bursts - Delete Me"), matching what `commit()` moves. Also the new labels, which belong in `ReviewModel`: Commit becomes "Move to Albums…", and Select all ✓ Keep / ✗ Delete (hard-coded in `ReviewScreen.swift` today) become Keep All / Delete All.
 - [x] **M4** Burst headers: date and count per `BurstGroup`.
 - [x] **M5** Undo: marks go through an `UndoManager`, so ⌘Z works as in every Mac app. Marks only: Move to Albums can't be undone, since there is no album-removal code.
-- [x] **M6** Verdict stats: `Cleanup.verdictStats()` per pass, agreement out of total.
+- ~~**M6** Verdict stats~~: dropped 2026-10-29. Built as a View menu sheet, then removed: not useful in the app. `Cleanup.verdictStats()` and `decisions.jsonl` stay for prompt tuning.
 
 Views:
 
@@ -73,16 +70,14 @@ Views:
 - [x] **V3** Moving asks first: a confirmation dialog naming each album. Red only there.
 - [x] **V4** Grid selection from S3. Arrows move the selection the same way in every view, Bursts included. K and ⌫ are Photo menu items (Keep, Delete), since Edit > Delete took ⌫ first; Undo and Redo are Edit menu commands on the model's `UndoManager`.
 - [x] **V5** Bursts: grid sections with a date · count header, ★ on Vision's pick.
-- [ ] **V7** Large preview on Space, in the app (`khivi/phase5-preview`): ←/→ page, K/⌫ mark, Esc closes. Not the Quick Look panel S1 tested, which would take the keys, so K/⌫ couldn't mark from the preview. It shows PhotoKit images and writes no files.
+- [x] **V7** Large preview on Space, in the app: ←/→ page, K/⌫ mark, Esc closes. Not the Quick Look panel S1 tested, which would take the keys, so K/⌫ couldn't mark from the preview. It shows the local copy at once, then lets Photos download the full photo from iCloud, for the previewed photo only. It writes no files.
 - [x] **V8** `ContentUnavailableView` for starting, no access, load failed and an empty pass.
-- [ ] **V9** Thumbnail zoom: toolbar slider, ⌘+ / ⌘−, kept across launches.
 - [x] **V10** Settings window (⌘,) for the ignored albums. Also the "Keep photos in albums" toggle: a persisted setting, default on, which surfaces the existing default (candidates skip any photo in a user-created album, `candidatePhotos` in `Passes.swift`). Off needs candidate logic that includes album photos. iCloud Shared Albums don't protect photos, only your own albums (decided 2026-10-29); PhotoKit's album list leaves them out anyway.
-- [ ] **C1** Menu commands: View (⌘1–⌘6 per sidebar item, zoom, Verdict Stats… sheet from M6); Photo (Keep All ⇧⌘K, Delete All ⇧⌘⌫, Preview Space, Move to Albums… ⌘↩). Done with V4: Photo > Keep K and Delete ⌫, Edit > Undo and Redo.
-- [ ] **A11y** VoiceOver: each cell reads its date, kind and mark; the sidebar reads its counts.
+- [x] **C1** Menu commands: View (⌘1–⌘6 per sidebar item); Photo (Keep K, Delete ⌫, Keep All ⌥⌘K, Delete All ⇧⌘⌫, Preview Space, Move to Albums… ⌘↩); Edit (Undo, Redo). Keep All is ⌥⌘K because ⇧⌘K is taken by another app on the user's Mac.
 
-- [ ] **R1** README screenshot and ARCHITECTURE, then release 0.5.0 by setting `CFBundleShortVersionString` to 0.5.0, which starts the release.
+- [ ] **R1** README screenshot and ARCHITECTURE, after C1 so the shortcuts are final. No release yet: `CFBundleShortVersionString` stays at 0.4.0, since changing it starts the release.
 
-Left: V7 (in progress), V9, C1, A11y, then R1.
+Left: R1. Zoom and VoiceOver moved to `## App`.
 
 ## Packaging and CI
 
@@ -92,7 +87,9 @@ Homebrew is the only install path: the cask in `khivi/homebrew-photos-cleanup` i
 
 ## App
 
-- [ ] **Inspector (later; was Phase 5's V6)** — a side panel (⌘I) for the selected photo: a small preview (Quick Look covers the large one), date, verdict and reason, album, Keep/Delete, and "Show in Photos" (⌘R). Show in Photos uses Photos' AppleScript `spotlight (first media item whose id is "<id>")`, which selects the photo (S2, Phase 5); first check by hand, with a Photos window open, whether it also scrolls Photos to it. If it only selects, drop the button. Shipping it needs the `com.apple.security.automation.apple-events` entitlement, `NSAppleEventsUsageDescription` and a one-time Automation prompt, all in the docs (entitlements file, Info.plist, README permissions, SECURITY).
+- [ ] **Thumbnail zoom (later; was Phase 5's V9)** — toolbar slider and ⌘+ / ⌘−, kept across launches; View menu items for both. Cells are 120–150pt today.
+- [ ] **VoiceOver (later; was Phase 5's A11y)** — each cell reads its date, kind and mark; the sidebar reads its counts.
+- [ ] **Inspector (later; was Phase 5's V6)** — a side panel (⌘I) for the selected photo: a small preview (the Space preview covers the large one), date, verdict and reason, album, Keep/Delete, and "Show in Photos" (⌘R). Show in Photos uses Photos' AppleScript `spotlight (first media item whose id is "<id>")`, which selects the photo (S2, Phase 5); first check by hand, with a Photos window open, whether it also scrolls Photos to it. If it only selects, drop the button. Shipping it needs the `com.apple.security.automation.apple-events` entitlement, `NSAppleEventsUsageDescription` and a one-time Automation prompt, all in the docs (entitlements file, Info.plist, README permissions, SECURITY).
 - [x] **Faster first Vision analysis** — `PhotoKitLibrary.vision` now runs the per-photo image fetch + Vision requests 4 at a time (`DispatchQueue.concurrentPerform`) inside each batch of 20. Measured on the real library (6802 photos, cache renamed away): 104.9 s sequential (65/s), 31.3 s concurrent (217/s), 3.4x; cache lines identical. `drainVision` logs `Vision: N photos in X s`. Only a first run or a new Mac pays it; later starts read the cache.
-- [ ] **Measure verdicts against real choices** — `Cleanup.commit` logs the user's final decision against each verdict (`decisions.jsonl`; `Cleanup.verdictStats()` sums it). After real use of Screenshots and Paperwork, read the agreement rate (via M6 once it exists) and tune the prompt in `Sources/PhotosCleanupCore/Verdicts.swift`. Baseline: `f1751a9` (summary before `keep`, greedy, new kinds) matched 96/102 filed screenshots, but those filings mostly accepted the old preselected verdicts. Known miss: a medicine-box photo gets delete; adding "medical or health information" to the keep list didn't fix it and flipped another photo. Tried and dropped: asking for facts (`timeSensitive`/`reusableInfo`) and deciding in code — 66/101. After a prompt change, rename `Cleanup.verdictCache` to re-judge everything.
+- [ ] **Measure verdicts against real choices** — `Cleanup.commit` logs the user's final decision against each verdict (`decisions.jsonl`; `Cleanup.verdictStats()` sums it). After real use of Screenshots and Paperwork, read the agreement rate by hand, from `decisions.jsonl` or `Cleanup.verdictStats()`, and tune the prompt in `Sources/PhotosCleanupCore/Verdicts.swift`. Baseline: `f1751a9` (summary before `keep`, greedy, new kinds) matched 96/102 filed screenshots, but those filings mostly accepted the old preselected verdicts. Known miss: a medicine-box photo gets delete; adding "medical or health information" to the keep list didn't fix it and flipped another photo. Tried and dropped: asking for facts (`timeSensitive`/`reusableInfo`) and deciding in code — 66/101. After a prompt change, rename `Cleanup.verdictCache` to re-judge everything.
 - [ ] **Recheck kept photos when the on-device model improves** — a pass's "Keep" album is the record of what was kept. Load it (hidden from candidates today), re-classify bypassing the verdict cache (a constant name today, so an OS model update alone doesn't invalidate it; key on the OS build too), show only new delete verdicts, and on commit move them Keep → Delete Me (needs album-removal code). Wait for an actual model update first.
