@@ -9,7 +9,6 @@ struct ReviewScreen: View {
     @State private var position = ScrollPosition(edge: .top)
     @State private var width: CGFloat = 800
     @FocusState private var focused: Bool
-    @State private var confirmingMove = false
 
     /// The adaptive grid fits as many columns as the width allows.
     private var columns: Int { max(1, Int((width - 2 * gridPadding + 4) / (cellSize + 4))) }
@@ -27,7 +26,8 @@ struct ReviewScreen: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        @Bindable var model = model
+        return NavigationSplitView {
             List(selection: selection) {
                 ForEach(model.sidebar) { section in
                     Section(section.title) {
@@ -45,13 +45,14 @@ struct ReviewScreen: View {
                 .navigationSubtitle(model.windowSubtitle)
                 .toolbar { toolbar }
                 .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
-                .confirmationDialog("Move to Albums?", isPresented: $confirmingMove) {
+                .confirmationDialog("Move to Albums?", isPresented: $model.confirmingMove) {
                     Button("Move", role: .destructive) { Task { await model.commit() } }
                 } message: {
                     Text(model.commitPreview.map(\.label).joined(separator: "\n"))
                 }
         }
         .focusedSceneValue(\.reviewModel, model)
+        .sheet(isPresented: $model.showingVerdictStats) { VerdictStatsSheet(model: model) }
         .task(id: pollKey) {
             while model.inPass && model.progress.pending > 0 {
                 try? await Task.sleep(for: .seconds(2))
@@ -84,11 +85,11 @@ struct ReviewScreen: View {
                     Button(ReviewModel.deleteAllLabel, systemImage: "trash") { model.setAll(.delete) }
                 }
                 .labelStyle(.titleAndIcon)
-                .disabled(model.loading || model.photos.isEmpty)
+                .disabled(!model.canSetAll)
             }
             ToolbarItem {
-                Button(model.moveButtonLabel) { confirmingMove = true }
-                    .disabled(model.loading || model.committing || !model.canCommit)
+                Button(model.moveButtonLabel) { model.confirmingMove = true }
+                    .disabled(!model.canMove)
             }
         }
     }
@@ -216,6 +217,30 @@ struct ReviewCommands: Commands {
                     .keyboardShortcut(.delete, modifiers: [])
             }
             .disabled(model?.inPass != true)
+            Divider()
+            Group {
+                Button(ReviewModel.keepAllLabel) { model?.setAll(.keep) }
+                    .keyboardShortcut("k", modifiers: [.command, .shift])
+                Button(ReviewModel.deleteAllLabel) { model?.setAll(.delete) }
+                    .keyboardShortcut(.delete, modifiers: [.command, .shift])
+            }
+            .disabled(model?.canSetAll != true)
+            Divider()
+            // No shortcut here: the grid's own Space handler toggles the preview, and a bare-Space key equivalent would also catch Space in dialogs.
+            Button("Preview") { model?.togglePreview() }.disabled(model == nil)
+            Button("Move to Albums…") { model?.confirmingMove = true }
+                .keyboardShortcut(.return)
+                .disabled(model?.canMove != true)
+        }
+        CommandGroup(after: .toolbar) {
+            Divider()
+            ForEach(Array(ReviewModel.tabs.prefix(9).enumerated()), id: \.offset) { i, tab in
+                Button(tab.title) { if let model { Task { await model.select(tab.view) } } }
+                    .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")))
+                    .disabled(model == nil)
+            }
+            Divider()
+            Button("Verdict Stats…") { model?.showingVerdictStats = true }.disabled(model == nil)
         }
         CommandGroup(replacing: .undoRedo) {
             Button("Undo") { if let u = model?.undoManager, u.canUndo { u.undo() } }
@@ -223,5 +248,29 @@ struct ReviewCommands: Commands {
             Button("Redo") { if let u = model?.undoManager, u.canRedo { u.redo() } }
                 .keyboardShortcut("z", modifiers: [.command, .shift])
         }
+    }
+}
+
+/// Per-pass agreement between the verdicts and what the user decided, read from the decisions log.
+struct VerdictStatsSheet: View {
+    let model: ReviewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Verdict Stats").font(.headline)
+            if model.verdictStatRows.isEmpty {
+                Text("No decisions yet.").foregroundStyle(.secondary)
+            } else {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
+                    ForEach(model.verdictStatRows) { row in
+                        GridRow { Text(row.title); Text(row.label).foregroundStyle(.secondary) }
+                    }
+                }
+            }
+            HStack { Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
+        }
+        .padding(20).frame(minWidth: 280)
+        .task { await model.refreshVerdictStats() }
     }
 }

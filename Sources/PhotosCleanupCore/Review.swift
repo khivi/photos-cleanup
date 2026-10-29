@@ -88,6 +88,14 @@ public final class ReviewModel {
             decisions[$0.id] == .keep && (touched.contains($0.id) || $0.verdict != nil || best.contains($0.id))
         }
     }
+    /// The "Move to Albums?" dialog is open. The toolbar button and Photo > Move to Albums both set it.
+    public var confirmingMove = false
+    /// The Verdict Stats sheet is open.
+    public var showingVerdictStats = false
+    /// Move to Albums can run now: the toolbar button and the menu item share this.
+    public var canMove: Bool { !loading && !committing && canCommit }
+    /// Keep All and Delete All can run now.
+    public var canSetAll: Bool { inPass && !loading && !photos.isEmpty }
     public var canCommit: Bool { view.passKey != nil && !(doomed.isEmpty && keepers.isEmpty) }
 
     // MARK: Labels (what the screen shows; views only lay them out)

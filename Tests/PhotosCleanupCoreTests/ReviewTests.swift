@@ -210,6 +210,19 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.selected == [ids[2]])
     }
 
+    @Test func moveDialogOpensOnlyWhenThereIsSomethingToMove() async throws {
+        let (c, _) = try await makeCleanup(shots("a", "b"), verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.all)
+        #expect(!m.canMove && !m.canSetAll && !m.confirmingMove)
+        await m.select(.pass("screenshots"))
+        #expect(m.canSetAll)
+        m.setAll(.delete)
+        #expect(m.canMove)
+        m.confirmingMove = true
+        #expect(m.confirmingMove)
+    }
+
     @Test func previewOpensForOnePhotoAndClosesWithTheSelection() async throws {
         let (c, _) = try await makeCleanup(shots("a", "b", "c"), verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
