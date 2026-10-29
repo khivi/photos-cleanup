@@ -50,6 +50,9 @@ public final class ReviewModel {
     /// Where a ⇧-click range starts and arrow keys move from.
     public private(set) var anchor: String?
 
+    /// Marks register their undo here. The app swaps in the window's manager so ⌘Z reaches it.
+    public var undoManager = UndoManager()
+
     private let cleanup: Cleanup
 
     public init(cleanup: Cleanup) { self.cleanup = cleanup }
@@ -175,6 +178,7 @@ public final class ReviewModel {
             await loadWaiting()
             view = v
             clearSelection()
+            undoManager.removeAllActions()
             return
         }
         loading = true
@@ -191,6 +195,7 @@ public final class ReviewModel {
             }
             view = v
             clearSelection()
+            undoManager.removeAllActions()  // another list: the marks belong to the old one
             photos = items
             groups = gs
             progress = prog
@@ -245,8 +250,25 @@ public final class ReviewModel {
 
     /// Marks `ids` Keep or Delete as the user's choice.
     public func mark(_ ids: some Collection<String>, _ d: Decision) {
-        touched.formUnion(ids)
-        for id in ids { decisions[id] = d }
+        apply(Dictionary(ids.map { ($0, (d, true)) }, uniquingKeysWith: { a, _ in a }), name: d == .keep ? "Keep" : "Delete")
+    }
+
+    /// Sets each photo's decision and touched flag, and registers the reverse with the undo manager.
+    /// Undo and redo pass through here too, so they register each other. Commits are not undoable.
+    private func apply(_ new: [String: (decision: Decision?, touched: Bool)], name: String? = nil) {
+        let have = Set(photos.map(\.id))  // a photo that left (committed) has nothing to restore
+        let new = new.filter { have.contains($0.key) }
+        var old: [String: (decision: Decision?, touched: Bool)] = [:]
+        for id in new.keys { old[id] = (decisions[id], touched.contains(id)) }
+        for (id, n) in new {
+            decisions[id] = n.decision
+            if n.touched { touched.insert(id) } else { touched.remove(id) }
+        }
+        let grouping = !(undoManager.isUndoing || undoManager.isRedoing)
+        if grouping { undoManager.beginUndoGrouping() }
+        undoManager.registerUndo(withTarget: self) { m in MainActor.assumeIsolated { m.apply(old) } }
+        if let name { undoManager.setActionName(name) }
+        if grouping { undoManager.endUndoGrouping() }
     }
 
     /// Flips one photo.
@@ -259,8 +281,7 @@ public final class ReviewModel {
     }
 
     public func setAll(_ d: Decision) {
-        decisions = Dictionary(photos.map { ($0.id, d) }, uniquingKeysWith: { a, _ in a })
-        touched = Set(photos.map(\.id))
+        apply(Dictionary(photos.map { ($0.id, (d, true)) }, uniquingKeysWith: { a, _ in a }), name: d == .keep ? "Keep All" : "Delete All")
     }
 
     // MARK: Selection
@@ -323,6 +344,7 @@ public final class ReviewModel {
             groups = groups.map { BurstGroup(photos: $0.photos.filter { !gone.contains($0.id) }, best: $0.best) }
                 .filter { !$0.photos.isEmpty }
             for id in gone { decisions[id] = nil }
+            undoManager.removeAllActions()
             touched.subtract(gone)
             pruneSelection()
             var parts: [String] = []

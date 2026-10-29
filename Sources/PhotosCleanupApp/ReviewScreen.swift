@@ -9,6 +9,7 @@ struct ReviewScreen: View {
     @State private var position = ScrollPosition(edge: .top)
     @State private var width: CGFloat = 800
     @FocusState private var focused: Bool
+    @Environment(\.undoManager) private var windowUndo
 
     /// The adaptive grid fits as many columns as the width allows.
     private var columns: Int { max(1, Int((width - 2 * gridPadding + 4) / (cellSize + 4))) }
@@ -49,6 +50,9 @@ struct ReviewScreen: View {
                 }
                 content
             }
+        }
+        .onChange(of: windowUndo.map(ObjectIdentifier.init), initial: true) {  // Edit > Undo and ⌘Z reach the marks
+            if let windowUndo { model.undoManager = windowUndo }
         }
         .task(id: pollKey) {
             while model.inPass && model.progress.pending > 0 {

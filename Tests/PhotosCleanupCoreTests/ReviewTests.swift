@@ -230,6 +230,43 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.selected.isEmpty)
     }
 
+    @Test func marksUndoAndRedo() async throws {
+        let (c, lib) = try await makeCleanup(shots("a", "b", "c"), judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        m.undoManager.groupsByEvent = false  // no run loop here to close the groups
+        await m.select(.pass("screenshots"))
+        let ids = m.displayed.map(\.id)
+        m.click(ids[0])
+        m.click(ids[1], extend: true)
+        m.markSelection(.delete)
+        m.toggle(ids[2])
+        #expect(m.decisions.values.allSatisfy { $0 == .delete } && m.touched.count == 3)
+
+        m.undoManager.undo()  // the toggle
+        #expect(m.decisions[ids[2]] == .keep && !m.touched.contains(ids[2]))
+        m.undoManager.undo()  // the selection mark
+        #expect(m.decisions.values.allSatisfy { $0 == .keep } && m.touched.isEmpty)
+        #expect(!m.undoManager.canUndo && m.undoManager.canRedo)
+        m.undoManager.redo()
+        #expect(m.decisions[ids[0]] == .delete && m.decisions[ids[1]] == .delete && m.touched == Set(ids[0...1]))
+
+        m.setAll(.keep)
+        #expect(m.undoManager.undoActionName == "Keep All")
+        m.undoManager.undo()
+        #expect(m.decisions[ids[0]] == .delete && m.decisions[ids[2]] == .keep && m.touched == Set(ids[0...1]))
+
+        // The move to albums is not undoable: it clears the stack and undo leaves the albums alone.
+        await m.commit()
+        #expect(!m.undoManager.canUndo)
+        m.undoManager.undo()
+        #expect(lib.adds.withLock { $0 }.count == 1 && m.photos.map(\.id) == [ids[2]])
+
+        await m.select(.pass("screenshots"))
+        m.toggle(ids[2])
+        await m.select(.all)  // another list: nothing to undo
+        #expect(!m.undoManager.canUndo)
+    }
+
     @Test func deletedListSurvivesRestart() async throws {
         let lib = [
             Photo(uuid: "s", screenshot: true, albums: ["Screenshots - Delete Me"]),
