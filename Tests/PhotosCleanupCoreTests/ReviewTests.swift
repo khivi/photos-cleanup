@@ -388,23 +388,3 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(BurstGroup(photos: [Photo(uuid: "a")], best: "a").headerLabel(locale: us, timeZone: utc) == "1 photo")
     }
 }
-
-@MainActor
-@Suite struct VerdictStatRowTests {
-    @Test func rowsPerPassWithLegacyKeys() async throws {
-        let dir = tempDir()
-        let log = [
-            ["uuid": "a", "kind": "screenshots", "verdict_keep": false, "decision": "delete"],
-            ["uuid": "b", "kind": "screenshots", "verdict_keep": false, "decision": "keep"],
-            ["uuid": "c", "kind": "utility", "verdict_keep": true, "decision": "keep"],  // legacy key
-            ["uuid": "d", "kind": "bogus", "verdict_keep": true, "decision": "keep"],  // not a pass
-        ].map(jsonLine).joined(separator: "\n") + "\n"
-        try log.write(to: dir.appendingPathComponent(Cleanup.decisionsLog), atomically: true, encoding: .utf8)
-        let (c, _) = try await makeCleanup([], cacheDir: dir)
-        let m = ReviewModel(cleanup: c)
-        #expect(m.verdictStatRows.isEmpty)
-        await m.refreshVerdictStats()
-        #expect(m.verdictStatRows.map(\.title) == ["Screenshots", "Paperwork"])
-        #expect(m.verdictStatRows.map(\.label) == ["1 of 2 agree", "1 of 1 agree"])
-    }
-}

@@ -52,7 +52,6 @@ struct ReviewScreen: View {
                 }
         }
         .focusedSceneValue(\.reviewModel, model)
-        .sheet(isPresented: $model.showingVerdictStats) { VerdictStatsSheet(model: model) }
         .task(id: pollKey) {
             while model.inPass && model.progress.pending > 0 {
                 try? await Task.sleep(for: .seconds(2))
@@ -220,7 +219,7 @@ struct ReviewCommands: Commands {
             Divider()
             Group {
                 Button(ReviewModel.keepAllLabel) { model?.setAll(.keep) }
-                    .keyboardShortcut("k", modifiers: [.command, .shift])
+                    .keyboardShortcut("k", modifiers: [.command, .option])  // ⇧⌘K is often taken by other apps
                 Button(ReviewModel.deleteAllLabel) { model?.setAll(.delete) }
                     .keyboardShortcut(.delete, modifiers: [.command, .shift])
             }
@@ -239,8 +238,6 @@ struct ReviewCommands: Commands {
                     .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")))
                     .disabled(model == nil)
             }
-            Divider()
-            Button("Verdict Stats…") { model?.showingVerdictStats = true }.disabled(model == nil)
         }
         CommandGroup(replacing: .undoRedo) {
             Button("Undo") { if let u = model?.undoManager, u.canUndo { u.undo() } }
@@ -248,29 +245,5 @@ struct ReviewCommands: Commands {
             Button("Redo") { if let u = model?.undoManager, u.canRedo { u.redo() } }
                 .keyboardShortcut("z", modifiers: [.command, .shift])
         }
-    }
-}
-
-/// Per-pass agreement between the verdicts and what the user decided, read from the decisions log.
-struct VerdictStatsSheet: View {
-    let model: ReviewModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Verdict Stats").font(.headline)
-            if model.verdictStatRows.isEmpty {
-                Text("No decisions yet.").foregroundStyle(.secondary)
-            } else {
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
-                    ForEach(model.verdictStatRows) { row in
-                        GridRow { Text(row.title); Text(row.label).foregroundStyle(.secondary) }
-                    }
-                }
-            }
-            HStack { Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
-        }
-        .padding(20).frame(minWidth: 280)
-        .task { await model.refreshVerdictStats() }
     }
 }
