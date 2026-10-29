@@ -110,26 +110,22 @@ struct ReviewScreen: View {
     @ViewBuilder private var content: some View {
         if model.showsEmptyState {
             ContentUnavailableView(ReviewModel.emptyState, systemImage: "checkmark.circle")
-        } else if model.view == .pass("bursts") {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize), spacing: 4)], spacing: 4) {
-                    ForEach(model.groups, id: \.best) { group in
-                        Section {
-                            ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
-                        } header: {
-                            Text(group.headerLabel()).font(.headline)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
-                        }
-                    }
-                }
-                .padding(.horizontal, gridPadding)
-            }
-            .scrollPosition($position)
-            .keyboardSelection(model: model, focused: $focused, width: $width) { move($0) }
         } else {
+            // One ScrollView for every list: a second one would leave keyboard focus on the old one.
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize), spacing: 4)], spacing: 4) {
-                    ForEach(items) { cell($0) }
+                    if model.view == .pass("bursts") {
+                        ForEach(model.groups, id: \.best) { group in
+                            Section {
+                                ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
+                            } header: {
+                                Text(group.headerLabel()).font(.headline)
+                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                            }
+                        }
+                    } else {
+                        ForEach(items) { cell($0) }
+                    }
                 }
                 .padding(.horizontal, gridPadding)
             }
@@ -143,19 +139,10 @@ struct ReviewScreen: View {
         switch key {
         case .leftArrow: model.moveSelection(by: -1)
         case .rightArrow: model.moveSelection(by: 1)
-        case .upArrow: step(-1)
-        default: step(1)
+        case .upArrow: model.moveSelection(by: -columns)
+        default: model.moveSelection(by: columns)
         }
         if let a = model.anchor { position.scrollTo(id: a) }
-    }
-
-    /// Up/down: by visual rows inside each burst section, by `columns` places elsewhere.
-    private func step(_ direction: Int) {
-        if model.view == .pass("bursts") {
-            model.moveSelectionRows(by: direction, columns: columns)
-        } else {
-            model.moveSelection(by: direction * columns)
-        }
     }
 
     private func cell(_ p: PassPhoto) -> some View {

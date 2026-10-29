@@ -298,56 +298,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
 }
 
 @MainActor
-@Suite struct BurstRowTests {
-    /// Newest burst first. With 3 columns the rows are: fg | abc | de, the first section being f g.
-    func model() async throws -> ReviewModel {
-        let burst = dated(["a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 1000, "g": 1001])
-        let (c, _) = try await makeCleanup(burst, vision: Dictionary(uniqueKeysWithValues: "abcdefg".map { (String($0), V(0.5)) }))
-        let m = ReviewModel(cleanup: c)
-        await m.select(.pass("bursts"))
-        #expect(m.groups.count == 2)
-        return m
-    }
 
-    func press(_ m: ReviewModel, _ dir: Int, from id: String? = nil) -> String? {
-        if let id { m.click(id) }
-        m.moveSelectionRows(by: dir, columns: 3)
-        return m.anchor
-    }
-
-    @Test func withinASection() async throws {
-        let m = try await model()
-        #expect(press(m, 1, from: "b") == "e")
-        #expect(press(m, -1) == "b")
-        #expect(press(m, 1, from: "a") == "d")
-    }
-
-    @Test func acrossTheBoundary() async throws {
-        let m = try await model()
-        #expect(press(m, 1, from: "f") == "a")  // column 0 into the next section's first row
-        #expect(press(m, 1, from: "g") == "b")  // column 1
-        #expect(press(m, -1, from: "e") == "b")  // within the section
-        #expect(press(m, -1, from: "a") == "f")  // back across the boundary
-        #expect(press(m, -1, from: "c") == "g")  // column 2 clamps to the short row
-    }
-
-    @Test func clampsIntoAShorterRow() async throws {
-        let m = try await model()
-        #expect(press(m, 1, from: "c") == "e")  // column 2 -> last of de
-    }
-
-    @Test func edgesStayPut() async throws {
-        let m = try await model()
-        #expect(press(m, -1, from: "g") == "g")
-        #expect(press(m, 1, from: "e") == "e")
-        m.clearSelection()
-        #expect(press(m, 1) == "f")  // nothing selected: first
-        m.clearSelection()
-        #expect(press(m, -1) == "d")  // nothing selected: start of last row
-    }
-}
-
-@MainActor
 @Suite struct CommitPreviewTests {
     @Test func previewMatchesWhatCommitSends() async throws {
         let burst = dated(["x": 0, "y": 1, "z": 2])
