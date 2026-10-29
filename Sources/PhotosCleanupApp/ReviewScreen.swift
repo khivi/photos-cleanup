@@ -133,11 +133,19 @@ struct ReviewScreen: View {
         switch key {
         case .leftArrow: model.moveSelection(by: -1)
         case .rightArrow: model.moveSelection(by: 1)
-        // ponytail: up/down step a row of the flat list, so they drift across burst sections; per-section rows if it matters
-        case .upArrow: model.moveSelection(by: -columns)
-        default: model.moveSelection(by: columns)
+        case .upArrow: step(-1)
+        default: step(1)
         }
         if let a = model.anchor { position.scrollTo(id: a) }
+    }
+
+    /// Up/down: by visual rows inside each burst section, by `columns` places elsewhere.
+    private func step(_ direction: Int) {
+        if model.view == .pass("bursts") {
+            model.moveSelectionRows(by: direction, columns: columns)
+        } else {
+            model.moveSelection(by: direction * columns)
+        }
     }
 
     private func cell(_ p: PassPhoto) -> some View {
