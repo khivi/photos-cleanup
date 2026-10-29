@@ -32,7 +32,7 @@ Each phase ends in something that runs. The server and React UI stay working unt
 - [x] `scripts/app.sh`: `swift build -c release`, assemble `Photos Cleanup.app`, sign it. `scripts/app.sh run` builds, then `open`s it with stdout to a log. The spike showed a bare binary from a shell never gets its window in front.
 - [x] Window: ask for Photos access, `Cleanup.load()`, show the photo count.
 - [x] **Risk, resolved 2026-10-29:** the hardened runtime denies Photos access without `com.apple.security.personal-information.photos-library`, even with TCC at Full Access. `scripts/app.sh` signs with `Sources/PhotosCleanupApp/PhotosCleanup.entitlements`; set `SIGN_IDENTITY` for a Developer ID build.
-- [ ] **Risk:** TCC keys an ad-hoc signature on the binary hash, so every rebuild may ask for Photos access again. If it does, sign dev builds with a stable Apple Development identity.
+- [x] **Risk, resolved 2026-10-29:** rebuilding the ad-hoc signed dev app did not ask for Photos access again.
 
 Done when: the app opens from Finder, macOS asks Photos access for the app (not the terminal), and the count matches the browser UI.
 
@@ -48,10 +48,10 @@ Done when: `swift test` covers the view model with no window and no library.
 ### Phase 2: screens, to parity with the browser UI
 
 - [x] Thumbnails: lift the spike's loader: `PHCachingImageManager`, `.highQualityFormat`, network off, cache ~30 rows ahead.
-- [ ] Tabs with counts: All, the four passes, To be deleted. A 170pt `LazyVGrid`; Bursts as one horizontal row per group.
-- [ ] Cell: Keep/Delete badge, verdict kind, dimmed when delete, the verdict reason as `.help`. Click toggles.
-- [ ] Toolbar: Select all Keep/Delete, progress bar, "verdicts unavailable" message, totals, `Commit: N delete · M keep`, status line after commit, empty state, the To be deleted explainer.
-- [ ] Startup: access denied shows an "Open Privacy Settings" button; load errors and `verdictsOff` show in the window.
+- [x] Tabs with counts: All, the four passes, To be deleted. A 170pt `LazyVGrid`; Bursts as one horizontal row per group.
+- [x] Cell: Keep/Delete badge, verdict kind, dimmed when delete, the verdict reason as `.help`. Click toggles.
+- [x] Toolbar: Select all Keep/Delete, progress bar, "verdicts unavailable" message, totals, `Commit: N delete · M keep`, status line after commit, empty state, the To be deleted explainer.
+- [x] Startup: access denied shows an "Open Privacy Settings" button; load errors and `verdictsOff` show in the window.
 - [ ] **To be deleted survives a restart.** Today it lists only this session's commits and empties on relaunch. Read the Delete Me albums from Photos instead (each pass's `deleteAlbum`, plus its `legacyAlbums`), grouped by album with counts, so the tab always shows what is still waiting to be deleted. Photos already deleted in Photos drop out on their own.
 - [x] **Rename the Utility pass.** "Utility" (Vision's `isUtility`) means nothing to a user. It holds receipts, tickets, tracking, promos, documents, notes and labels. Candidates: "Paperwork" (recommended), "Receipts & Docs", "Documents". Rename the title in `Passes.all` and add "Utility - Delete Me" and "Utility - Keep" to `Passes.legacyAlbums`, so photos already filed under them stay hidden. Decide whether the key (`utility`) changes too.
 - [x] **Tab tooltips.** On hover, each tab says what the pass finds and how photos start: e.g. Screenshots "Screen captures. The on-device model preselects ones not worth keeping." Bursts "Similar shots taken within a minute. The best one starts as Keep." Low Quality "Blurry or accidental shots, by Vision's aesthetics score. All start as Delete." Keep the texts with the pass in `Passes.all`, next to its title.
@@ -61,10 +61,10 @@ Done when: every pass gives the same candidates as the browser UI on the real li
 
 ### Phase 3: release 0.4.0
 
-- [ ] `release.yml` (applied by a script, as before): `scripts/app.sh` universal build, Developer ID signature with the hardened runtime, `ditto -c -k --keepParent` zip, notarize, staple, upload.
-- [ ] `ci.yml`: build the `.app` on `xcode-27`, so bundling breakage shows in CI.
-- [ ] Tap: add a cask, remove the formula, and add a formula-to-cask migration. Check how Homebrew handles that in one tap first. Point the bump action at the cask.
-- [ ] Install the cask on this Mac; `spctl -a -vv` passes; release 0.4.0.
+- [x] `release.yml` (applied by a script, as before): `scripts/app.sh` universal build, Developer ID signature with the hardened runtime, `ditto -c -k --keepParent` zip, notarize, staple, upload.
+- [x] `ci.yml`: build the `.app` on `xcode-27`, so bundling breakage shows in CI.
+- [x] Tap: `release.yml` writes the cask and removed the formula. No formula-to-cask migration: users run `brew uninstall photos-cleanup`, then install the cask (README).
+- [x] Install the cask on this Mac; `spctl -a -vv` passes; release 0.4.0.
 
 ### Phase 4: remove the web stack (after a few days of real use of 0.4.0)
 
@@ -76,7 +76,7 @@ Done when: every pass gives the same candidates as the browser UI on the real li
 
 ## Packaging and CI
 
-Homebrew is the only install path: `khivi/homebrew-photos-cleanup` installs the prebuilt universal tarball from each GitHub Release (v0.3.0 is the first). The PyPI project `macos-photos-cleanup` is archived (2026-10-28). Release steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release).
+Homebrew is the only install path: the cask in `khivi/homebrew-photos-cleanup` installs the signed, notarized app zip from each GitHub Release (v0.4.0 is the first; up to 0.3.1 a formula installed the command). The PyPI project `macos-photos-cleanup` is archived (2026-10-28). Release steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release).
 
 `ci.yml` runs `pnpm build`, `swift build` and `swift test` on `macos-latest` (no macOS 27 SDK: the no-verdicts fallback) and `xcode-27` (preview runner: verdicts compiled in). Dependabot opens monthly PRs with a 7-day cooldown.
 
