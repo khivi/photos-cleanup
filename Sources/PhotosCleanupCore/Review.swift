@@ -4,7 +4,7 @@ import Observation
 public enum ReviewView: Hashable, Sendable {
     case all
     case pass(String)  // a key from `Passes.all`
-    case deleted  // this session's list; nothing to load
+    case deleted  // photos waiting in Delete Me albums
 
     public var passKey: String? { if case .pass(let k) = self { k } else { nil } }
 }
@@ -14,7 +14,7 @@ public enum Decision: Sendable, Equatable {
 }
 
 /// The review screen's state over a `Cleanup`: the current view, per-photo decisions, commits and
-/// the session's "To be deleted" list. No timers: the view calls `refresh()` while `progress.pending > 0`.
+/// the "To be deleted" list. No timers: the view calls `refresh()` while `progress.pending > 0`.
 @MainActor @Observable
 public final class ReviewModel {
     public private(set) var view = ReviewView.all
@@ -24,9 +24,19 @@ public final class ReviewModel {
     public private(set) var decisions: [String: Decision] = [:]
     /// Decided explicitly by the user.
     public private(set) var touched: Set<String> = []
-    public private(set) var deleted: [Photo] = []
-    /// The Delete Me album each photo in `deleted` went to.
-    public private(set) var deletedAlbum: [String: String] = [:]
+    /// Photos this session's commits moved to a Delete Me album, newest first.
+    private var committed: [Photo] = []
+    private var committedAlbum: [String: String] = [:]
+    /// Photos already in a Delete Me album when the library loaded.
+    private var loaded: [Photo] = []
+    private var loadedAlbum: [String: String] = [:]
+    /// Every photo waiting in a Delete Me album: this session's commits, then the loaded ones.
+    public var deleted: [Photo] {
+        let seen = Set(committed.map(\.id))
+        return committed + loaded.filter { !seen.contains($0.id) }
+    }
+    /// The Delete Me album each photo in `deleted` is in.
+    public var deletedAlbum: [String: String] { loadedAlbum.merging(committedAlbum) { _, new in new } }
     public private(set) var progress = JobProgress()
     public private(set) var counts: [String: Int?] = [:]
     public private(set) var loading = false
@@ -54,7 +64,7 @@ public final class ReviewModel {
 
     public func decision(_ uuid: String) -> Decision? { decisions[uuid] }
 
-    /// Photos to show: this session's deleted list, or the loaded ones.
+    /// Photos to show: the To be deleted list, or the loaded ones.
     public var displayed: [Photo] { view == .deleted ? deleted : photos.map(\.photo) }
 
     public var doomed: [PassPhoto] { photos.filter { decisions[$0.id] == .delete } }
@@ -71,7 +81,7 @@ public final class ReviewModel {
     public static let tabs: [(view: ReviewView, title: String, help: String)] =
         [(.all, "All", "Every photo in your library.")]
         + Passes.all.map { (.pass($0.key), $0.title, Passes.about[$0.key] ?? "") }
-        + [(.deleted, "To be deleted", "Photos moved to a Delete Me album this session. Delete them there in Photos.")]
+        + [(.deleted, "To be deleted", "Photos waiting in a Delete Me album. Delete them there in Photos.")]
 
     public func tabLabel(_ v: ReviewView, _ title: String) -> String {
         let n: Int? = switch v {
@@ -110,8 +120,8 @@ public final class ReviewModel {
         let albums = Dictionary(grouping: deleted.compactMap { deletedAlbum[$0.id] }, by: { $0 })
             .sorted { $0.key < $1.key }
             .map { "“\($0.key)” (\($0.value.count))" }
-        guard !albums.isEmpty else { return "Nothing moved to a Delete Me album yet this session." }
-        return "Nothing is deleted yet. In Photos, open \(albums.joined(separator: ", ")), select all, and delete. This list resets on reload."
+        guard !albums.isEmpty else { return "Nothing is waiting in a Delete Me album." }
+        return "Nothing is deleted yet. In Photos, open \(albums.joined(separator: ", ")), select all, and delete."
     }
 
     public var showsEmptyState: Bool { inPass && !loading && displayed.isEmpty }
@@ -122,6 +132,7 @@ public final class ReviewModel {
     public func select(_ v: ReviewView) async {
         status = nil
         if v == .deleted {
+            await loadWaiting()
             view = v
             return
         }
@@ -169,7 +180,23 @@ public final class ReviewModel {
         progress = r.progress
     }
 
-    public func refreshCounts() async { counts = await cleanup.counts() }
+    public func refreshCounts() async {
+        counts = await cleanup.counts()
+        await loadWaiting()
+    }
+
+    /// Read once per launch; photos deleted in Photos since then drop out on the next launch.
+    private func loadWaiting() async {
+        let all = await cleanup.photos
+        loaded = []
+        loadedAlbum = [:]
+        for p in all {
+            if let a = Passes.waitingAlbum(in: p.albums) {
+                loaded.append(p)
+                loadedAlbum[p.id] = a
+            }
+        }
+    }
 
     // MARK: Deciding
 
@@ -195,9 +222,9 @@ public final class ReviewModel {
         do {
             let r = try await cleanup.commit(key, delete: doomed.map(\.id), keep: keep)
             let gone = Set(doomed.map(\.id) + keep)
-            let seen = Set(deleted.map(\.id))
-            deleted = doomed.map(\.photo).filter { !seen.contains($0.id) } + deleted
-            for p in doomed { deletedAlbum[p.id] = r.album }
+            let seen = Set(committed.map(\.id))
+            committed = doomed.map(\.photo).filter { !seen.contains($0.id) } + committed
+            for p in doomed { committedAlbum[p.id] = r.album }
             photos.removeAll { gone.contains($0.id) }
             groups = groups.map { BurstGroup(photos: $0.photos.filter { !gone.contains($0.id) }, best: $0.best) }
                 .filter { !$0.photos.isEmpty }

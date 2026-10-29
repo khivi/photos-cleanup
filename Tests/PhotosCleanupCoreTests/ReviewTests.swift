@@ -144,4 +144,30 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.banner?.contains("“Screenshots - Delete Me” (2)") == true)
         #expect("\(CleanupError.accessDenied)".hasPrefix("Photos access not granted"))
     }
+
+    @Test func deletedListSurvivesRestart() async throws {
+        let lib = [
+            Photo(uuid: "s", screenshot: true, albums: ["Screenshots - Delete Me"]),
+            Photo(uuid: "u", albums: ["Utility - Delete Me"]),
+            Photo(uuid: "k", albums: ["Screenshots - Keep"]),
+            Photo(uuid: "r", albums: ["Low Quality - Review Me", "Utility - Keep"]),
+            Photo(uuid: "n", screenshot: true),
+        ]
+        let (c, _) = try await makeCleanup(lib, judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.refreshCounts()
+        #expect(m.tabLabel(.deleted, "To be deleted") == "To be deleted (2)")
+        await m.select(.deleted)
+        #expect(Set(m.displayed.map(\.id)) == ["s", "u"])
+        #expect(m.deletedAlbum == ["s": "Screenshots - Delete Me", "u": "Utility - Delete Me"])
+        #expect(m.banner?.contains("“Screenshots - Delete Me” (1), “Utility - Delete Me” (1)") == true)
+
+        // A session commit of an already-listed photo does not duplicate it.
+        await m.select(.pass("screenshots"))
+        m.setAll(.delete)
+        await m.commit()
+        await m.select(.deleted)
+        #expect(m.deleted.map(\.id).sorted() == ["n", "s", "u"])
+        #expect(m.deletedAlbum["n"] == "Screenshots - Delete Me")
+    }
 }

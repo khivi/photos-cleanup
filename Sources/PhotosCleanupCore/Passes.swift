@@ -84,6 +84,13 @@ public enum Passes {
     // their photos on every later run.
     public static func keepAlbum(_ key: String) -> String? { title(key).map { "\($0) - Keep" } }
 
+    /// The Delete Me album among a photo's albums (a pass's own, or a legacy one), if any.
+    public static func waitingAlbum(in albums: [String]) -> String? {
+        let names = Set(all.compactMap { deleteAlbum($0.key) }).union(
+            legacyAlbums.values.joined().filter { $0.hasSuffix(" - Delete Me") })
+        return albums.sorted().first(where: names.contains)
+    }
+
     /// What each pass finds and how its photos start; the tab's tooltip.
     public static let about: [String: String] = [
         "screenshots": "Screenshots. The on-device model preselects the ones not worth keeping.",
