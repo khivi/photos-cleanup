@@ -264,3 +264,16 @@ public final class ReviewModel {
         }
     }
 }
+
+// MARK: Burst headers
+
+extension BurstGroup {
+    /// "Jan 1, 2024 · 3 photos": the date of the first shot and the count. The date is left out
+    /// when no shot has one. Locale and time zone are parameters so tests can pin them.
+    public func headerLabel(locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        let count = "\(photos.count) \(photos.count == 1 ? "photo" : "photos")"
+        guard let first = photos.compactMap(\.date).min() else { return count }
+        let style = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: locale, timeZone: timeZone)
+        return "\(first.formatted(style)) · \(count)"
+    }
+}

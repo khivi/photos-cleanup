@@ -200,3 +200,23 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(ReviewModel.keepAllLabel == "Keep All" && ReviewModel.deleteAllLabel == "Delete All")
     }
 }
+
+@Suite struct BurstHeaderTests {
+    let us = Locale(identifier: "en_US")
+    let utc = TimeZone(identifier: "UTC")!
+
+    @Test func dateAndCount() {
+        let g = BurstGroup(photos: dated(["b": 60, "a": 0, "c": 120]), best: "a")
+        #expect(g.headerLabel(locale: us, timeZone: utc) == "Jan 1, 2024 · 3 photos")
+    }
+
+    @Test func timeZoneShiftsTheDay() {
+        let g = BurstGroup(photos: dated(["a": 0, "b": 1]), best: "a")
+        let la = TimeZone(identifier: "America/Los_Angeles")!
+        #expect(g.headerLabel(locale: us, timeZone: la) == "Dec 31, 2023 · 2 photos")
+    }
+
+    @Test func undatedAndSingular() {
+        #expect(BurstGroup(photos: [Photo(uuid: "a")], best: "a").headerLabel(locale: us, timeZone: utc) == "1 photo")
+    }
+}
