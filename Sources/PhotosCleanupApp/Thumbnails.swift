@@ -48,8 +48,10 @@ final class Thumbnails {
         guard let asset = assets[uuid] else { return nil }
         let scale = NSScreen.main?.backingScaleFactor ?? 2
         let o = PHImageRequestOptions()
-        o.deliveryMode = .highQualityFormat
-        o.isNetworkAccessAllowed = false
+        // The local copy first, then the full one. With Optimize Mac Storage the full one is only in
+        // iCloud: Photos downloads it for the one photo being previewed.
+        o.deliveryMode = .opportunistic
+        o.isNetworkAccessAllowed = true
         return manager.requestImage(for: asset, targetSize: CGSize(width: side * scale, height: side * scale),
                                     contentMode: .aspectFit, options: o) { image, _ in
             MainActor.assumeIsolated { done(image) }

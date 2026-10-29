@@ -22,7 +22,7 @@ It finds bursts and low-quality photos with Apple's on-device Vision.
 Verdicts for screenshots and paperwork come from Apple's on-device Foundation Models.
 It caches thumbnails, analysis and verdicts in `~/Library/Caches/photos-cleanup`.
 Delete that folder to clear them.
-The app makes no network calls and sends no telemetry.
+The app makes no network calls and sends no telemetry. When you preview a photo that is stored only in iCloud, Photos downloads it.
 
 ## Requirements
 
