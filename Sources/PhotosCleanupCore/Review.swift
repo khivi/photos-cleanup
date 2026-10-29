@@ -64,6 +64,52 @@ public final class ReviewModel {
     }
     public var canCommit: Bool { view.passKey != nil && !(doomed.isEmpty && keepers.isEmpty) }
 
+    // MARK: Labels (what the screen shows; views only lay them out)
+
+    public static let tabs: [(view: ReviewView, title: String)] =
+        [(.all, "All")] + Passes.all.map { (.pass($0.key), $0.title) } + [(.deleted, "To be deleted")]
+
+    public func tabLabel(_ v: ReviewView, _ title: String) -> String {
+        let n: Int? = switch v {
+        case .all: counts["all"] ?? nil
+        case .pass(let k): counts[k] ?? nil
+        case .deleted: deleted.isEmpty ? nil : deleted.count
+        }
+        return n.map { "\(title) (\($0.formatted()))" } ?? title
+    }
+
+    public var inPass: Bool { view.passKey != nil }
+
+    /// "N candidates · M to delete", "N photos" or "N queued for deletion".
+    public var summary: String {
+        if view == .deleted { return "\(deleted.count) queued for deletion" }
+        if inPass { return "\(photos.count) candidates · \(doomed.count) to delete" }
+        return "\(photos.count.formatted()) photos"
+    }
+
+    public var commitLabel: String {
+        committing ? "Moving…" : "Commit: \(doomed.count) delete · \(keepers.count) keep"
+    }
+
+    /// Progress text and fraction while Vision or verdicts run in a pass.
+    public var progressDone: Int { (progress.total > 0 ? progress.total : progress.pending) - progress.pending }
+    public var progressTotal: Int { progress.total > 0 ? progress.total : progress.pending }
+    public var showsProgress: Bool { inPass && !loading && progress.pending > 0 }
+
+    public var progressError: String? {
+        guard !loading, let e = progress.error else { return nil }
+        return "\(view == .pass("bursts") ? "Similarity check unavailable" : "AI verdicts unavailable"): \(e)"
+    }
+
+    public var banner: String? {
+        view == .deleted
+            ? "Nothing is deleted yet. These photos were moved this session to the pass’s “Delete Me” album — open it in Photos, select all, and delete. This list resets on reload."
+            : status
+    }
+
+    public var showsEmptyState: Bool { inPass && !loading && displayed.isEmpty }
+    public static let emptyState = "Nothing left to review. Photos already filed in this pass’s albums are hidden."
+
     // MARK: Loading
 
     public func select(_ v: ReviewView) async {

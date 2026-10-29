@@ -16,10 +16,12 @@ final class Thumbnails {
     // Rows are ~8 cells wide: cache ~30 rows ahead of the lowest visible cell, ~15 behind.
     private let ahead = 240, behind = 120
     private var cached = 0..<0
+    private let index: [String: Int]
 
     init(library: PhotoKitLibrary, uuids: [String]) {
         self.uuids = uuids
         assets = library.assets(uuids)
+        index = Dictionary(uuids.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
     }
 
     // Must match requestImage's size and options, or the cache never hits.
@@ -41,8 +43,10 @@ final class Thumbnails {
 
     func cancel(_ id: PHImageRequestID) { manager.cancelImageRequest(id) }
 
-    /// Called as cell `i` appears: slide the caching window when it nears either edge.
-    func near(_ i: Int) {
+    /// Called as a cell appears: slide the caching window when it nears either edge.
+    /// Positions are in whole-library order, so any subset of photos can share one instance.
+    func near(_ uuid: String) {
+        guard let i = index[uuid] else { return }
         guard i + ahead / 2 > cached.upperBound || i - behind / 2 < cached.lowerBound else { return }
         let want = max(0, i - behind)..<min(uuids.count, i + ahead)
         func list(_ s: IndexSet) -> [PHAsset] { s.compactMap { assets[uuids[$0]] } }
@@ -54,27 +58,64 @@ final class Thumbnails {
     }
 }
 
+/// One photo. The badges and dimming follow the review model's state, passed in as `mark`.
 struct PhotoCell: View {
-    let index: Int
-    let uuid: String
+    enum Mark { case none, decision(Decision), deleteMe }
+
+    let photo: PassPhoto
+    let mark: Mark
     let thumbnails: Thumbnails
+    var onTap: (() -> Void)?
     @State private var image: NSImage?
     @State private var requestID: PHImageRequestID?
+
+    private var dim: Bool {
+        switch mark {
+        case .deleteMe, .decision(.delete): true
+        default: false
+        }
+    }
 
     var body: some View {
         Color.gray.opacity(0.15)
             .aspectRatio(1, contentMode: .fit)
             .frame(maxWidth: .infinity)
-            .overlay { if let image { Image(nsImage: image).resizable().scaledToFill() } }
+            .overlay { if let image { Image(nsImage: image).resizable().scaledToFill().opacity(dim ? 0.5 : 1) } }
+            .overlay(alignment: .topLeading) { badge.padding(6) }
+            .overlay(alignment: .bottomLeading) {
+                if case .decision = mark, let v = photo.verdict {
+                    Text(v.kind).font(.caption2).foregroundStyle(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(.black.opacity(0.6), in: .rect(cornerRadius: 4)).padding(6)
+                }
+            }
             .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-        .onAppear {
-            thumbnails.near(index)
-            requestID = thumbnails.request(uuid) { image = $0 ?? image }
+            .clipShape(.rect(cornerRadius: 4))
+            .contentShape(.rect)
+            .onTapGesture { onTap?() }
+            .help(photo.verdict.map { "\($0.kind): \($0.reason)" } ?? "")
+            .onAppear {
+                thumbnails.near(photo.id)
+                requestID = thumbnails.request(photo.id) { image = $0 ?? image }
+            }
+            .onDisappear {
+                if let requestID { thumbnails.cancel(requestID) }
+                requestID = nil
+            }
+    }
+
+    @ViewBuilder private var badge: some View {
+        switch mark {
+        case .none: EmptyView()
+        case .deleteMe: label("✗ Delete Me", .red)
+        case .decision(.delete): label("✗ Delete", .red)
+        case .decision(.keep): label("✓ Keep", .green)
         }
-        .onDisappear {
-            if let requestID { thumbnails.cancel(requestID) }
-            requestID = nil
-        }
+    }
+
+    private func label(_ text: String, _ color: Color) -> some View {
+        Text(text).font(.caption.weight(.semibold)).foregroundStyle(.white)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(color, in: .rect(cornerRadius: 4))
     }
 }

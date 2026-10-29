@@ -120,4 +120,27 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.status == "\(CleanupError.accessDenied)")
         #expect(m.photos.map(\.id) == ["a"] && m.deleted.isEmpty)
     }
+
+    @Test func labels() async throws {
+        let (c, _) = try await makeCleanup(shots("a", "b"), verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        #expect(ReviewModel.tabs.map(\.title) == ["All", "Screenshots", "Utility", "Bursts", "Low Quality", "To be deleted"])
+        await m.refreshCounts()
+        await m.select(.all)
+        #expect(m.summary == "2 photos" && m.tabLabel(.all, "All") == "All (2)")
+        #expect(m.tabLabel(.deleted, "To be deleted") == "To be deleted")
+        await m.select(.pass("screenshots"))
+        #expect(m.summary == "2 candidates · 1 to delete")
+        #expect(m.commitLabel == "Commit: 1 delete · 0 keep")
+        #expect(m.banner == nil && !m.showsEmptyState)
+        await m.commit()
+        #expect(m.tabLabel(.deleted, "To be deleted") == "To be deleted (1)")
+        #expect(m.banner == m.status && m.status?.hasPrefix("Moved") == true)
+        m.setAll(.delete)
+        await m.commit()
+        #expect(m.showsEmptyState)
+        await m.select(.deleted)
+        #expect(m.summary == "2 queued for deletion" && m.banner?.hasPrefix("Nothing is deleted yet") == true)
+        #expect("\(CleanupError.accessDenied)".hasPrefix("Photos access not granted"))
+    }
 }

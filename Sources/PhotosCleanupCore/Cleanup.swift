@@ -39,6 +39,17 @@ public enum CleanupError: Error, Equatable {
     case failed(String)
 }
 
+extension CleanupError: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .unknownPass: "Unknown pass."
+        case .noMatchingPhotos: "Those photos are no longer in the library."
+        case .accessDenied: "Photos access not granted. Allow it in System Settings, Privacy & Security, Photos."
+        case .failed(let m): m
+        }
+    }
+}
+
 /// The app's state and background work: the photo list, the Vision analysis, the verdict
 /// queue, commits and the on-disk caches. Pure Swift; the HTTP layer is a thin shell over it.
 public actor Cleanup {
