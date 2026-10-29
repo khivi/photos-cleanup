@@ -23,20 +23,30 @@ struct ContentView: View {
     @State private var phase = Phase.starting
 
     var body: some View {
-        VStack(spacing: 12) {
+        Group {
             switch phase {
             case .starting:
-                ProgressView("Reading your Photos library…")
+                ContentUnavailableView {
+                    ProgressView()
+                } description: {
+                    Text("Reading your Photos library…")
+                }
             case .noAccess(let status):
-                Text("Photos access is \(status).")
-                Button("Open Privacy Settings") { NSWorkspace.shared.open(photosSettings) }
+                ContentUnavailableView {
+                    Label("No access to Photos", systemImage: "photo.on.rectangle.angled")
+                } description: {
+                    Text("Photos access is \(status). Allow it in System Settings, Privacy & Security, Photos.")
+                } actions: {
+                    Button("Open Privacy Settings") { NSWorkspace.shared.open(photosSettings) }
+                }
             case .loaded(let model, let thumbnails):
                 ReviewScreen(model: model, thumbnails: thumbnails)
             case .failed(let message):
-                Text("Couldn’t load the Photos library: \(message)").foregroundStyle(.red)
+                ContentUnavailableView(
+                    "Couldn’t load the Photos library", systemImage: "exclamationmark.triangle",
+                    description: Text(message))
             }
         }
-        .padding(.vertical)
         .frame(minWidth: 760, minHeight: 360)
         .task { phase = await start() }
     }
