@@ -20,7 +20,7 @@ That is the whole job. Everything below is a fact, not a preference.
 ## Scope for this repo
 
 Swift here is the whole backend: the Swift package in `Sources/` (PhotoKit, Vision and
-Foundation Models in `PhotosCleanupCore`, a Hummingbird server) and the `spike/` probes.
+Foundation Models in `PhotosCleanupCore`, the SwiftUI app in `PhotosCleanupApp`) and the `spike/` probes.
 The native SwiftUI + PhotoKit rewrite is not being pursued (see `TODO.md`); the
 SwiftUI and PhotoKit rows stay in the reference in case that changes. Nothing
 here is generic app-building advice.

@@ -2,22 +2,10 @@
 
 ## Requirements
 
-- macOS with the Xcode Command Line Tools (Swift 6)
-- Node and pnpm, for the UI
-
-## Setup
-
-```bash
-pnpm install
-pnpm build
-```
-
-`pnpm build` writes the UI into `Sources/PhotosCleanup/ui/dist`. Git ignores that directory.
-SwiftPM ships it as a resource of the `photos-cleanup` executable.
+- macOS 15 or later with the Xcode Command Line Tools (Swift 6)
+- For AI verdicts: the macOS 27 SDK, and macOS 27 with Apple Intelligence on
 
 ## Run
-
-The native app:
 
 ```bash
 scripts/app.sh run
@@ -26,21 +14,6 @@ scripts/app.sh run
 It builds `.build/Photos Cleanup.app`, signs it ad hoc and opens it. Its output goes to `/tmp/photos-cleanup-app.log`.
 macOS asks for Photos access once for "Photos Cleanup".
 A bare binary started from a shell never gets its window in front, so always run the app as a bundle.
-
-The browser UI, until the native app replaces it:
-
-```bash
-swift run photos-cleanup
-```
-
-For hot reload, run the API and Vite in two terminals.
-
-```bash
-swift run photos-cleanup --dev
-pnpm dev
-```
-
-Vite proxies API requests to the server.
 
 ## Tests
 
@@ -64,11 +37,8 @@ The commit hook runs the linters and builds the Swift package.
 
 - `Sources/PhotosCleanupCore/` — PhotoKit, Vision, Foundation Models, the passes, the `Cleanup` actor and the `ReviewModel` the app's screen runs on. No web framework, no SwiftUI.
 - `Sources/PhotosCleanupApp/` — the native SwiftUI app, its `Info.plist` (the release version) and its entitlements
-- `Sources/PhotosCleanupServer/` — Hummingbird routes, JSON and the Host allowlist
-- `Sources/PhotosCleanup/` — the `photos-cleanup` executable for the browser UI, its `Info.plist` and the built UI
 - `scripts/app.sh` — builds and signs the app bundle
-- `Tests/` — Core and server tests
-- `src/` — React UI
+- `Tests/` — Core tests
 - `spike/` — research probes
 
 ## Release

@@ -13,7 +13,6 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-json
-        exclude: ^tsconfig.*\.json$  # tsconfigs are JSONC (comments)
       - id: check-added-large-files
       - id: check-case-conflict
       - id: check-merge-conflict
@@ -36,16 +35,8 @@ repos:
 
   - repo: local
     hooks:
-      - id: tsc
-        name: tsc (UI type check)
-        entry: pnpm exec tsc --noEmit
-        language: system
-        types_or: [ts, tsx]
-        pass_filenames: false
-
-      # Nothing else compiles the helpers before the server runs them. One file per swiftc
-      # call: each helper is a standalone script, and given several files swiftc only allows
-      # top-level code in main.swift.
+      # The spike probes are standalone scripts outside the package. One file per swiftc call:
+      # given several files, swiftc only allows top-level code in main.swift.
       - id: swift-typecheck
         name: swiftc -typecheck
         entry: bash -c 'for f in "$@"; do swiftc -typecheck "$f" || exit 1; done' --
@@ -54,12 +45,12 @@ repos:
         # The Swift package's files only compile together; swift-build checks them.
         exclude: ^(spike|Sources|Tests)/|^Package\.swift$
 
-      # The Swift package (server, Core, tests) builds as a whole.
+      # The Swift package (Core, the app, tests) builds as a whole.
       - id: swift-build
         name: swift build (with tests)
         entry: swift build --build-tests
         language: system
-        files: ^(Sources|Tests)/.*\.swift$|^Package\.(swift|resolved)$
+        files: ^(Sources|Tests)/.*\.swift$|^Package\.swift$
         pass_filenames: false
 
       # The full test run; too slow for every commit, so pre-push only.

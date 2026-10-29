@@ -33,18 +33,15 @@ import Testing
     #expect(!ignore.contains("# a comment"))
 }
 
-@Test func everyPassHasOneName() throws {
+@MainActor @Test func everyPassHasOneName() {
     for (key, title) in Passes.all {
         #expect(Passes.deleteAlbum(key) == "\(title) - Delete Me")
         #expect(Passes.keepAlbum(key) == "\(title) - Keep")
         #expect(Passes.about[key]?.isEmpty == false, "\(key) needs a tooltip")
     }
-    // The UI's tabs must read exactly the pass titles.
-    let app = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        .appendingPathComponent("../../src/App.tsx")
-    let ui = try String(contentsOf: app, encoding: .utf8)
+    // The app's tabs read exactly the pass titles.
     for (key, title) in Passes.all {
-        #expect(ui.contains(#"<Tab v="\#(key)" label="\#(title)" />"#), "tab for \(key) must read \(title)")
+        #expect(ReviewModel.tabs.contains { $0.view == .pass(key) && $0.title == title })
     }
 }
 
@@ -209,7 +206,7 @@ import Testing
     #expect(judge.judged.withLock { $0 }.isEmpty)
 }
 
-// MARK: Commit, decisions, thumbnails
+// MARK: Commit and decisions
 
 @Test func commitFilesDeleteAndKeepThenHidesThem() async throws {
     let photos = "abc".map { Photo(uuid: String($0), screenshot: true) }
@@ -241,16 +238,6 @@ import Testing
     _ = try await c.commit("low-quality", delete: ["a"], keep: [])  // not a verdict pass
     let stats = await c.verdictStats()
     #expect(stats.count == 1 && stats["screenshots"]?.agree == 1 && stats["screenshots"]?.total == 2)
-}
-
-@Test func thumbnailsAreMadeOnceAndOnlyForKnownPhotos() async throws {
-    let dir = tempDir()
-    let (c, _) = try await makeCleanup([Photo(uuid: "a")], cacheDir: dir)
-    let file = try #require(await c.thumbnail("a"))
-    #expect(file == dir.appendingPathComponent("thumbs/a.jpg"))
-    #expect(await c.thumbnail("a") == file)  // served from the cache
-    #expect(await c.thumbnail("../../etc/passwd") == nil)
-    #expect(await c.thumbnail("missing") == nil)
 }
 
 @Test func visionCacheRoundTrips() {

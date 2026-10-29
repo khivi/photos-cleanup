@@ -21,9 +21,6 @@ final class FakeLibrary: PhotoLibrary {
 
     func authorize() async -> String { status }
     func photos() throws -> [Photo] { all }
-    func jpeg(_ uuid: String, maxSide: Int) -> Data? {
-        analysis.keys.contains(uuid) || all.contains { $0.uuid == uuid } ? Data([0xFF, 0xD8, 0xFF]) : nil
-    }
 
     func vision(_ uuids: [String]) -> [String: VisionResult?] {
         gate.wait()

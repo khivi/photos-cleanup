@@ -355,20 +355,6 @@ public actor Cleanup {
         return out
     }
 
-    // MARK: Thumbnails
-
-    /// A 340px JPEG (the 170px grid cell on a 2x display), made once and cached on disk.
-    public func thumbnail(_ uuid: String) async -> URL? {
-        guard byUUID[uuid] != nil else { return nil }  // only known ids reach the file path
-        let dir = cacheDir.appendingPathComponent("thumbs")
-        let file = dir.appendingPathComponent("\(uuid).jpg")
-        if FileManager.default.fileExists(atPath: file.path) { return file }
-        let library = library
-        guard let jpeg = try? await offload({ library.jpeg(uuid, maxSide: 340) }) ?? nil else { return nil }
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return (try? jpeg.write(to: file)) != nil ? file : nil
-    }
-
     // MARK: Cache files (JSON lines)
 
     func appendLines(_ name: String, _ lines: [String]) {

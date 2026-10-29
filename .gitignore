@@ -1,8 +1,5 @@
 # Swift
 .build/
 
-# Node / frontend
-node_modules/
-
 # OS
 .DS_Store

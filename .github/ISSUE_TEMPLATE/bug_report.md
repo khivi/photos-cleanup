@@ -10,11 +10,11 @@ labels: bug
 
 ## Environment
 
-- photos-cleanup version: <!-- `photos-cleanup --version` -->
+- Photos Cleanup version: <!-- Photos Cleanup > About Photos Cleanup -->
 - macOS version:
-- Install method: <!-- brew / from source -->
+- Install method: <!-- brew cask / from source -->
 
-## Terminal output
+## Log output (from source: /tmp/photos-cleanup-app.log)
 
 ```text
 

@@ -9,15 +9,11 @@ Do not open a public issue for a vulnerability.
 ## Supported versions
 
 Only the latest release gets fixes.
-Upgrade with `brew upgrade photos-cleanup`.
+Upgrade with `brew upgrade --cask photos-cleanup`.
 
 ## Security model
 
-- The server binds to 127.0.0.1 only. Other machines cannot reach it.
-- A Host-header allowlist (`127.0.0.1`, `localhost`) blocks DNS rebinding.
-- The server sets no CORS headers. Other websites cannot read or call the API from your browser.
 - The app never deletes photos. It only adds photos to albums.
-- The app reads the library with Photos access granted to your terminal.
-  Anything that runs in that terminal can read the library too. This is the macOS permission model.
-  It needs no Full Disk Access.
-- The app makes no network calls.
+- The app reads the library with its own Photos access, granted in the macOS prompt. It needs no Full Disk Access.
+- The release is signed with Developer ID, uses the hardened runtime and is notarized. Its one entitlement is Photos library access.
+- The app makes no network calls and opens no network port.

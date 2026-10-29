@@ -1,14 +1,12 @@
 # TODO
 
-## Stack — DECIDED 2026-10-28: browser UI + local Swift server
+## Stack — DECIDED 2026-10-29: native SwiftUI app
 
-The app is a Swift package. A Hummingbird server serves the React UI to the browser.
+The app is a Swift package with no dependencies: `PhotosCleanupCore` plus the SwiftUI app, bundled and signed by `scripts/app.sh`.
 All library access goes through PhotoKit, in-process. Vision and Foundation Models also run in-process.
-The Python server, the Swift helper processes and the PyPI package are gone.
-osxphotos and Full Disk Access were dropped on 2026-10-28.
+Gone: the Python server and PyPI package (2026-10-28), osxphotos and Full Disk Access (2026-10-28), the Hummingbird server, React UI and Node toolchain (2026-10-29, after 0.4.0).
+The grid spike (`spike/grid_probe.swift`, `feea7cb`, `5542d42`) settled native over the browser. An earlier decision against it (2026-07-22) is in commit `8320785`.
 See [ARCHITECTURE.md](ARCHITECTURE.md).
-
-Next: **native SwiftUI app** (reopened 2026-10-28). The grid spike (`spike/grid_probe.swift`, `feea7cb`, `5542d42`) scrolled all 7,383 assets smoothly with `.highQualityFormat` plus `startCachingImages` ~30 rows ahead. It imports `PhotosCleanupCore` unchanged; the server and React UI go once it reaches parity. Earlier decision against it (2026-07-22): commit `8320785`.
 
 Decided for the native app, starting 2026-10-29:
 
@@ -24,7 +22,7 @@ Not pursuing:
 
 ## Native app plan
 
-Each phase ends in something that runs. The server and React UI stay working until phase 4.
+Each phase ended in something that ran. Done 2026-10-29 except the CI and Dependabot cleanup.
 
 ### Phase 0: skeleton and early risks
 
@@ -68,17 +66,17 @@ Done when: every pass gives the same candidates as the browser UI on the real li
 
 ### Phase 4: remove the web stack (after a few days of real use of 0.4.0)
 
-- [ ] Delete `PhotosCleanupServer` and its tests, the Hummingbird dependency, `Sources/PhotosCleanup` (CLI, UI resource, Info.plist), `src/`, `public/`, `index.html`, the pnpm, Vite and tsconfig files, and Core's `thumbnail()` and `jpeg()` if nothing else calls them.
-- [ ] `verdictStats` is reachable only over HTTP today. Keep `Cleanup.verdictStats()` and `decisions.jsonl` when deleting the route; until the app shows the stats, read `decisions.jsonl` by hand.
+- [x] Delete `PhotosCleanupServer` and its tests, the Hummingbird dependency, `Sources/PhotosCleanup` (CLI, UI resource, Info.plist), `src/`, `public/`, `index.html`, the pnpm, Vite and tsconfig files, and Core's `thumbnail()` and `jpeg()` if nothing else calls them.
+- [x] `verdictStats` is reachable only over HTTP today. Keep `Cleanup.verdictStats()` and `decisions.jsonl` when deleting the route; until the app shows the stats, read `decisions.jsonl` by hand.
 - [ ] CI, pre-commit and Dependabot: drop pnpm, `tsc` and the npm ecosystem.
-- [ ] Skills: replace `start-server` and `open-browser` with one `run-app` skill over `scripts/app.sh run`.
-- [ ] Docs: README (cask install, the app's own permission, no port or options), CONTRIBUTING, ARCHITECTURE, CLAUDE.md, SECURITY (no local listener).
+- [x] Skills: replace `start-server` and `open-browser` with one `run-app` skill over `scripts/app.sh run`.
+- [x] Docs: README (cask install, the app's own permission, no port or options), CONTRIBUTING, ARCHITECTURE, CLAUDE.md, SECURITY (no local listener).
 
 ## Packaging and CI
 
 Homebrew is the only install path: the cask in `khivi/homebrew-photos-cleanup` installs the signed, notarized app zip from each GitHub Release (v0.4.0 is the first; up to 0.3.1 a formula installed the command). The PyPI project `macos-photos-cleanup` is archived (2026-10-28). Release steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release).
 
-`ci.yml` runs `pnpm build`, `swift build` and `swift test` on `macos-latest` (no macOS 27 SDK: the no-verdicts fallback) and `xcode-27` (preview runner: verdicts compiled in). Dependabot opens monthly PRs with a 7-day cooldown.
+`ci.yml` runs `swift build` and `swift test` on `macos-latest` (no macOS 27 SDK: the no-verdicts fallback) and `xcode-27` (preview runner: verdicts compiled in). Dependabot opens monthly PRs with a 7-day cooldown.
 
 ## App
 

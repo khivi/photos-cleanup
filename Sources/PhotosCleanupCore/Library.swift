@@ -8,8 +8,6 @@ public protocol PhotoLibrary: Sendable {
     /// "authorized", "denied", "limited", "restricted" or "notDetermined"; prompts if undecided.
     func authorize() async -> String
     func photos() throws -> [Photo]
-    /// JPEG data, longest side <= maxSide, or nil when no local image exists.
-    func jpeg(_ uuid: String, maxSide: Int) -> Data?
     /// nil per photo when it has no local image.
     func vision(_ uuids: [String]) -> [String: VisionResult?]
     /// Adds the photos it finds in the user's own library; returns how many.
@@ -108,11 +106,6 @@ public struct PhotoKitLibrary: PhotoLibrary {
         return nil
     }
 
-    public func jpeg(_ uuid: String, maxSide: Int) -> Data? {
-        guard let a = assets([uuid])[uuid], let img = cgImage(a, maxSide: maxSide) else { return nil }
-        return encodeJPEG(img)
-    }
-
     /// Feature print, isUtility and aesthetics score from one 1024px image. The similarity cutoff
     /// was calibrated on prints of roughly this size.
     public func vision(_ uuids: [String]) -> [String: VisionResult?] {
@@ -163,15 +156,6 @@ func floats(_ data: Data, elementType: VNElementType) -> [Float] {
             ? raw.bindMemory(to: Double.self).map(Float.init)
             : Array(raw.bindMemory(to: Float.self))
     }
-}
-
-func encodeJPEG(_ img: CGImage) -> Data? {
-    let data = NSMutableData()
-    guard let dest = CGImageDestinationCreateWithData(data, "public.jpeg" as CFString, 1, nil) else {
-        return nil
-    }
-    CGImageDestinationAddImage(dest, img, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
-    return CGImageDestinationFinalize(dest) ? data as Data : nil
 }
 
 /// Runs blocking PhotoKit and Vision work off Swift's cooperative threads.
