@@ -22,6 +22,55 @@ Not pursuing:
 
 - **Mac App Store.** It needs a sandboxed app bundle; revisit once the native app exists.
 
+## Native app plan
+
+Each phase ends in something that runs. The server and React UI stay working until phase 4.
+
+### Phase 0: skeleton and early risks
+
+- [x] Add the `PhotosCleanupApp` executable target: SwiftUI `@main`, depends on Core only. Its own `Info.plist` with a bundle ID, `CFBundleShortVersionString` (the one version source), `LSMinimumSystemVersion` and `NSPhotoLibraryUsageDescription`.
+- [x] `scripts/app.sh`: `swift build -c release`, assemble `Photos Cleanup.app`, sign it. `scripts/app.sh run` builds, then `open`s it with stdout to a log. The spike showed a bare binary from a shell never gets its window in front.
+- [ ] Window: ask for Photos access, `Cleanup.load()`, show the photo count.
+- [ ] **Risk:** the hardened runtime may need the `com.apple.security.personal-information.photos-library` entitlement. Check with a Developer ID build before phase 3.
+- [ ] **Risk:** TCC keys an ad-hoc signature on the binary hash, so every rebuild may ask for Photos access again. If it does, sign dev builds with a stable Apple Development identity.
+
+Done when: the app opens from Finder, macOS asks Photos access for the app (not the terminal), and the count matches the browser UI.
+
+### Phase 1: Core types and the view model, with tests
+
+- [x] Core: make `Photo` `Identifiable` and `Hashable`. Replace `PassResult`'s tuples with small structs. Update the routes and their tests in the same commit.
+- [x] Core: expose the `PHAsset` lookup (`PhotoKitLibrary.assets`) for the app's thumbnail cache.
+- [ ] `ReviewModel` (`@Observable`, `@MainActor`) in Core, next to `Cleanup`: it imports Observation, not SwiftUI, and the Core tests' fakes cover it. Port the state from `src/App.tsx`: current tab, decisions and `touched`, `initialDecision`, toggle, Select all, which keeps Commit sends (touched, has a verdict, or a burst's best), the commit and the session's "To be deleted" list, counts, and polling while Vision or verdicts run (new candidates merge in, touched choices stay).
+- [ ] Tests for each rule above, with Swift Testing. No Vitest suite and no OpenAPI contract (decided 2026-10-28): HTTP and React go away.
+
+Done when: `swift test` covers the view model with no window and no library.
+
+### Phase 2: screens, to parity with the browser UI
+
+- [ ] Thumbnails: lift the spike's loader: `PHCachingImageManager`, `.highQualityFormat`, network off, cache ~30 rows ahead.
+- [ ] Tabs with counts: All, the four passes, To be deleted. A 170pt `LazyVGrid`; Bursts as one horizontal row per group.
+- [ ] Cell: Keep/Delete badge, verdict kind, dimmed when delete, the verdict reason as `.help`. Click toggles.
+- [ ] Toolbar: Select all Keep/Delete, progress bar, "verdicts unavailable" message, totals, `Commit: N delete · M keep`, status line after commit, empty state, the To be deleted explainer.
+- [ ] Startup: access denied shows an "Open Privacy Settings" button; load errors and `verdictsOff` show in the window.
+- [x] `albums_ignore`: it is read from the working directory, which means nothing for a Finder launch. Move it to `~/Library/Application Support/photos-cleanup/`.
+
+Done when: every pass gives the same candidates as the browser UI on the real library, and one real commit files photos into both albums.
+
+### Phase 3: release 0.4.0
+
+- [ ] `release.yml` (applied by a script, as before): `scripts/app.sh` universal build, Developer ID signature with the hardened runtime, `ditto -c -k --keepParent` zip, notarize, staple, upload.
+- [ ] `ci.yml`: build the `.app` on `xcode-27`, so bundling breakage shows in CI.
+- [ ] Tap: add a cask, remove the formula, and add a formula-to-cask migration. Check how Homebrew handles that in one tap first. Point the bump action at the cask.
+- [ ] Install the cask on this Mac; `spctl -a -vv` passes; release 0.4.0.
+
+### Phase 4: remove the web stack (after a few days of real use of 0.4.0)
+
+- [ ] Delete `PhotosCleanupServer` and its tests, the Hummingbird dependency, `Sources/PhotosCleanup` (CLI, UI resource, Info.plist), `src/`, `public/`, `index.html`, the pnpm, Vite and tsconfig files, and Core's `thumbnail()` and `jpeg()` if nothing else calls them.
+- [ ] `verdictStats` is reachable only over HTTP today. Keep `Cleanup.verdictStats()` and `decisions.jsonl` when deleting the route; until the app shows the stats, read `decisions.jsonl` by hand.
+- [ ] CI, pre-commit and Dependabot: drop pnpm, `tsc` and the npm ecosystem.
+- [ ] Skills: replace `start-server` and `open-browser` with one `run-app` skill over `scripts/app.sh run`.
+- [ ] Docs: README (cask install, the app's own permission, no port or options), CONTRIBUTING, ARCHITECTURE, CLAUDE.md, SECURITY (no local listener).
+
 ## Packaging and CI
 
 Homebrew is the only install path: `khivi/homebrew-photos-cleanup` installs the prebuilt universal tarball from each GitHub Release (v0.3.0 is the first). The PyPI project `macos-photos-cleanup` is archived (2026-10-28). Release steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release).
@@ -30,8 +79,8 @@ Homebrew is the only install path: `khivi/homebrew-photos-cleanup` installs the 
 
 ## App
 
-- [ ] **UI tests: view-model tests, once the native app starts** — a native SwiftUI app (see the grid spike) is the likely direction, so the web-only seams aren't worth testing: no Vitest suite for `src/App.tsx`, no OpenAPI contract between the UI and the JSON API (both decided against on 2026-10-28; HTTP and React go away). Instead, put the screen's state (tab, keep/delete choices, Select all, what Commit sends, progress) in an `@Observable` view model over `Cleanup`, and test it with Swift Testing and the existing fakes. The 22 Core tests carry over unchanged; the server route and startup tests go with the server.
 - [ ] **Faster first Vision analysis** — `PhotoKitLibrary.vision` analyses one photo at a time (~80/s, ~1.5 min for 7k photos). Only a first run or a new Mac pays it; later starts read the cache. Run the per-photo image fetch + Vision requests concurrently (a bounded `TaskGroup`, ~4 at a time) inside each batch of 20, keeping batches small so thumbnails still interleave. Measure before and after on the real library.
+- [ ] **Verdict stats in the app (later)** — show `Cleanup.verdictStats()` per pass (agreement out of total), e.g. a menu item or a small sheet. Needed once the server, and with it `GET /verdict-stats`, is gone.
 - [ ] **Measure verdicts against real choices** — `/commit` logs the user's final decision against each verdict (`decisions.jsonl`, `GET /verdict-stats`). After real use of Screenshots and Utility, read the agreement rate and tune the prompt in `Sources/PhotosCleanupCore/Verdicts.swift`. Baseline: `f1751a9` (summary before `keep`, greedy, new kinds) matched 96/102 filed screenshots, but those filings mostly accepted the old preselected verdicts. Known miss: a medicine-box photo gets delete; adding "medical or health information" to the keep list didn't fix it and flipped another photo. Tried and dropped: asking for facts (`timeSensitive`/`reusableInfo`) and deciding in code — 66/101. After a prompt change, rename `Cleanup.verdictCache` to re-judge everything.
 - [ ] **Recheck kept photos when the on-device model improves** — a pass's "Keep" album is the record of what was kept. Load it (hidden from candidates today), re-classify bypassing the verdict cache (a constant name today, so an OS model update alone doesn't invalidate it; key on the OS build too), show only new delete verdicts, and on commit move them Keep → Delete Me (needs album-removal code). Wait for an actual model update first.
 - [ ] **"Keep photos in albums" toggle** — persisted setting (default on) that surfaces the *existing* default: candidates already skip any photo in a user-created album (`candidatePhotos` in `Passes.swift`). "Off" needs custom candidate logic to *include* album photos. Decide whether iCloud Shared Albums should protect photos; PhotoKit's album list leaves them out.
