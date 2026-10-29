@@ -28,14 +28,14 @@ flowchart LR
 The Swift package has no dependencies.
 
 | Target | Role |
-|---|---|
+| --- | --- |
 | `PhotosCleanupCore` | No UI framework. The library access, the passes, the background jobs and the screen's model. The tests drive it with fakes. |
 | `PhotosCleanupApp` | The SwiftUI app. Views only: every decision and label comes from `ReviewModel`. |
 
 `PhotosCleanupCore` has five files:
 
 | File | Role |
-|---|---|
+| --- | --- |
 | `Library.swift` | The `PhotoLibrary` protocol and `PhotoKitLibrary`. It authorizes, lists photos, looks up assets, runs Vision (feature print, `isUtility`, aesthetics score) and adds photos to albums. |
 | `Verdicts.swift` | The `Judge` protocol and `FoundationModelsJudge`. It returns kind, keep/delete and a short summary for one photo. It needs macOS 27 and Apple Intelligence. |
 | `Passes.swift` | `Passes.all` (one key and title per pass), the tooltips, the thresholds, the candidate filter, time grouping and the similarity split. |
@@ -45,7 +45,7 @@ The Swift package has no dependencies.
 `PhotosCleanupApp` has four files:
 
 | File | Role |
-|---|---|
+| --- | --- |
 | `PhotosCleanupApp.swift` | The app, its window and the Settings window. It asks for Photos access, loads the library, then shows the review screen. |
 | `ReviewScreen.swift` | The sidebar, the toolbar, the grid, the Info panel (an `.inspector`, ⌘I) and the menu commands. Bursts show as one grid section per group. The grid takes the arrow keys and Space; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
 | `Thumbnails.swift` | One `PHCachingImageManager`: high-quality thumbnails, cached about 30 rows ahead of the visible ones, and the large preview. The settings come from `spike/grid_probe.swift`. |
@@ -60,7 +60,7 @@ The key names the view and the pass in `decisions.jsonl`. The title is the tab l
 Albums are always `<Title> - Delete Me` and `<Title> - Keep`.
 
 | Pass | Candidates | Signal | Default |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Screenshots | Screenshots | Foundation Models verdict | The verdict |
 | Paperwork | Non-screenshot photos that Vision marks `isUtility` | Foundation Models verdict | The verdict. A "screenshot" verdict is always keep. |
 | Bursts | Photos taken within 60 s of each other | Vision feature-print distance below 0.45. `isUtility` images never group. | Best aesthetics score: keep. Others: delete. |
@@ -111,7 +111,7 @@ Blocking PhotoKit and Vision calls run off the actor, so the screen never waits 
 All caches are in `~/Library/Caches/photos-cleanup/`. Delete the folder to reset them.
 
 | File | Contents | Reset when |
-|---|---|---|
+| --- | --- | --- |
 | `vision-38db2b8a.jsonl` | Feature print, `isUtility` and score per photo | You change `Cleanup.visionCache` |
 | `verdicts-66bf2472.jsonl` | Foundation Models verdict per photo | You change `Cleanup.verdictCache` |
 | `decisions.jsonl` | Your keep/delete against each verdict | Never |
@@ -131,7 +131,7 @@ After such a change, rename the constant to force a recompute. Old files stay in
 ## Tools
 
 | Area | Tools |
-|---|---|
+| --- | --- |
 | Swift | SwiftPM, Swift 6 from the Xcode Command Line Tools, SwiftUI, swift-testing (`swift test`) |
 | Bundle | `scripts/app.sh`: builds, assembles and signs the `.app` |
 | Checks | pre-commit: linters, a Swift package build, gitleaks, markdownlint, codespell |
@@ -140,7 +140,7 @@ After such a change, rename the constant to force a recompute. Old files stay in
 ## Decisions
 
 | Decision | Reason |
-|---|---|
+| --- | --- |
 | Native SwiftUI app (0.4.0, 2026-10-29) | The grid spike showed PhotoKit thumbnails scroll smoothly for the whole library. One app replaces a server, a React UI and the Node toolchain, and gets its own Photos permission instead of the terminal's. |
 | SwiftPM and a script, no Xcode project | The package already built everything. `scripts/app.sh` adds the bundle, the icon and the signature. |
 | `ReviewModel` in Core, views hold no logic | The screen's rules are tested with the fakes, without a window. Core imports Observation, not SwiftUI. |
