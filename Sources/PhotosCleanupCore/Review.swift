@@ -190,8 +190,10 @@ public final class ReviewModel {
             .filter { $0.count > 0 }
     }
 
+    /// Window title: the sidebar item's title.
+    public var windowTitle: String { Self.tabs.first { $0.view == view }?.title ?? "" }
     /// Window subtitle: "41 candidates · 12 to delete", "N photos" or "N queued for deletion".
-    public var windowSubtitle: String { summary }
+    public var windowSubtitle: String { loading ? "Loading…" : summary }
     public var moveButtonLabel: String { committing ? "Moving…" : "Move to Albums…" }
     public static let keepAllLabel = "Keep All"
     public static let deleteAllLabel = "Delete All"
@@ -258,6 +260,15 @@ public final class ReviewModel {
         counts = await cleanup.counts()
         await loadWaiting()
     }
+
+    /// A pass count Vision will still fill in. Paperwork's count waits for its verdicts, which
+    /// only start when the pass is opened, so it doesn't count as pending.
+    public var countsPending: Bool {
+        Passes.all.contains { $0.key != "paperwork" && (counts[$0.key] ?? nil) == nil }
+    }
+
+    /// The pass counts alone, cheap enough to poll while Vision runs.
+    public func refreshPassCounts() async { counts = await cleanup.counts() }
 
     /// Read once per launch; photos deleted in Photos since then drop out on the next launch.
     private func loadWaiting() async {

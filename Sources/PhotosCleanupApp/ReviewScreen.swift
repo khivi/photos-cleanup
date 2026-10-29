@@ -9,6 +9,7 @@ struct ReviewScreen: View {
     @State private var position = ScrollPosition(edge: .top)
     @State private var width: CGFloat = 800
     @FocusState private var focused: Bool
+    @State private var confirmingMove = false
 
     /// The adaptive grid fits as many columns as the width allows.
     private var columns: Int { max(1, Int((width - 2 * gridPadding + 4) / (cellSize + 4))) }
@@ -38,17 +39,17 @@ struct ReviewScreen: View {
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 200)
         } detail: {
-            VStack(spacing: 0) {
-                header
-                if let banner = model.banner {
-                    Text(banner).font(.callout).frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12).padding(.vertical, 6).background(.blue.opacity(0.1))
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .navigationTitle(model.windowTitle)
+                .navigationSubtitle(model.windowSubtitle)
+                .toolbar { toolbar }
+                .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
+                .confirmationDialog("Move to Albums?", isPresented: $confirmingMove) {
+                    Button("Move", role: .destructive) { Task { await model.commit() } }
+                } message: {
+                    Text(model.commitPreview.map(\.label).joined(separator: "\n"))
                 }
-                if let error = model.error {
-                    Text(error).foregroundStyle(.red).padding(12)
-                }
-                content
-            }
         }
         .focusedSceneValue(\.reviewModel, model)
         .task(id: pollKey) {
@@ -59,42 +60,51 @@ struct ReviewScreen: View {
             }
         }
         .task(id: countsKey) {
-            if !model.loading && !model.committing { await model.refreshCounts() }
+            guard !model.loading && !model.committing else { return }
+            await model.refreshCounts()
+            while model.countsPending && !Task.isCancelled {  // badges appear as the background Vision run finishes
+                try? await Task.sleep(for: .seconds(2))
+                await model.refreshPassCounts()
+            }
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                if model.inPass && !model.loading {
-                    Group {
-                        Text("Select all:").font(.caption).foregroundStyle(.secondary)
-                        Button("✓ Keep") { model.setAll(.keep) }.tint(.green)
-                        Button("✗ Delete") { model.setAll(.delete) }.tint(.red)
-                    }
-                    .disabled(model.photos.isEmpty)
-                }
-                if let off = model.verdictsOff {
-                    Text("\(off). Everything else works.").font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if model.showsProgress {
-                    ProgressView(value: Double(model.progressDone), total: Double(max(model.progressTotal, 1)))
-                        .frame(width: 120)
-                        .help("Analysing photos on this Mac; results appear as they arrive")
-                    Text("\(model.progressDone.formatted())/\(model.progressTotal.formatted())")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if let e = model.progressError { Text(e).font(.caption).foregroundStyle(.red) }
-                Text(model.loading ? "Loading…" : model.summary).fontWeight(.semibold)
-                if model.inPass && !model.loading {
-                    Button(model.commitLabel) { Task { await model.commit() } }
-                        .buttonStyle(.borderedProminent).tint(.red)
-                        .disabled(model.committing || !model.canCommit)
-                }
+    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        if model.showsProgress {
+            ToolbarItem {
+                ProgressView(value: Double(model.progressDone), total: Double(max(model.progressTotal, 1)))
+                    .frame(width: 100)
+                    .help("Analysing photos on this Mac: \(model.progressDone.formatted()) of \(model.progressTotal.formatted())")
             }
         }
-        .padding(12)
+        if model.inPass {
+            ToolbarItemGroup {
+                Group {
+                    Button(ReviewModel.keepAllLabel, systemImage: "checkmark.circle") { model.setAll(.keep) }
+                    Button(ReviewModel.deleteAllLabel, systemImage: "xmark.circle") { model.setAll(.delete) }
+                }
+                .disabled(model.loading || model.photos.isEmpty)
+            }
+            ToolbarItem {
+                Button(model.moveButtonLabel) { confirmingMove = true }
+                    .disabled(model.loading || model.committing || !model.canCommit)
+            }
+        }
+    }
+
+    /// One line under the grid for what used to be banners: after a move, To be deleted's albums, errors.
+    @ViewBuilder private var statusBar: some View {
+        let lines = [model.banner, model.error, model.progressError, model.verdictsOff.map { "\($0). Everything else works." }]
+            .compactMap { $0 }
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(lines, id: \.self) { Text($0) }
+            }
+            .font(.callout).foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(.bar)
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -157,7 +167,7 @@ struct ReviewScreen: View {
 }
 
 extension View {
-    /// The grid takes keyboard focus: arrows move the selection, ⌘A selects all, K keeps and ⌫ deletes it.
+    /// The grid takes keyboard focus: arrows move the selection, ⌘A selects all. K and ⌫ are menu commands.
     fileprivate func keyboardSelection(model: ReviewModel, focused: FocusState<Bool>.Binding, width: Binding<CGFloat>,
                                        move: @escaping (KeyEquivalent) -> Void) -> some View {
         self
@@ -170,11 +180,6 @@ extension View {
                 move(press.key)
                 return .handled
             }
-            .onKeyPress("k") {
-                model.markSelection(.keep)
-                return .handled
-            }
-            .onDeleteCommand { model.markSelection(.delete) }  // onKeyPress(.delete) never sees the ⌫ key (U+7F) on macOS
             .background {
                 Button("Select All") { model.selectAll() }.keyboardShortcut("a").hidden()
             }
@@ -186,10 +191,21 @@ extension FocusedValues {
 }
 
 /// Edit > Undo and Redo drive the model's UndoManager directly, not the window's.
-struct UndoCommands: Commands {
+/// Photo > Keep (K) and Delete (⌫) are menu items because the default Edit > Delete takes ⌫ before
+/// the grid sees it. Disabled outside the review window, so they don't steal keys from Settings.
+struct ReviewCommands: Commands {
     @FocusedValue(\.reviewModel) private var model
 
     var body: some Commands {
+        CommandMenu("Photo") {
+            Group {
+                Button("Keep") { model?.markSelection(.keep) }
+                    .keyboardShortcut("k", modifiers: [])
+                Button("Delete") { model?.markSelection(.delete) }
+                    .keyboardShortcut(.delete, modifiers: [])
+            }
+            .disabled(model?.inPass != true)
+        }
         CommandGroup(replacing: .undoRedo) {
             Button("Undo") { if let u = model?.undoManager, u.canUndo { u.undo() } }
                 .keyboardShortcut("z")
