@@ -11,10 +11,10 @@ type Photo = {
 };
 type Classify = { pending: number; total?: number; error: string | null };
 // A pass's view key and tab label match the server's PASSES (and its albums' prefix).
-type View = "all" | "screenshots" | "utility" | "bursts" | "low-quality" | "deleted";
+type View = "all" | "screenshots" | "paperwork" | "bursts" | "low-quality" | "deleted";
 type Decision = "keep" | "delete";
-const CLEANUP_VIEWS: View[] = ["screenshots", "utility", "bursts", "low-quality"];
-const VERDICT_VIEWS: View[] = ["screenshots", "utility"]; // judged by the on-device model
+const CLEANUP_VIEWS: View[] = ["screenshots", "paperwork", "bursts", "low-quality"];
+const VERDICT_VIEWS: View[] = ["screenshots", "paperwork"]; // judged by the on-device model
 
 const CELL = 170; // px per thumbnail cell
 const POLL_MS = 5000; // refresh while the server analyses or classifies in the background
@@ -418,7 +418,7 @@ function App() {
       >
         <Tab v="all" label="All" />
         <Tab v="screenshots" label="Screenshots" />
-        <Tab v="utility" label="Utility" />
+        <Tab v="paperwork" label="Paperwork" />
         <Tab v="bursts" label="Bursts" />
         <Tab v="low-quality" label="Low Quality" />
         <Tab

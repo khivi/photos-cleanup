@@ -73,7 +73,7 @@ public struct JobProgress: Sendable, Equatable {
 public enum Passes {
     public static let all: [(key: String, title: String)] = [
         ("screenshots", "Screenshots"),
-        ("utility", "Utility"),
+        ("paperwork", "Paperwork"),
         ("bursts", "Bursts"),
         ("low-quality", "Low Quality"),
     ]
@@ -84,10 +84,23 @@ public enum Passes {
     // their photos on every later run.
     public static func keepAlbum(_ key: String) -> String? { title(key).map { "\($0) - Keep" } }
 
+    /// What each pass finds and how its photos start; the tab's tooltip.
+    public static let about: [String: String] = [
+        "screenshots": "Screenshots. The on-device model preselects the ones not worth keeping.",
+        "paperwork": "Receipts, tickets, tracking, promos, documents, notes and labels. The on-device model preselects the ones not worth keeping.",
+        "bursts": "Near-identical shots taken within a minute. The best of each group starts as Keep, the rest as Delete.",
+        "low-quality": "Blurry, dark or accidental shots, by Vision's aesthetics score. All start as Delete.",
+    ]
+
     /// Earlier names of a pass's album: photos in them still count as filed.
-    public static let legacyAlbums: [String: Set<String>] = ["low-quality": ["Low Quality - Review Me"]]
+    public static let legacyAlbums: [String: Set<String>] = [
+        "low-quality": ["Low Quality - Review Me"],
+        "paperwork": ["Utility - Delete Me", "Utility - Keep"],
+    ]
+    /// Earlier pass keys, as written in decisions.jsonl.
+    public static let legacyKeys = ["utility": "paperwork"]
     /// Passes judged by Foundation Models.
-    public static let verdictKinds: Set<String> = ["screenshots", "utility"]
+    public static let verdictKinds: Set<String> = ["screenshots", "paperwork"]
 
     public static let burstWindow: TimeInterval = 60
     /// Feature-print L2 distance below which two neighbouring shots count as repeats. Set by eye
@@ -198,10 +211,10 @@ func distance(_ a: [Float], _ b: [Float]) -> Float {
     return sum.squareRoot()
 }
 
-/// The verdict as a pass should use it. Real screenshots have their own pass, so in Utility
+/// The verdict as a pass should use it. Real screenshots have their own pass, so in Paperwork
 /// "screenshot" is always a misread camera photo (a hand, a dashboard); never preselect delete.
 public func passVerdict(_ kind: String, _ v: Verdict?) -> Verdict? {
     guard var v else { return nil }
-    if kind == "utility", v.kind == "screenshot", !v.keep { v.keep = true }
+    if kind == "paperwork", v.kind == "screenshot", !v.keep { v.keep = true }
     return v
 }

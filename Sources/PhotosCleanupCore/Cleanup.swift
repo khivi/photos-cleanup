@@ -116,7 +116,7 @@ public actor Cleanup {
         let found: [Photo]
         switch kind {
         case "screenshots": found = candidatePhotos(photos, ignoring: ignoreAlbums, onlyScreenshots: true)
-        case "utility", "low-quality": found = candidatePhotos(photos, ignoring: ignoreAlbums)
+        case "paperwork", "low-quality": found = candidatePhotos(photos, ignoring: ignoreAlbums)
         case "bursts": found = candidatePhotos(photos, ignoring: ignoreAlbums, requireValidDate: true)
         default: throw CleanupError.unknownPass
         }
@@ -125,12 +125,12 @@ public actor Cleanup {
         return found.filter { !committed.contains($0.uuid) && filed.isDisjoint(with: $0.albums) }
     }
 
-    /// Narrow Utility and Low Quality by the Vision analysis done so far, and its progress.
+    /// Narrow Paperwork and Low Quality by the Vision analysis done so far, and its progress.
     func analysed(_ kind: String, _ photos: [Photo], threshold: Double) -> ([Photo], JobProgress) {
         let progress = startVision(photos)
         let narrowed: [Photo]
         switch kind {
-        case "utility": narrowed = photos.filter { (vision[$0.uuid] ?? nil)?.utility == true }
+        case "paperwork": narrowed = photos.filter { (vision[$0.uuid] ?? nil)?.utility == true }
         case "low-quality":
             narrowed = photos.filter { ((vision[$0.uuid] ?? nil)?.score).map { $0 <= threshold } ?? false }
         default: narrowed = photos
@@ -160,7 +160,7 @@ public actor Cleanup {
             startClassifier(photos)
             if result.progress.pending == 0 { result.progress = classify }  // Vision first, then the model
         }
-        if kind == "utility" {
+        if kind == "paperwork" {
             // Unjudged photos appear once classified; "picture" means the model's own Vision
             // check said it isn't a utility image after all.
             photos = photos.filter { (verdicts[$0.uuid]?.kind ?? "picture") != "picture" }
@@ -184,7 +184,7 @@ public actor Cleanup {
             let (narrowed, _) = analysed(kind, found, threshold: Passes.lowQualityMax)
             if !done {
                 out[kind] = .some(nil)  // the background Vision analysis is still running
-            } else if kind == "utility" {
+            } else if kind == "paperwork" {
                 let judged = narrowed.compactMap { verdicts[$0.uuid] }
                 out[kind] = judged.count == narrowed.count ? judged.filter { $0.kind != "picture" }.count : nil
             } else if kind == "bursts" {
@@ -343,9 +343,10 @@ public actor Cleanup {
     public func verdictStats() -> [String: (agree: Int, total: Int)] {
         var out: [String: (agree: Int, total: Int)] = [:]
         for row in readJSONLines(cacheDir.appendingPathComponent(Self.decisionsLog)) {
-            guard let kind = row["kind"] as? String, let keep = row["verdict_keep"] as? Bool,
+            guard let logged = row["kind"] as? String, let keep = row["verdict_keep"] as? Bool,
                 let decision = row["decision"] as? String
             else { continue }
+            let kind = Passes.legacyKeys[logged] ?? logged
             var s = out[kind] ?? (0, 0)
             s.total += 1
             s.agree += keep == (decision == "keep") ? 1 : 0

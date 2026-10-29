@@ -98,7 +98,7 @@ func body(_ r: TestResponse) -> [String: Any] {
     try await app().test(.router) { client in
         let c = body(try await client.execute(uri: "/counts", method: .get, headers: localhost))
         #expect(c["all"] as? Int == 0 && c["screenshots"] as? Int == 0)
-        #expect(Set(c.keys) == ["all", "screenshots", "utility", "bursts", "low-quality"])
+        #expect(Set(c.keys) == ["all", "screenshots", "paperwork", "bursts", "low-quality"])
     }
 }
 

@@ -81,7 +81,7 @@ Albums are always `<Title> - Delete Me` and `<Title> - Keep`.
 |---|---|---|---|
 | Screenshots | Screenshots | Foundation Models verdict | The verdict |
 | Utility | Non-screenshot photos that Vision marks `isUtility` | Foundation Models verdict | The verdict. A "screenshot" verdict is always keep. |
-| Bursts | Photos taken within 60 s of each other | Vision feature-print distance below 0.45. Utility images never group. | Best aesthetics score: keep. Others: delete. |
+| Bursts | Photos taken within 60 s of each other | Vision feature-print distance below 0.45. Paperwork images never group. | Best aesthetics score: keep. Others: delete. |
 | Low Quality | All other candidates | Vision aesthetics score at or below −0.75 | Delete |
 
 Every pass skips favorites, videos, photos in your own albums, and photos already in its own albums.
@@ -103,8 +103,8 @@ sequenceDiagram
     L--)C: print, isUtility, score → disk cache
 
     Note over UI,L: Open a pass
-    UI->>S: GET /cleanup/utility
-    S->>C: pass("utility")
+    UI->>S: GET /cleanup/paperwork
+    S->>C: pass("paperwork")
     C-)L: judge (1024 px image, background)
     L--)C: kind, keep/delete, summary → disk cache
     S-->>UI: candidates and progress (UI polls)
@@ -120,7 +120,7 @@ sequenceDiagram
 
 1. **Startup.** `main.swift` checks access. `Cleanup.load()` reads the photo list once.
 2. **Vision analysis.** A background job sends all still photos to `PhotoKitLibrary.vision` in batches of 20. Results go to a disk cache. Bursts, Low Quality and Utility read this cache.
-3. **Verdicts.** When you open Screenshots or Utility, the classifier queues the photos with no verdict. It renders each as a 1024 px image and asks Foundation Models. Verdicts go to a disk cache. A photo the model cannot judge is not queued again until the next start.
+3. **Verdicts.** When you open Screenshots or Paperwork, the classifier queues the photos with no verdict. It renders each as a 1024 px image and asks Foundation Models. Verdicts go to a disk cache. A photo the model cannot judge is not queued again until the next start.
 4. **Thumbnails.** `/thumb/<id>` makes a 340 px JPEG once, then serves it from the cache.
 5. **Commit.** `/commit` adds the photos to each album. It also logs your decision against the model's verdict.
 

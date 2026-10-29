@@ -45,6 +45,7 @@ struct ReviewScreen: View {
                         .buttonStyle(.bordered)
                         .tint(model.view == tab.view ? .accentColor : nil)
                         .disabled(model.view == tab.view || model.loading)
+                        .help(tab.help)
                 }
                 Spacer()
             }
@@ -115,5 +116,6 @@ struct ReviewScreen: View {
         }
         return PhotoCell(photo: p, mark: mark, thumbnails: thumbnails,
                          onTap: model.inPass ? { model.toggle(p.id) } : nil)
+            .help(model.view == .deleted ? model.deletedAlbum[p.id] ?? "" : "")
     }
 }

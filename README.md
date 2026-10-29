@@ -18,7 +18,7 @@ The app skips favorites and photos that are already in your own albums.
 Everything runs on your Mac.
 The app reads and files photos through PhotoKit, Apple's Photos API.
 It finds bursts and low-quality photos with Apple's on-device Vision.
-Verdicts for screenshots and utility photos come from Apple's on-device Foundation Models.
+Verdicts for screenshots and paperwork come from Apple's on-device Foundation Models.
 The server is one Swift program. It calls these Apple frameworks in-process.
 It caches thumbnails, analysis and verdicts in `~/Library/Caches/photos-cleanup`.
 Delete that folder to clear them.
@@ -62,7 +62,7 @@ If access is off, the app opens this settings pane and names the terminal app.
 ## Usage
 
 1. Run `photos-cleanup`. Your browser opens at `http://127.0.0.1:8765/`.
-2. Pick a cleanup pass. The passes are screenshots, utility photos (receipts, tickets), bursts (repeated shots of one scene), and low quality.
+2. Pick a cleanup pass. The passes are screenshots, paperwork (receipts, tickets, documents), bursts (repeated shots of one scene), and low quality.
 3. Review the thumbnail grid. Mark each photo keep or delete.
 4. Commit. Photos marked delete go into the pass's "Delete Me" album. Keepers go into its "Keep" album.
 5. Open that album in Photos. Check it, then delete the photos there.

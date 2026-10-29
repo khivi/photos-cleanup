@@ -124,7 +124,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
     @Test func labels() async throws {
         let (c, _) = try await makeCleanup(shots("a", "b"), verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
-        #expect(ReviewModel.tabs.map(\.title) == ["All", "Screenshots", "Utility", "Bursts", "Low Quality", "To be deleted"])
+        #expect(ReviewModel.tabs.map(\.title) == ["All", "Screenshots", "Paperwork", "Bursts", "Low Quality", "To be deleted"])
         await m.refreshCounts()
         await m.select(.all)
         #expect(m.summary == "2 photos" && m.tabLabel(.all, "All") == "All (2)")
@@ -141,6 +141,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.showsEmptyState)
         await m.select(.deleted)
         #expect(m.summary == "2 queued for deletion" && m.banner?.hasPrefix("Nothing is deleted yet") == true)
+        #expect(m.banner?.contains("“Screenshots - Delete Me” (2)") == true)
         #expect("\(CleanupError.accessDenied)".hasPrefix("Photos access not granted"))
     }
 }

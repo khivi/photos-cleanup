@@ -25,6 +25,8 @@ public final class ReviewModel {
     /// Decided explicitly by the user.
     public private(set) var touched: Set<String> = []
     public private(set) var deleted: [Photo] = []
+    /// The Delete Me album each photo in `deleted` went to.
+    public private(set) var deletedAlbum: [String: String] = [:]
     public private(set) var progress = JobProgress()
     public private(set) var counts: [String: Int?] = [:]
     public private(set) var loading = false
@@ -66,8 +68,10 @@ public final class ReviewModel {
 
     // MARK: Labels (what the screen shows; views only lay them out)
 
-    public static let tabs: [(view: ReviewView, title: String)] =
-        [(.all, "All")] + Passes.all.map { (.pass($0.key), $0.title) } + [(.deleted, "To be deleted")]
+    public static let tabs: [(view: ReviewView, title: String, help: String)] =
+        [(.all, "All", "Every photo in your library.")]
+        + Passes.all.map { (.pass($0.key), $0.title, Passes.about[$0.key] ?? "") }
+        + [(.deleted, "To be deleted", "Photos moved to a Delete Me album this session. Delete them there in Photos.")]
 
     public func tabLabel(_ v: ReviewView, _ title: String) -> String {
         let n: Int? = switch v {
@@ -102,9 +106,12 @@ public final class ReviewModel {
     }
 
     public var banner: String? {
-        view == .deleted
-            ? "Nothing is deleted yet. These photos were moved this session to the pass’s “Delete Me” album — open it in Photos, select all, and delete. This list resets on reload."
-            : status
+        guard view == .deleted else { return status }
+        let albums = Dictionary(grouping: deleted.compactMap { deletedAlbum[$0.id] }, by: { $0 })
+            .sorted { $0.key < $1.key }
+            .map { "“\($0.key)” (\($0.value.count))" }
+        guard !albums.isEmpty else { return "Nothing moved to a Delete Me album yet this session." }
+        return "Nothing is deleted yet. In Photos, open \(albums.joined(separator: ", ")), select all, and delete. This list resets on reload."
     }
 
     public var showsEmptyState: Bool { inPass && !loading && displayed.isEmpty }
@@ -190,6 +197,7 @@ public final class ReviewModel {
             let gone = Set(doomed.map(\.id) + keep)
             let seen = Set(deleted.map(\.id))
             deleted = doomed.map(\.photo).filter { !seen.contains($0.id) } + deleted
+            for p in doomed { deletedAlbum[p.id] = r.album }
             photos.removeAll { gone.contains($0.id) }
             groups = groups.map { BurstGroup(photos: $0.photos.filter { !gone.contains($0.id) }, best: $0.best) }
                 .filter { !$0.photos.isEmpty }

@@ -37,6 +37,7 @@ import Testing
     for (key, title) in Passes.all {
         #expect(Passes.deleteAlbum(key) == "\(title) - Delete Me")
         #expect(Passes.keepAlbum(key) == "\(title) - Keep")
+        #expect(Passes.about[key]?.isEmpty == false, "\(key) needs a tooltip")
     }
     // The UI's tabs must read exactly the pass titles.
     let app = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
@@ -47,11 +48,11 @@ import Testing
     }
 }
 
-@Test func utilityNeverPreselectsAMisreadScreenshotForDelete() {
+@Test func paperworkNeverPreselectsAMisreadScreenshotForDelete() {
     let shot = Verdict(keep: false, kind: "screenshot", reason: "A hand with a ring")
-    #expect(passVerdict("utility", shot)?.keep == true)
+    #expect(passVerdict("paperwork", shot)?.keep == true)
     #expect(passVerdict("screenshots", shot)?.keep == false)  // the Screenshots pass is untouched
-    #expect(passVerdict("utility", Verdict(keep: false, kind: "receipt", reason: ""))?.keep == false)
+    #expect(passVerdict("paperwork", Verdict(keep: false, kind: "receipt", reason: ""))?.keep == false)
 }
 
 // MARK: Passes over a Cleanup
@@ -65,7 +66,7 @@ import Testing
     #expect(r.photos.first { $0.photo.uuid == "a" }?.verdict == v)
 }
 
-@Test func utilityShowsOnlyVisionUtilityPhotosTheModelKeptAsUtility() async throws {
+@Test func paperworkShowsOnlyVisionUtilityPhotosTheModelKeptAsUtility() async throws {
     let receipt = Verdict(keep: false, kind: "receipt", reason: "Paid")
     let picture = Verdict(keep: true, kind: "picture", reason: "Not a utility image")
     // c: not judged yet; d: Vision says not utility.
@@ -73,7 +74,7 @@ import Testing
         "abcd".map { Photo(uuid: String($0)) },
         vision: ["a": V(utility: true), "b": V(utility: true), "c": V(utility: true), "d": V()],
         verdicts: ["a": receipt, "b": picture], judge: FakeJudge(off: "off"))
-    let r = try await c.pass("utility")
+    let r = try await c.pass("paperwork")
     #expect(r.photos.map(\.photo.uuid) == ["a"])
     #expect(r.photos[0].verdict == receipt)
 }
@@ -140,7 +141,7 @@ import Testing
     lib.gate.close()  // hold the Vision job so its results don't land yet
     var counts = await c.counts()
     #expect(counts["all"] == 3 && counts["screenshots"] == 0)
-    #expect(counts["low-quality"] == .some(nil) && counts["bursts"] == .some(nil) && counts["utility"] == .some(nil))
+    #expect(counts["low-quality"] == .some(nil) && counts["bursts"] == .some(nil) && counts["paperwork"] == .some(nil))
     lib.gate.open()
     await settle(c)
 
@@ -149,7 +150,7 @@ import Testing
     let vision: [String: VisionResult?] = ["a": V(-0.9, utility: true, [0]), "b": V(0.5, [0.1]), "c": V(0.5, [0.2])]
     (c, lib) = try await makeCleanup(photos, vision: vision, verdicts: ["a": doc, "b": pic, "c": pic], judge: judge, cacheDir: tempDir())
     counts = await c.counts()
-    #expect(counts["utility"] == 1 && counts["bursts"] == 2 && counts["low-quality"] == 1)
+    #expect(counts["paperwork"] == 1 && counts["bursts"] == 2 && counts["low-quality"] == 1)
 }
 
 // MARK: Background jobs
@@ -180,7 +181,7 @@ import Testing
     let (c, _) = try await makeCleanup([], judge: judge)
     judge.gate.close()
     await c.startClassifier(shots)  // Screenshots tab
-    await c.startClassifier([Photo(uuid: "u1")])  // Utility tab, mid-run
+    await c.startClassifier([Photo(uuid: "u1")])  // Paperwork tab, mid-run
     await c.startClassifier(shots)  // Screenshots reopened: already in flight, not re-queued
     #expect(await c.classify == JobProgress(pending: 3, total: 3))
     judge.gate.open()

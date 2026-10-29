@@ -69,7 +69,7 @@ let start = Date()
 do { try await cleanup.load() } catch { die("couldn't load the Photos library: \(error)") }
 let photos = await cleanup.photos
 print("\(photos.count.formatted()) photos loaded in \(String(format: "%.1f", Date().timeIntervalSince(start)))s.")
-// Bursts, Low Quality and Utility all need the Vision analysis; start it now.
+// Bursts, Low Quality and Paperwork all need the Vision analysis; start it now.
 let progress = await cleanup.startVision(photos.filter { !$0.isMovie && !$0.screenshot })
 if progress.pending > 0 {
     print("Analysing \(progress.pending.formatted()) photos in the background; cached afterwards.")
