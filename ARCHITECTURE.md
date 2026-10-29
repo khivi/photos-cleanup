@@ -40,15 +40,16 @@ The Swift package has no dependencies.
 | `Verdicts.swift` | The `Judge` protocol and `FoundationModelsJudge`. It returns kind, keep/delete and a short summary for one photo. It needs macOS 27 and Apple Intelligence. |
 | `Passes.swift` | `Passes.all` (one key and title per pass), the tooltips, the thresholds, the candidate filter, time grouping and the similarity split. |
 | `Cleanup.swift` | The `Cleanup` actor. It holds the photo list, the Vision job, the verdict queue, commits and the caches. |
-| `Review.swift` | `ReviewModel` (`@Observable`, main actor). The current tab, keep/delete choices, Select all, what Commit sends, progress, the To be deleted list (read from the Delete Me albums), and every label the screen shows. |
+| `Review.swift` | `ReviewModel` (`@Observable`, main actor). The sidebar and its counts, keep/delete marks with undo, the selection, the preview, what Move to Albums sends, progress, the To be deleted list (read from the Delete Me albums), and every label the window shows. |
 
-`PhotosCleanupApp` has three files:
+`PhotosCleanupApp` has four files:
 
 | File | Role |
 |---|---|
-| `PhotosCleanupApp.swift` | The app and its window. It asks for Photos access, loads the library, then shows the review screen. |
-| `ReviewScreen.swift` | Tabs, toolbar, banners and grids. Bursts show as one row per group. It refreshes the model every 2 s while work runs. |
-| `Thumbnails.swift` | One `PHCachingImageManager`: high-quality thumbnails, cached about 30 rows ahead of the visible ones. The settings come from `spike/grid_probe.swift`. |
+| `PhotosCleanupApp.swift` | The app, its window and the Settings window. It asks for Photos access, loads the library, then shows the review screen. |
+| `ReviewScreen.swift` | The sidebar, the toolbar, the grid and the menu commands. Bursts show as one grid section per group. The grid takes the arrow keys and Space; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
+| `Thumbnails.swift` | One `PHCachingImageManager`: high-quality thumbnails, cached about 30 rows ahead of the visible ones, and the large preview. The settings come from `spike/grid_probe.swift`. |
+| `SettingsView.swift` | The Settings window: Keep photos in albums, and the ignored albums. |
 
 The tests fake `PhotoLibrary` and `Judge`, so they need no library and no Apple Intelligence.
 
@@ -100,8 +101,8 @@ sequenceDiagram
 1. **Launch.** The app asks for Photos access. `Cleanup.load()` reads the photo list once.
 2. **Vision analysis.** A background job sends all still photos to `PhotoKitLibrary.vision` in batches of 20. Results go to a disk cache. Bursts, Low Quality and Paperwork read this cache.
 3. **Verdicts.** When you open Screenshots or Paperwork, the classifier queues the photos with no verdict. It renders each as a 1024 px image and asks Foundation Models. Verdicts go to a disk cache. A photo the model cannot judge is not queued again until the next launch.
-4. **Thumbnails.** The views ask `PHCachingImageManager` directly. Nothing is written to disk.
-5. **Commit.** `Cleanup.commit` adds the photos to each album. It also logs your decision against the model's verdict.
+4. **Thumbnails and preview.** The views ask `PHCachingImageManager` directly. Nothing is written to disk. The preview shows the local copy first. If the full photo is only in iCloud, Photos downloads it.
+5. **Move to Albums.** After you confirm, `Cleanup.commit` adds the photos to each album. It also logs your decision against the model's verdict. Undo covers marks, not the move.
 
 Blocking PhotoKit and Vision calls run off the actor, so the screen never waits behind a batch.
 

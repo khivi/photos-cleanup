@@ -3,8 +3,8 @@
 ![Photos Cleanup icon](Sources/PhotosCleanupApp/AppIcon.svg)
 
 Photos Cleanup is a Mac app. It helps you clear unwanted photos from your Photos library.
-You review each cleanup pass as a thumbnail grid and mark every photo keep or delete.
-When you commit, the app files the photos into albums in Photos.
+You review each cleanup pass as a thumbnail grid and mark photos keep or delete.
+When you move them to albums, the app files the photos into albums in Photos.
 
 ## Safety
 
@@ -20,7 +20,7 @@ Everything runs on your Mac.
 The app reads and files photos through PhotoKit, Apple's Photos API.
 It finds bursts and low-quality photos with Apple's on-device Vision.
 Verdicts for screenshots and paperwork come from Apple's on-device Foundation Models.
-It caches thumbnails, analysis and verdicts in `~/Library/Caches/photos-cleanup`.
+It caches analysis and verdicts in `~/Library/Caches/photos-cleanup`.
 Delete that folder to clear them.
 The app makes no network calls and sends no telemetry. When you preview a photo that is stored only in iCloud, Photos downloads it.
 
@@ -61,10 +61,22 @@ If access is off, the app shows an Open Privacy Settings button.
 ## Usage
 
 1. Open Photos Cleanup. It reads your library and shows every photo.
-2. Pick a cleanup pass: Screenshots, Paperwork (receipts, tickets, documents), Bursts (repeated shots of one scene) or Low Quality. Hover a tab to see what it finds.
-3. Review the thumbnail grid. Click a photo to switch it between keep and delete.
-4. Commit. Photos marked delete go into the pass's "Delete Me" album. Keepers go into its "Keep" album.
-5. Open that album in Photos. Check it, then delete the photos there. The To be deleted tab names the albums.
+2. Pick a cleanup pass in the sidebar: Screenshots, Paperwork (receipts, tickets, documents), Bursts (repeated shots of one scene) or Low Quality. Hover a pass to see what it finds.
+3. Review the grid. Each photo starts with a suggestion; only photos to delete are marked.
+4. Select photos and change the marks: K keeps, ⌫ deletes. Space shows the selected photo large.
+5. Click Move to Albums and confirm. Photos marked delete go into the pass's "Delete Me" album. Keepers go into its "Keep" album.
+6. Open that album in Photos. Check it, then delete the photos there. To be deleted lists the albums.
+
+| Key | Action |
+| --- | --- |
+| Click, ⇧-click, ⌘-click, ⌘A | Select |
+| Arrow keys | Move the selection |
+| K / ⌫ | Mark the selection keep / delete |
+| ⌥⌘K / ⇧⌘⌫ | Mark every photo in the pass keep / delete |
+| Space, Esc | Show or close the large preview |
+| ⌘Z / ⇧⌘Z | Undo / redo a mark |
+| ⌘↩ | Move to Albums |
+| ⌘1 – ⌘6 | Go to a sidebar item |
 
 Photos keeps deleted items in Recently Deleted for 30 days.
 Restore a photo from there if you change your mind.
@@ -73,7 +85,12 @@ Delete it from Recently Deleted to free space at once.
 ## Albums that protect photos
 
 Passes skip favorites and photos in your own albums.
-To make some of your albums not count, list them one per line in `~/Library/Application Support/photos-cleanup/albums_ignore`.
+To change this, open Settings (⌘,):
+
+- Turn off Keep photos in albums to review photos in your own albums too.
+- Add albums under Ignored albums to make only those not count.
+
+Changes apply the next time the app opens.
 
 ## Troubleshooting
 
