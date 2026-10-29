@@ -14,8 +14,11 @@ for a in "$@"; do
   esac
 done
 
-swift build -c release --product PhotosCleanupApp ${arch[@]+"${arch[@]}"}
-bin=$(swift build -c release --product PhotosCleanupApp ${arch[@]+"${arch[@]}"} --show-bin-path)
+# The default build system records SDK 15.0 in the binary whatever SDK it builds with, and macOS
+# then draws the window in its pre-macOS 26 style. The native one records the real SDK.
+build=(swift build -c release --build-system native --product PhotosCleanupApp ${arch[@]+"${arch[@]}"})
+"${build[@]}"
+bin=$("${build[@]}" --show-bin-path)
 
 app=".build/Photos Cleanup.app"
 rm -rf "$app"
