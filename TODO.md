@@ -22,7 +22,7 @@ Not pursuing:
 
 ## Native app plan
 
-Each phase ended in something that ran. Done 2026-10-29 except the CI and Dependabot cleanup.
+Each phase ended in something that ran. All done 2026-10-29.
 
 ### Phase 0: skeleton and early risks
 
@@ -68,7 +68,7 @@ Done when: every pass gives the same candidates as the browser UI on the real li
 
 - [x] Delete `PhotosCleanupServer` and its tests, the Hummingbird dependency, `Sources/PhotosCleanup` (CLI, UI resource, Info.plist), `src/`, `public/`, `index.html`, the pnpm, Vite and tsconfig files, and Core's `thumbnail()` and `jpeg()` if nothing else calls them.
 - [x] `verdictStats` is reachable only over HTTP today. Keep `Cleanup.verdictStats()` and `decisions.jsonl` when deleting the route; until the app shows the stats, read `decisions.jsonl` by hand.
-- [ ] CI, pre-commit and Dependabot: drop pnpm, `tsc` and the npm ecosystem.
+- [x] CI, pre-commit and Dependabot: drop pnpm, `tsc` and the npm ecosystem.
 - [x] Skills: replace `start-server` and `open-browser` with one `run-app` skill over `scripts/app.sh run`.
 - [x] Docs: README (cask install, the app's own permission, no port or options), CONTRIBUTING, ARCHITECTURE, CLAUDE.md, SECURITY (no local listener).
 
