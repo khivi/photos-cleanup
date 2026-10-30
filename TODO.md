@@ -24,6 +24,7 @@ Not pursuing:
 - **Dry run** (the old tool's `--dry-run`). Nothing moves until Move to Albums is confirmed.
 - **Face-based best pick** (decided 2026-10-30). `VNDetectFaceCaptureQualityRequest` would rank people shots by their worst face; the aesthetics ★ is rarely wrong in practice.
 - **Side-by-side compare in a group** (decided 2026-10-30), as in PhotoSweeper's Face-to-Face. The ★ is rarely wrong, and ←/→ in the preview already flips between frames.
+- **Screen Recordings pass** (decided 2026-10-30). The library has 4; they show in Videos.
 - **Streaks, widgets, reminders, video compression, Live Photo → still** (swipe apps, CleanMy Phone). Phone retention features; compression and conversion re-import through PhotoKit and lose metadata.
 
 ## Native app plan
@@ -120,8 +121,7 @@ Compared against CleanMy Phone, Gemini 2, PhotoSweeper, PowerPhotos, Slidebox/Sw
 - [x] **Video playback in the preview** — `PHImageManager.requestPlayerItem` and AVKit's `VideoPlayer`; Space, ←/→, K and ⌫ stay the app's keys. Both video passes need it: a poster frame doesn't show what a video is.
 - [x] **Videos pass** — every video (not favorites, not in the user's albums), longest first by `PHAsset.duration`, the duration on each cell. Videos under ~2 s (accidental record taps; a `Passes` constant set by eye) start Delete, the rest Keep. Albums "Videos - Delete Me" / "Videos - Keep". Sort by size instead if Space freed lands.
 - [x] **By-hand check of the merge (2026-10-30)** — Delete in Photos… and Cancel (deletes nothing) on a throwaway photo; All's month headers and Done; video playback with the app's keys.
-- [ ] **Screen Recordings pass** — `PHAssetMediaSubtypeVideoScreenRecording` (macOS 10.15+), read like `.photoScreenshot`. All start Delete, longest first. First count them in Photos (Albums → Utilities → Screen Recordings): if only a handful, leave them in Videos instead.
-- [ ] **Saved Images: measure first** — WhatsApp/Telegram saves, memes, forwards. Count `PHAssetResource.originalFilename` matching `-WA\d+` and photos with no location. A few dozen: drop it. Thousands: design a pass that starts Keep and preselects Delete only where Vision finds no people (photos family send look the same by filename).
+- [ ] **Saved Images: measure first** — Photos (macOS 27) has its own Recently Saved and Captured by Me albums, which PhotoKit doesn't expose; check Recently Saved's size in Photos first. WhatsApp/Telegram saves, memes, forwards. Count `PHAssetResource.originalFilename` matching `-WA\d+` and photos with no location. A few dozen: drop it. Thousands: design a pass that starts Keep and preselects Delete only where Vision finds no people (photos family send look the same by filename).
 
 ### Future (not next up)
 
