@@ -71,6 +71,7 @@ public final class ReviewModel {
         case .pass(let k) where Passes.verdictKinds.contains(k):
             if let v = p.verdict, !v.keep { return .delete }
             return .keep
+        case .pass("videos"): return p.photo.duration < Passes.accidentalVideoMax ? .delete : .keep
         case .pass: return p.photo.edited ? .keep : .delete  // Low Quality: edits are kept
         default: return .keep
         }
@@ -84,7 +85,7 @@ public final class ReviewModel {
     public var doomed: [PassPhoto] { photos.filter { decisions[$0.id] == .delete } }
     public var keepers: [PassPhoto] {
         let best = best
-        let editsKeep = !Passes.verdictKinds.contains(view.passKey ?? "")
+        let editsKeep = view.passKey.map { $0 == "low-quality" || Passes.grouped.contains($0) } ?? false
         return photos.filter {
             decisions[$0.id] == .keep
                 && (touched.contains($0.id) || $0.verdict != nil || best.contains($0.id)
@@ -376,13 +377,16 @@ public final class ReviewModel {
         public let badge: String?
         public let best: Bool
         public let reason: String?
+        public let video: Bool
     }
 
     public var preview: Preview? {
         guard previewing, let id = anchor else { return nil }
         let verdict = photos.first { $0.id == id }?.verdict
         let badge: String? = view == .deleted ? "✗ Delete Me" : decision(id).map { $0 == .keep ? "✓ Keep" : "✗ Delete" }
-        return Preview(id: id, badge: badge, best: isBest(id), reason: verdict.map { "\($0.kind): \($0.reason)" })
+        return Preview(
+            id: id, badge: badge, best: isBest(id), reason: verdict.map { "\($0.kind): \($0.reason)" },
+            video: displayed.first { $0.id == id }?.isMovie ?? false)
     }
 
     public func selectAll() { selected = Set(order) }
@@ -426,7 +430,7 @@ public final class ReviewModel {
         }
         return Info(
             id: id, date: p.photo.date.map { $0.formatted(style) } ?? "Unknown date",
-            kind: p.photo.screenshot ? "Screenshot" : "Photo",
+            kind: p.photo.isMovie ? "Video" : p.photo.screenshot ? "Screenshot" : "Photo",
             verdict: p.verdict.map { "\($0.kind): \($0.reason)" },
             albums: p.photo.albums.isEmpty
                 ? "In no album"

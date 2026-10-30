@@ -107,7 +107,9 @@ public actor Cleanup {
         switch kind {
         case "screenshots":
             found = candidatePhotos(
-                photos, ignoring: ignoreAlbums, onlyScreenshots: true, keepAlbumPhotos: keepAlbumPhotos)
+                photos, ignoring: ignoreAlbums, kind: .screenshot, keepAlbumPhotos: keepAlbumPhotos)
+        case "videos":
+            found = candidatePhotos(photos, ignoring: ignoreAlbums, kind: .video, keepAlbumPhotos: keepAlbumPhotos)
         case "paperwork", "low-quality":
             found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos)
         case "bursts", "similar":
@@ -154,6 +156,10 @@ public actor Cleanup {
     public func pass(_ kind: String, threshold: Double = Passes.lowQualityMax) throws -> PassResult {
         var photos = try candidates(kind)
         var result = PassResult()
+        if kind == "videos" {  // no Vision, no verdicts
+            result.photos = photos.sorted { $0.duration > $1.duration }.map { PassPhoto(photo: $0) }
+            return result
+        }
         if kind != "screenshots" { (photos, result.progress) = analysed(kind, photos, threshold: threshold) }
         if Passes.grouped.contains(kind) {
             result.groups = groups(kind, photos).reversed().map { g in  // newest group first
@@ -184,7 +190,7 @@ public actor Cleanup {
         var out: [String: Int?] = ["all": photos.count]
         for (kind, _) in Passes.all {
             guard let found = try? candidates(kind) else { continue }
-            if kind == "screenshots" {
+            if kind == "screenshots" || kind == "videos" {
                 out[kind] = found.count
                 continue
             }

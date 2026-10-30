@@ -20,7 +20,7 @@ import Testing
     ]
     let ignore = loadIgnoreAlbums(dir: tempDir())
     #expect(candidatePhotos(photos, ignoring: ignore).map(\.uuid) == ["plain", "smart", "filed", "undated", "old"])
-    #expect(candidatePhotos(photos, ignoring: ignore, onlyScreenshots: true).map(\.uuid) == ["shot"])
+    #expect(candidatePhotos(photos, ignoring: ignore, kind: .screenshot).map(\.uuid) == ["shot"])
     #expect(
         candidatePhotos(photos, ignoring: ignore, requireValidDate: true).map(\.uuid) == ["plain", "smart", "filed"])
 }
@@ -372,4 +372,40 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     let vision: [String: VisionResult?] = ["a": vr(0.1, [0]), "b": vr(0.9, [0.2]), "c": vr(0.5, [0.4])]
     let (c, _) = try await makeCleanup(photos, vision: vision)
     #expect(try await c.pass("similar").groups.map(\.best) == ["c"])
+}
+
+// MARK: Videos
+
+@Test func videoCandidatesAreVideosOnly() {
+    let photos = [
+        Photo(uuid: "v", isMovie: true, duration: 5),
+        Photo(uuid: "fav", isMovie: true, favorite: true),
+        Photo(uuid: "mine", isMovie: true, albums: ["Trip to Goa"]),
+        Photo(uuid: "p"), Photo(uuid: "s", screenshot: true),
+    ]
+    let ignore = loadIgnoreAlbums(dir: tempDir())
+    #expect(candidatePhotos(photos, ignoring: ignore, kind: .video).map(\.uuid) == ["v"])
+    #expect(candidatePhotos(photos, ignoring: ignore).map(\.uuid) == ["p"])  // other passes exclude videos
+}
+
+@Test func videosPassIsLongestFirstWithoutVision() async throws {
+    let vids = [
+        Photo(uuid: "a", isMovie: true, duration: 3), Photo(uuid: "b", isMovie: true, duration: 90),
+        Photo(uuid: "c", isMovie: true, duration: 1), Photo(uuid: "p"),
+    ]
+    let (c, lib) = try await makeCleanup(vids)
+    #expect(try await c.pass("videos").photos.map(\.photo.uuid) == ["b", "a", "c"])
+    #expect(await c.counts()["videos"] == .some(3))
+    #expect(lib.visionCalls.withLock { $0.isEmpty })
+    for k in ["screenshots", "paperwork", "low-quality", "bursts", "similar"] {
+        #expect(try await c.candidates(k).allSatisfy { !$0.isMovie })
+        #expect(try await c.pass(k).photos.isEmpty)
+    }
+}
+
+@Test func durationLabel() {
+    #expect(Photo(uuid: "a", isMovie: true, duration: 5).durationLabel == "0:05")
+    #expect(Photo(uuid: "a", isMovie: true, duration: 74.6).durationLabel == "1:15")
+    #expect(Photo(uuid: "a", isMovie: true, duration: 3600).durationLabel == "60:00")
+    #expect(Photo(uuid: "a", duration: 5).durationLabel == nil)
 }
