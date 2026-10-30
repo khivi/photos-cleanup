@@ -345,3 +345,10 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     #expect(lib.adds.withLock { $0.map(\.album) } == ["All - Delete Me"])
     #expect(await c.verdictStats().isEmpty)
 }
+
+@Test func similarSkipsPhotosBurstsFiled() async throws {
+    let p = Photo(uuid: "a", date: .now, albums: ["Bursts - Keep"])
+    let (c, _) = try await makeCleanup([p], keepAlbumPhotos: false)
+    #expect(try await c.candidates("similar").isEmpty)
+    #expect(try await c.candidates("low-quality").map(\.uuid) == ["a"])
+}

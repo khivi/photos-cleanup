@@ -115,8 +115,10 @@ public actor Cleanup {
                 photos, ignoring: ignoreAlbums, requireValidDate: true, keepAlbumPhotos: keepAlbumPhotos)
         default: throw CleanupError.unknownPass
         }
-        let filed = Set([Passes.deleteAlbum(kind)!, Passes.keepAlbum(kind)!, Passes.allDeleteAlbum])
-            .union(Passes.legacyAlbums[kind] ?? [])
+        // Similar also skips photos Bursts already filed: they are the same kind of decision.
+        let owners = kind == "similar" ? ["similar", "bursts"] : [kind]
+        let filed = Set(owners.flatMap { [Passes.deleteAlbum($0)!, Passes.keepAlbum($0)!] } + [Passes.allDeleteAlbum])
+            .union(owners.flatMap { Passes.legacyAlbums[$0] ?? [] })
         return found.filter { !committed.contains($0.uuid) && filed.isDisjoint(with: $0.albums) }
     }
 
