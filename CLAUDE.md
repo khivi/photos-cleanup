@@ -1,8 +1,9 @@
 # photos-cleanup
 
 A native macOS app (SwiftUI) for reviewing and clearing unwanted photos in the
-Photos library. The app never deletes; it moves flagged photos into a "Delete Me"
-album and the user deletes there.
+Photos library. It moves flagged photos into a "Delete Me" album. It deletes only
+those photos, only when the user clicks Delete in Photos…, after macOS confirms; Photos
+keeps them in Recently Deleted for 30 days.
 
 ## One Swift package
 

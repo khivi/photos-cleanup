@@ -62,6 +62,8 @@ public actor Cleanup {
     var byUUID: [String: Photo] = [:]
     /// The photo list is read once and never sees album changes, so commits are tracked here.
     var committed: Set<String> = []
+    /// The subset of `committed` filed into a Delete Me album.
+    var filedDelete: Set<String> = []
 
     var vision: [String: VisionResult?] = [:]  // nil: no local image
     var visionQueue: [String] = []
@@ -324,7 +326,7 @@ public actor Cleanup {
         public var keepAlbum: String
     }
 
-    /// File photos into the pass's Delete Me (`delete`) and Keep (`keep`) albums. Never deletes.
+    /// File photos into the pass's Delete Me (`delete`) and Keep (`keep`) albums.
     /// `Passes.allKey` is the All view: only `delete` is filed, into "All - Delete Me"; `keep` is ignored
     /// and nothing is logged, since All has no verdicts.
     public func commit(_ kind: String, delete: [String], keep: [String]) async throws -> Committed {
@@ -341,10 +343,28 @@ public actor Cleanup {
             _ = try await offload { try library.add(album: name, uuids: uuids) }
         }
         committed.formUnion(doomed + kept)
+        filedDelete.formUnion(doomed)
         if Passes.verdictKinds.contains(kind) {
             logDecisions(kind, doomed.map { ($0, "delete") } + kept.map { ($0, "keep") })
         }
         return Committed(added: doomed.count, album: album, kept: kept.count, keepAlbum: keepAlbum)
+    }
+
+    /// Deletes the photos of `uuids` that sit in a Delete Me album, after macOS confirms; they stay in
+    /// Recently Deleted for 30 days. Returns the uuids deleted: none when the user cancels.
+    public func delete(_ uuids: [String]) async throws -> [String] {
+        let waiting = Set(photos.filter { Passes.waitingAlbum(in: $0.albums) != nil }.map(\.uuid)).union(filedDelete)
+        let doomed = uuids.filter { waiting.contains($0) && byUUID[$0] != nil }
+        guard !doomed.isEmpty else { return [] }
+        let library = library
+        let n = try await offload { try library.delete(uuids: doomed) }
+        guard n > 0 else { return [] }
+        let gone = Set(doomed)
+        photos.removeAll { gone.contains($0.uuid) }
+        for u in gone { byUUID[u] = nil }
+        filedDelete.subtract(gone)
+        committed.subtract(gone)
+        return doomed
     }
 
     /// One line per committed photo that has a verdict, to measure the model's accuracy.

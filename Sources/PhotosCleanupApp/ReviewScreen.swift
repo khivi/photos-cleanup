@@ -98,6 +98,13 @@ struct ReviewScreen: View {
                 .disabled(!model.canSetAll)
             }
         }
+        if model.view == .deleted {
+            ToolbarItem {
+                Button(model.deleteInPhotosLabel, systemImage: "trash") { Task { await model.deleteInPhotos() } }
+                    .labelStyle(.titleAndIcon)
+                    .disabled(!model.canDeleteInPhotos)
+            }
+        }
         if model.canMark {  // Keep All / Delete All stay pass-only; All has just the move
             ToolbarItem {
                 Button(model.moveButtonLabel) { model.confirmingMove = true }
@@ -255,6 +262,8 @@ struct ReviewCommands: Commands {
             Button(model?.inspectorToggleLabel ?? "Show Info") { model?.showsInspector.toggle() }
                 .keyboardShortcut("i").disabled(model == nil)
             Button("Preview") { model?.togglePreview() }.disabled(model == nil)
+            Button(model?.deleteInPhotosLabel ?? "Delete in Photos…") { Task { await model?.deleteInPhotos() } }
+                .disabled(model?.canDeleteInPhotos != true)
             Button("Move to Albums…") { model?.confirmingMove = true }
                 .keyboardShortcut(.return)
                 .disabled(model?.canMove != true)
