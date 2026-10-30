@@ -39,8 +39,12 @@ public enum Passes {
         ("screenshots", "Screenshots"),
         ("paperwork", "Paperwork"),
         ("bursts", "Bursts"),
+        ("similar", "Similar"),
         ("low-quality", "Low Quality"),
     ]
+
+    /// Passes shown as groups of photos, with the best of each marked.
+    public static let grouped: Set<String> = ["bursts", "similar"]
 
     /// The All view is not a pass, but it has a title and one Delete Me album, derived like a pass's.
     public static let allKey = "all"
@@ -67,6 +71,8 @@ public enum Passes {
             "Receipts, tickets, tracking, promos, documents, notes and labels. The on-device model preselects the ones not worth keeping.",
         "bursts":
             "Near-identical shots taken within a minute. The best of each group starts as Keep, the rest as Delete.",
+        "similar":
+            "The same scene shot minutes or days apart, grouped by day. The best of each group starts as Keep, the rest as Delete.",
         "low-quality": "Blurry, dark or accidental shots, by Vision's aesthetics score. All start as Delete.",
     ]
 
@@ -202,6 +208,34 @@ public func splitSimilar(_ group: [Photo], vision: [String: VisionResult?]) -> [
     }
     runs.append(run)
     return runs.filter { $0.count >= 2 }
+}
+
+/// Group by calendar day: within a day, in time order, a photo joins the first group whose first
+/// photo is within `similarMaxDistance`, else starts one. Groups of one are dropped. Comparing to
+/// the first photo, not any member, stops chains of slowly changing shots merging into one group.
+/// Utility images and photos not yet analysed never join.
+/// ponytail: per-day only, so a scene shot on two days stays two groups; widen to a week if that misses real repeats.
+public func groupSimilar(_ photos: [Photo], vision: [String: VisionResult?], calendar: Calendar = .current)
+    -> [[Photo]]
+{
+    var days: [DateComponents: [(photo: Photo, print: [Float])]] = [:]
+    for p in photos.sorted(by: { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }) {
+        guard let d = p.date, let v = vision[p.uuid] ?? nil, !v.utility else { continue }
+        days[calendar.dateComponents([.year, .month, .day], from: d), default: []].append((p, v.print))
+    }
+    var groups: [[Photo]] = []
+    for shots in days.values {
+        var day: [[(photo: Photo, print: [Float])]] = []
+        for s in shots {
+            if let i = day.firstIndex(where: { distance($0[0].print, s.print) < Passes.similarMaxDistance }) {
+                day[i].append(s)
+            } else {
+                day.append([s])
+            }
+        }
+        groups += day.filter { $0.count >= 2 }.map { $0.map(\.photo) }
+    }
+    return groups.sorted { $0[0].date! < $1[0].date! }
 }
 
 func distance(_ a: [Float], _ b: [Float]) -> Float {

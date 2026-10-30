@@ -19,7 +19,7 @@ public enum Decision: Sendable, Equatable {
 public final class ReviewModel {
     public private(set) var view = ReviewView.all
     public private(set) var photos: [PassPhoto] = []
-    /// Bursts view: one row per burst.
+    /// Grouped passes: one row per group.
     public private(set) var groups: [BurstGroup] = []
     public private(set) var decisions: [String: Decision] = [:]
     /// Decided explicitly by the user.
@@ -61,12 +61,12 @@ public final class ReviewModel {
 
     public var best: Set<String> { Set(groups.map(\.best)) }
 
-    /// Vision's pick of a burst, shown with a star in the Bursts view only.
-    public func isBest(_ id: String) -> Bool { view == .pass("bursts") && best.contains(id) }
+    /// Vision's pick of a group, shown with a star in the grouped passes only.
+    public func isBest(_ id: String) -> Bool { view.passKey.map(Passes.grouped.contains) == true && best.contains(id) }
 
     func initialDecision(_ p: PassPhoto) -> Decision {
         switch view {
-        case .pass("bursts"): return best.contains(p.id) ? .keep : .delete
+        case .pass(let k) where Passes.grouped.contains(k): return best.contains(p.id) ? .keep : .delete
         case .pass(let k) where Passes.verdictKinds.contains(k):
             if let v = p.verdict, !v.keep { return .delete }
             return .keep
@@ -164,7 +164,8 @@ public final class ReviewModel {
 
     public var progressError: String? {
         guard !loading, let e = progress.error else { return nil }
-        return "\(view == .pass("bursts") ? "Similarity check unavailable" : "AI verdicts unavailable"): \(e)"
+        return
+            "\(view.passKey.map(Passes.grouped.contains) == true ? "Similarity check unavailable" : "AI verdicts unavailable"): \(e)"
     }
 
     public var banner: String? {
@@ -228,7 +229,9 @@ public final class ReviewModel {
             var prog = JobProgress()
             if let key = v.passKey {
                 let r = try await cleanup.pass(key)
-                (items, gs, prog) = (key == "bursts" ? Self.flat(r.groups) : r.photos, r.groups, r.progress)
+                (items, gs, prog) = (
+                    Passes.grouped.contains(key) ? Self.flat(r.groups) : r.photos, r.groups, r.progress
+                )
             } else {
                 items = await cleanup.photos.map { PassPhoto(photo: $0) }
             }
@@ -253,7 +256,7 @@ public final class ReviewModel {
     /// One poll tick while Vision or verdicts run: new candidates merge in, touched choices stay.
     public func refresh() async {
         guard let key = view.passKey, let r = try? await cleanup.pass(key), view.passKey == key else { return }
-        if key == "bursts" {  // groups change as more photos are analysed: take them wholesale
+        if Passes.grouped.contains(key) {  // groups change as more photos are analysed: take them wholesale
             groups = r.groups
             photos = Self.flat(r.groups)
         } else {

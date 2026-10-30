@@ -132,7 +132,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c)
         #expect(
             ReviewModel.tabs.map(\.title) == [
-                "All", "Screenshots", "Paperwork", "Bursts", "Low Quality", "To be deleted",
+                "All", "Screenshots", "Paperwork", "Bursts", "Similar", "Low Quality", "To be deleted",
             ])
         await m.refreshCounts()
         await m.select(.all)

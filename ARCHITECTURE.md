@@ -47,7 +47,7 @@ The Swift package has no dependencies.
 | File | Role |
 | --- | --- |
 | `PhotosCleanupApp.swift` | The app, its window and the Settings window. It asks for Photos access, loads the library, then shows the review screen. |
-| `ReviewScreen.swift` | The sidebar, the toolbar, the grid, the Info panel (an `.inspector`, ⌘I) and the menu commands. Bursts show as one grid section per group. The grid takes the arrow keys and Space; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
+| `ReviewScreen.swift` | The sidebar, the toolbar, the grid, the Info panel (an `.inspector`, ⌘I) and the menu commands. Bursts and Similar show as one grid section per group. The grid takes the arrow keys and Space; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
 | `Thumbnails.swift` | One `PHCachingImageManager`: high-quality thumbnails, cached about 30 rows ahead of the visible ones, and the large preview. The settings come from the grid spike (`feea7cb`). |
 | `SettingsView.swift` | The Settings window: Keep photos in albums, and the ignored albums. |
 
@@ -64,6 +64,7 @@ Albums are always `<Title> - Delete Me` and `<Title> - Keep`.
 | Screenshots | Screenshots | Foundation Models verdict | The verdict |
 | Paperwork | Non-screenshot photos that Vision marks `isUtility` | Foundation Models verdict | The verdict. A "screenshot" verdict is always keep. |
 | Bursts | Photos taken within 60 s of each other | Vision feature-print distance below 0.45. `isUtility` images never group. | Best aesthetics score: keep. Others: delete. |
+| Similar | Photos of one calendar day, not in a Bursts group | Feature-print distance below 0.45 to the group's first photo. `isUtility` images never group. | As Bursts. |
 | Low Quality | All other candidates | Vision aesthetics score at or below −0.75 | Delete |
 
 Every pass skips favorites, videos, photos in your own albums, and photos already in its own albums.
@@ -99,7 +100,7 @@ sequenceDiagram
 ```
 
 1. **Launch.** The app asks for Photos access. `Cleanup.load()` reads the photo list once.
-2. **Vision analysis.** A background job sends all still photos to `PhotoKitLibrary.vision` in batches of 20. Results go to a disk cache. Bursts, Low Quality and Paperwork read this cache.
+2. **Vision analysis.** A background job sends all still photos to `PhotoKitLibrary.vision` in batches of 20. Results go to a disk cache. Bursts, Similar, Low Quality and Paperwork read this cache.
 3. **Verdicts.** When you open Screenshots or Paperwork, the classifier queues the photos with no verdict. It renders each as a 1024 px image and asks Foundation Models. Verdicts go to a disk cache. A photo the model cannot judge is not queued again until the next launch.
 4. **Thumbnails and preview.** The views ask `PHCachingImageManager` directly. Nothing is written to disk. The preview shows the local copy first. If the full photo is only in iCloud, Photos downloads it.
 5. **Move to Albums.** After you confirm, `Cleanup.commit` adds the photos to each album. It also logs your decision against the model's verdict. Undo covers marks, not the move. In All, only the Delete marks move, to one album ("All - Delete Me"); nothing is logged, because All has no verdicts.

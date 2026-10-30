@@ -132,6 +132,38 @@ import Testing
     #expect(try await c.pass("bursts").groups.map { $0.photos.map(\.uuid) } == [["c", "d"], ["a", "b"]])
 }
 
+/// Photos at hours past local midnight of t0's day, so day boundaries hold in any time zone.
+private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
+    let midnight = Calendar.current.startOfDay(for: t0)
+    return hours.map { Photo(uuid: $0.key, date: midnight.addingTimeInterval($0.value * 3600)) }
+}
+
+@Test func similarGroupsByDayAgainstTheFirstPhoto() async throws {
+    // a, b, c: same day, c is 0.4 from a but 0.8 from nothing else; d: 0.5 from a, so a new
+    // group even though only 0.1 from c (no chaining); e: two days later, never joins a.
+    let photos = atHours(["a": 1, "b": 3, "c": 5, "d": 7, "e": 49, "f": 9, "u": 2])
+    let vision: [String: VisionResult?] = [
+        "a": vr(0.1, [0]), "b": vr(0.9, [0.2]), "c": vr(0.5, [0.4]), "d": vr(0.5, [0.5]),
+        "e": vr(0.5, [0]), "f": vr(0.5, [3]), "u": vr(0.5, utility: true, [0]),
+    ]
+    let (c, _) = try await makeCleanup(photos, vision: vision)
+    let r = try await c.pass("similar")
+    #expect(r.groups.map { $0.photos.map(\.uuid) } == [["a", "b", "c"]])
+    #expect(r.groups[0].best == "b")
+}
+
+@Test func similarLeavesOutBurstMembers() async throws {
+    // a, b are a burst (10 s apart); c, d are hours later and look the same as them.
+    let midnight = Calendar.current.startOfDay(for: t0)
+    let photos = [("a", 3600.0), ("b", 3610), ("c", 7200), ("d", 10800)].map {
+        Photo(uuid: $0.0, date: midnight.addingTimeInterval($0.1))
+    }
+    let vision: [String: VisionResult?] = ["a": vr(0.5, [0]), "b": vr(0.5, [0]), "c": vr(0.5, [0]), "d": vr(0.5, [0])]
+    let (c, _) = try await makeCleanup(photos, vision: vision)
+    #expect(try await c.pass("bursts").groups.map { $0.photos.map(\.uuid) } == [["a", "b"]])
+    #expect(try await c.pass("similar").groups.map { $0.photos.map(\.uuid) } == [["c", "d"]])
+}
+
 @Test func lowQualityFiltersByVisionScore() async throws {
     let vision: [String: VisionResult?] = ["a": vr(-0.9), "b": vr(0.5), "edge": vr(Passes.lowQualityMax), "c": nil]
     let (c, _) = try await makeCleanup(["a", "b", "c", "edge"].map { Photo(uuid: $0) }, vision: vision)
@@ -312,4 +344,11 @@ import Testing
     #expect(done == .init(added: 1, album: "All - Delete Me", kept: 0, keepAlbum: ""))
     #expect(lib.adds.withLock { $0.map(\.album) } == ["All - Delete Me"])
     #expect(await c.verdictStats().isEmpty)
+}
+
+@Test func similarSkipsPhotosBurstsFiled() async throws {
+    let p = Photo(uuid: "a", date: .now, albums: ["Bursts - Keep"])
+    let (c, _) = try await makeCleanup([p], keepAlbumPhotos: false)
+    #expect(try await c.candidates("similar").isEmpty)
+    #expect(try await c.candidates("low-quality").map(\.uuid) == ["a"])
 }
