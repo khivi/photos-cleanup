@@ -66,7 +66,8 @@ public final class ReviewModel {
 
     func initialDecision(_ p: PassPhoto) -> Decision {
         switch view {
-        case .pass(let k) where Passes.grouped.contains(k): return best.contains(p.id) || p.photo.edited ? .keep : .delete
+        case .pass(let k) where Passes.grouped.contains(k):
+            return best.contains(p.id) || p.photo.edited ? .keep : .delete
         case .pass(let k) where Passes.verdictKinds.contains(k):
             if let v = p.verdict, !v.keep { return .delete }
             return .keep
@@ -83,9 +84,11 @@ public final class ReviewModel {
     public var doomed: [PassPhoto] { photos.filter { decisions[$0.id] == .delete } }
     public var keepers: [PassPhoto] {
         let best = best
+        let editsKeep = !Passes.verdictKinds.contains(view.passKey ?? "")
         return photos.filter {
             decisions[$0.id] == .keep
-                && (touched.contains($0.id) || $0.verdict != nil || best.contains($0.id) || $0.photo.edited)
+                && (touched.contains($0.id) || $0.verdict != nil || best.contains($0.id)
+                    || editsKeep && $0.photo.edited)
         }
     }
     /// The "Move to Albums?" dialog is open. The toolbar button and Photo > Move to Albums both set it.

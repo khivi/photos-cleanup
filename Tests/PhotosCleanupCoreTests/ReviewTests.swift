@@ -31,6 +31,11 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m3 = ReviewModel(cleanup: c3)
         await m3.select(.pass("screenshots"))
         #expect(m3.decisions == ["s": .delete])
+        let (c4, _) = try await makeCleanup(
+            [Photo(uuid: "t", screenshot: true, edited: true)], judge: FakeJudge(off: "off"))
+        let m4 = ReviewModel(cleanup: c4)
+        await m4.select(.pass("screenshots"))
+        #expect(m4.decisions == ["t": .keep] && m4.keepers.isEmpty)  // no verdict: an edit doesn't file it in Keep
     }
 
     @Test func initialDecisionsPerPass() async throws {
