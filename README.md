@@ -65,7 +65,7 @@ If access is off, the app shows an Open Privacy Settings button.
 3. Review the grid. Each photo starts with a suggestion; only photos to delete are marked.
 4. Select photos and change the marks: K keeps, ⌫ deletes. Space shows the selected photo large.
 5. Click Move to Albums and confirm. Photos marked delete go into the pass's "Delete Me" album. Keepers go into its "Keep" album.
-6. You can also mark photos delete in All. They start unmarked, and Move to Albums sends the marked ones to "All - Delete Me". All has no Keep album. Every pass skips photos in that album.
+6. You can also mark photos delete in All. They start unmarked, and Move to Albums sends the marked ones to "All - Delete Me". All has no Keep album. Every pass skips photos in that album. All groups photos by month; the Done switch on a month header remembers you reviewed it, until the month gains photos.
 7. Open that album in Photos. Check it, then delete the photos there. To be deleted lists the albums.
 
 | Key | Action |

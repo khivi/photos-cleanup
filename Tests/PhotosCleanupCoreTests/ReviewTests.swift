@@ -480,6 +480,40 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         await m.select(.pass("screenshots"))
         #expect(m.canSetAll)
     }
+
+    @Test func allGroupsByMonthWithDone() async throws {
+        let utc = TimeZone(identifier: "UTC")!
+        let en = Locale(identifier: "en_US")
+        func at(_ iso: String) -> Date { ISO8601DateFormatter().date(from: iso)! }
+        let photos = [
+            Photo(uuid: "u"), Photo(uuid: "a", date: at("2026-10-20T12:00:00Z")),
+            Photo(uuid: "b", date: at("2026-10-15T12:00:00Z")), Photo(uuid: "c", date: at("2024-03-05T12:00:00Z")),
+        ]
+        let (c, _) = try await makeCleanup(photos, judge: FakeJudge(off: "off"))
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let m = ReviewModel(cleanup: c, dir: dir)
+        await m.select(.all)
+
+        let gs = ReviewModel.monthGroups(photos, timeZone: utc)
+        #expect(gs.map(\.best) == ["2026-10", "2024-03", "unknown"])
+        #expect(
+            gs.map { m.header($0, locale: en, timeZone: utc) } == [
+                "October 2026 · 2", "March 2024 · 1", "Unknown date · 1",
+            ])
+        #expect(m.photos.map(\.id) == m.groups.flatMap(\.photos).map(\.id))  // arrow order is the display order
+
+        let oct = try #require(m.groups.first { $0.photos.count == 2 })
+        #expect(!m.isDone(oct))
+        m.toggleDone(oct)
+        #expect(m.isDone(oct) && loadReviewedMonths(dir: dir)[oct.best] == 2)
+        #expect(ReviewModel(cleanup: c, dir: dir).isDone(oct))  // reloaded
+
+        let grown = BurstGroup(photos: oct.photos + [Photo(uuid: "n")], best: oct.best)
+        #expect(!m.isDone(grown))  // more photos than when marked
+        m.toggleDone(oct)
+        #expect(loadReviewedMonths(dir: dir).isEmpty)
+    }
 }
 
 @MainActor

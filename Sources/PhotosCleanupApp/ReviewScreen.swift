@@ -130,13 +130,21 @@ struct ReviewScreen: View {
             // One ScrollView for every list: a second one would leave keyboard focus on the old one.
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize, maximum: cellMax), spacing: 4)], spacing: 4) {
-                    if model.view.passKey.map(Passes.grouped.contains) == true {
+                    if model.view == .all || model.view.passKey.map(Passes.grouped.contains) == true {
                         ForEach(model.groups, id: \.best) { group in
                             Section {
                                 ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
                             } header: {
-                                Text(group.headerLabel()).font(.headline)
-                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                                HStack {
+                                    Text(model.header(group)).font(.headline)
+                                    if model.view == .all {
+                                        Toggle(
+                                            "Done",
+                                            isOn: Binding(
+                                                get: { model.isDone(group) }, set: { _ in model.toggleDone(group) }))
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
                             }
                         }
                     } else {
