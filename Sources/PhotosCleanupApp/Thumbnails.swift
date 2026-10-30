@@ -7,7 +7,7 @@ let cellSize: CGFloat = 120
 /// Adaptive cells grow up to this to fill a row; thumbnails are requested at this size.
 let cellMax: CGFloat = 150
 
-/// Thumbnails for the grid, from one PHCachingImageManager (settings measured in spike/grid_probe.swift).
+/// Thumbnails for the grid, from one PHCachingImageManager (settings measured in the grid spike, `feea7cb`).
 @MainActor
 final class Thumbnails {
     private let manager = PHCachingImageManager()
@@ -162,13 +162,14 @@ struct PhotoCell: View {
 struct PhotoPreview: View {
     let preview: ReviewModel.Preview
     let thumbnails: Thumbnails
-    @State private var image: NSImage?
-    @State private var requestID: PHImageRequestID?
 
     var body: some View {
         GeometryReader { geo in
             Color.black
-                .overlay { if let image { Image(nsImage: image).resizable().scaledToFit().padding(12) } }
+                .overlay {
+                    LargeImage(id: preview.id, side: max(geo.size.width, geo.size.height), thumbnails: thumbnails)
+                        .padding(12)
+                }
                 .overlay(alignment: .topLeading) {
                     HStack(spacing: 6) {
                         if let badge = preview.badge { chip(badge, preview.badge == "✓ Keep" ? .green : .red) }
@@ -179,14 +180,6 @@ struct PhotoPreview: View {
                 .overlay(alignment: .bottomLeading) {
                     if let reason = preview.reason { chip(reason, .black.opacity(0.6)).padding(16) }
                 }
-                .task(id: preview.id) {
-                    if let requestID { thumbnails.cancel(requestID) }
-                    let id = preview.id
-                    requestID = thumbnails.requestLarge(id, side: max(geo.size.width, geo.size.height)) { img in
-                        if id == preview.id { image = img ?? image }
-                    }
-                }
-                .onDisappear { if let requestID { thumbnails.cancel(requestID) } }
         }
     }
 
@@ -194,5 +187,27 @@ struct PhotoPreview: View {
         Text(text).font(.callout.weight(.semibold)).foregroundStyle(.white)
             .padding(.horizontal, 8).padding(.vertical, 3)
             .background(color, in: .rect(cornerRadius: 5))
+    }
+}
+
+/// One photo, aspect-fit, from `Thumbnails.requestLarge`: the local copy first, then the full one.
+struct LargeImage: View {
+    let id: String
+    let side: CGFloat
+    let thumbnails: Thumbnails
+    @State private var image: NSImage?
+    @State private var requestID: PHImageRequestID?
+
+    var body: some View {
+        Group { if let image { Image(nsImage: image).resizable().scaledToFit() } else { Color.clear } }
+            .task(id: id) {
+                image = nil
+                if let requestID { thumbnails.cancel(requestID) }
+                let want = id
+                requestID = thumbnails.requestLarge(want, side: side) { img in
+                    if want == id { image = img ?? image }
+                }
+            }
+            .onDisappear { if let requestID { thumbnails.cancel(requestID) } }
     }
 }

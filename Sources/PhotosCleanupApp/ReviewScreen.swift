@@ -283,15 +283,13 @@ struct InspectorView: View {
     let model: ReviewModel
     let thumbnails: Thumbnails
     let refocus: () -> Void
-    @State private var image: NSImage?
-    @State private var requestID: PHImageRequestID?
 
     var body: some View {
         if let info = model.inspectorInfo() {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     Color.gray.opacity(0.15).frame(height: 200)
-                        .overlay { if let image { Image(nsImage: image).resizable().scaledToFit() } }
+                        .overlay { LargeImage(id: info.id, side: 260, thumbnails: thumbnails) }
                         .clipShape(.rect(cornerRadius: 4))
                     Text(info.date).font(.headline)
                     Text(info.kind).foregroundStyle(.secondary)
@@ -317,15 +315,6 @@ struct InspectorView: View {
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .task(id: info.id) {
-                image = nil
-                if let requestID { thumbnails.cancel(requestID) }
-                let id = info.id
-                requestID = thumbnails.requestLarge(id, side: 260) { img in
-                    if id == model.inspectorInfo()?.id { image = img ?? image }
-                }
-            }
-            .onDisappear { if let requestID { thumbnails.cancel(requestID) } }
         } else {
             Text(model.inspectorPlaceholder).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
