@@ -79,7 +79,7 @@ public struct PhotoKitLibrary: PhotoLibrary {
             out.append(
                 Photo(
                     uuid: id, date: a.creationDate, screenshot: a.mediaSubtypes.contains(.photoScreenshot),
-                    isMovie: a.mediaType == .video,
+                    isMovie: a.mediaType == .video, duration: a.duration,
                     favorite: a.isFavorite, albums: albumsOf[id] ?? []))
         }
         return out

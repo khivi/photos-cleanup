@@ -61,9 +61,9 @@ If access is off, the app shows an Open Privacy Settings button.
 ## Usage
 
 1. Open Photos Cleanup. It reads your library and shows every photo.
-2. Pick a cleanup pass in the sidebar: Screenshots, Paperwork (receipts, tickets, documents), Bursts (repeated shots of one scene), Similar (the same scene on one day, minutes apart or more) or Low Quality. Hover a pass to see what it finds.
+2. Pick a cleanup pass in the sidebar: Screenshots, Paperwork (receipts, tickets, documents), Bursts (repeated shots of one scene), Similar (the same scene on one day, minutes apart or more) Low Quality or Videos (longest first; clips under 2 seconds start as delete). Hover a pass to see what it finds.
 3. Review the grid. Each photo starts with a suggestion; only photos to delete are marked.
-4. Select photos and change the marks: K keeps, ⌫ deletes. Space shows the selected photo large.
+4. Select photos and change the marks: K keeps, ⌫ deletes. Space shows the selected photo large. A video plays in the large view, and video cells show their length.
 5. Click Move to Albums and confirm. Photos marked delete go into the pass's "Delete Me" album. Keepers go into its "Keep" album.
 6. You can also mark photos delete in All. They start unmarked, and Move to Albums sends the marked ones to "All - Delete Me". All has no Keep album. Every pass skips photos in that album.
 7. Open that album in Photos. Check it, then delete the photos there. To be deleted lists the albums.
@@ -78,7 +78,7 @@ If access is off, the app shows an Open Privacy Settings button.
 | ⌘I | Show or hide the Info panel |
 | ⌘Z / ⇧⌘Z | Undo / redo a mark |
 | ⌘↩ | Move to Albums |
-| ⌘1 – ⌘7 | Go to a sidebar item |
+| ⌘1 – ⌘8 | Go to a sidebar item |
 
 Photos keeps deleted items in Recently Deleted for 30 days.
 Restore a photo from there if you change your mind.

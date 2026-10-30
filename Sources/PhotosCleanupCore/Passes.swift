@@ -7,8 +7,22 @@ public struct Photo: Sendable, Hashable, Identifiable {
     public var date: Date? = nil
     public var screenshot = false
     public var isMovie = false
+    /// Seconds; 0 for a photo.
+    public var duration: TimeInterval = 0
     public var favorite = false
     public var albums: [String] = []
+
+    /// "m:ss" for a video, nil for a photo.
+    public var durationLabel: String? {
+        guard isMovie else { return nil }
+        let s = Int(duration.rounded())
+        return "\(s / 60):\(String(format: "%02d", s % 60))"
+    }
+}
+
+/// What a candidate list holds: each photo is exactly one kind.
+public enum PhotoKind: Sendable {
+    case photo, screenshot, video
 }
 
 /// One photo's Vision analysis: feature print, Vision's isUtility, and its aesthetics score.
@@ -41,6 +55,7 @@ public enum Passes {
         ("bursts", "Bursts"),
         ("similar", "Similar"),
         ("low-quality", "Low Quality"),
+        ("videos", "Videos"),
     ]
 
     /// Passes shown as groups of photos, with the best of each marked.
@@ -74,6 +89,8 @@ public enum Passes {
         "similar":
             "The same scene shot minutes or days apart, grouped by day. The best of each group starts as Keep, the rest as Delete.",
         "low-quality": "Blurry, dark or accidental shots, by Vision's aesthetics score. All start as Delete.",
+        "videos":
+            "Videos, longest first. Those under \(Int(accidentalVideoMax)) seconds start as Delete, the rest as Keep.",
     ]
 
     /// Earlier names of a pass's album: photos in them still count as filed.
@@ -95,6 +112,9 @@ public enum Passes {
     /// on the real library: <= -0.75 was almost all accidental shots (black frames, pocket blur,
     /// a finger over the lens); from about -0.7 up, dark or soft photos of people creep in.
     public static let lowQualityMax = -0.75
+    /// Seconds below which a video is suggested as accidental. Set by eye, like `lowQualityMax`:
+    /// shorter clips were pocket recordings and mistaken taps.
+    public static let accidentalVideoMax: TimeInterval = 2
 }
 
 /// Apple's smart albums: membership doesn't mean the user organised the photo.
@@ -153,15 +173,15 @@ public func saveIgnoreAlbums(_ names: [String], dir: URL = settingsDir) throws {
 
 private let minDate = ISO8601DateFormatter().date(from: "2000-01-01T00:00:00Z")!
 
-/// Photos a pass may suggest: not favorited, not videos, and (with `keepAlbumPhotos`, the default)
+/// Photos of one `kind` a pass may suggest: not favorited, and (with `keepAlbumPhotos`, the default)
 /// not in any of the user's own albums.
-/// Screenshots appear only with onlyScreenshots, which returns nothing else.
 public func candidatePhotos(
-    _ photos: [Photo], ignoring ignore: Set<String>, onlyScreenshots: Bool = false,
+    _ photos: [Photo], ignoring ignore: Set<String>, kind: PhotoKind = .photo,
     requireValidDate: Bool = false, keepAlbumPhotos: Bool = true
 ) -> [Photo] {
     photos.filter { p in
-        guard p.screenshot == onlyScreenshots, !p.isMovie, !p.favorite else { return false }
+        let k: PhotoKind = p.isMovie ? .video : p.screenshot ? .screenshot : .photo
+        guard k == kind, !p.favorite else { return false }
         guard !keepAlbumPhotos || Set(p.albums).subtracting(ignore).isEmpty else { return false }
         if requireValidDate {
             guard let d = p.date, d >= minDate else { return false }

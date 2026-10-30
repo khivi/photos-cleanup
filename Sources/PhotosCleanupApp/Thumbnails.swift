@@ -1,3 +1,4 @@
+import AVKit
 import AppKit
 import Photos
 import PhotosCleanupCore
@@ -62,6 +63,16 @@ final class Thumbnails {
         }
     }
 
+    /// A player item for the preview's video. Photos may download it from iCloud, as for the large image.
+    func requestPlayerItem(_ uuid: String, done: @escaping @MainActor (AVPlayerItem?) -> Void) -> PHImageRequestID? {
+        guard let asset = assets[uuid] else { return nil }
+        let o = PHVideoRequestOptions()
+        o.isNetworkAccessAllowed = true
+        return manager.requestPlayerItem(forVideo: asset, options: o) { item, _ in
+            Task { @MainActor in done(item) }
+        }
+    }
+
     func cancel(_ id: PHImageRequestID) { manager.cancelImageRequest(id) }
 
     /// Called as a cell appears: slide the caching window when it nears either edge.
@@ -119,6 +130,13 @@ struct PhotoCell: View {
                         "Vision's pick")
                 }
             }
+            .overlay(alignment: .bottomTrailing) {
+                if let d = photo.photo.durationLabel {
+                    Text(d).font(.caption2.monospacedDigit()).foregroundStyle(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(.black.opacity(0.6), in: .rect(cornerRadius: 4)).padding(6)
+                }
+            }
             .overlay(alignment: .bottomLeading) {
                 if case .decision = mark, let v = photo.verdict {
                     Text(v.kind).font(.caption2).foregroundStyle(.white)
@@ -167,8 +185,11 @@ struct PhotoPreview: View {
         GeometryReader { geo in
             Color.black
                 .overlay {
-                    LargeImage(id: preview.id, side: max(geo.size.width, geo.size.height), thumbnails: thumbnails)
-                        .padding(12)
+                    LargeImage(
+                        id: preview.id, side: max(geo.size.width, geo.size.height), thumbnails: thumbnails,
+                        video: preview.video
+                    )
+                    .padding(12)
                 }
                 .overlay(alignment: .topLeading) {
                     HStack(spacing: 6) {
@@ -191,23 +212,64 @@ struct PhotoPreview: View {
 }
 
 /// One photo, aspect-fit, from `Thumbnails.requestLarge`: the local copy first, then the full one.
+/// With `video`, the video plays over it once Photos hands over the player item.
 struct LargeImage: View {
     let id: String
     let side: CGFloat
     let thumbnails: Thumbnails
+    var video = false
     @State private var image: NSImage?
     @State private var requestID: PHImageRequestID?
+    @State private var playerRequest: PHImageRequestID?
+    @State private var player: AVPlayer?
+    @State private var shown: String?
 
     var body: some View {
         Group { if let image { Image(nsImage: image).resizable().scaledToFit() } else { Color.clear } }
+            .overlay { if let player { PlayerView(player: player) } }
             .task(id: id) {
+                stop()
                 image = nil
-                if let requestID { thumbnails.cancel(requestID) }
                 let want = id
+                shown = want
                 requestID = thumbnails.requestLarge(want, side: side) { img in
                     if want == id { image = img ?? image }
                 }
+                if video {
+                    playerRequest = thumbnails.requestPlayerItem(want) { item in
+                        guard shown == want, let item else { return }
+                        let p = AVPlayer(playerItem: item)
+                        player = p
+                        p.play()
+                    }
+                }
             }
-            .onDisappear { if let requestID { thumbnails.cancel(requestID) } }
+            .onDisappear { stop() }
     }
+
+    private func stop() {
+        if let requestID { thumbnails.cancel(requestID) }
+        if let playerRequest { thumbnails.cancel(playerRequest) }
+        player?.pause()
+        player = nil
+        shown = nil
+    }
+}
+
+/// An AVPlayerView that never becomes first responder, so the grid keeps the keys (Space, arrows, K, ⌫, Esc).
+private final class UnfocusedPlayerView: AVPlayerView {
+    override var acceptsFirstResponder: Bool { false }
+}
+
+private struct PlayerView: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let v = UnfocusedPlayerView()
+        v.controlsStyle = .inline
+        v.player = player
+        return v
+    }
+
+    func updateNSView(_ v: AVPlayerView, context: Context) { v.player = player }
 }

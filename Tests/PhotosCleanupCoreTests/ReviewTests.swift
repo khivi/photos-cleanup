@@ -9,6 +9,20 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
 
 @MainActor
 @Suite struct ReviewTests {
+    @Test func shortVideosStartDeleteAndLongOnesKeep() async throws {
+        let short = Photo(uuid: "s", isMovie: true, duration: Passes.accidentalVideoMax - 0.5)
+        let edge = Photo(uuid: "e", isMovie: true, duration: Passes.accidentalVideoMax)
+        let (c, _) = try await makeCleanup([short, edge, Photo(uuid: "l", isMovie: true, duration: 60)])
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("videos"))
+        #expect(m.decisions == ["s": .delete, "e": .keep, "l": .keep])
+        #expect(m.keepers.count == 2)  // long videos are filed in Videos - Keep too
+        m.click("l")
+        m.togglePreview()
+        #expect(m.preview?.video == true)
+        #expect(m.inspectorInfo()?.kind == "Video")
+    }
+
     @Test func initialDecisionsPerPass() async throws {
         // Screenshots: delete only on a not-keep verdict; unjudged keeps.
         let (c, _) = try await makeCleanup(
@@ -132,7 +146,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c)
         #expect(
             ReviewModel.tabs.map(\.title) == [
-                "All", "Screenshots", "Paperwork", "Bursts", "Similar", "Low Quality", "To be deleted",
+                "All", "Screenshots", "Paperwork", "Bursts", "Similar", "Low Quality", "Videos", "To be deleted",
             ])
         await m.refreshCounts()
         await m.select(.all)
