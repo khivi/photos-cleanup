@@ -13,6 +13,7 @@ Photos you mark delete go into an album for that pass, such as "Screenshots - De
 Photos you mark keep go into a "Keep" album, such as "Screenshots - Keep". Later runs skip them.
 You delete the photos yourself from that album in Photos.
 The app skips favorites and photos that are already in your own albums.
+Photos you edited in Photos start as keep in Bursts, Similar and Low Quality.
 
 ## Privacy
 

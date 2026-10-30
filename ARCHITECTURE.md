@@ -63,9 +63,9 @@ Albums are always `<Title> - Delete Me` and `<Title> - Keep`.
 | --- | --- | --- | --- |
 | Screenshots | Screenshots | Foundation Models verdict | The verdict |
 | Paperwork | Non-screenshot photos that Vision marks `isUtility` | Foundation Models verdict | The verdict. A "screenshot" verdict is always keep. |
-| Bursts | Photos taken within 60 s of each other | Vision feature-print distance below 0.45. `isUtility` images never group. | Best aesthetics score: keep. Others: delete. |
+| Bursts | Photos taken within 60 s of each other | Vision feature-print distance below 0.45. `isUtility` images never group. | Best aesthetics score: keep. Others: delete. An edited shot is the best, and every edited shot is keep. |
 | Similar | Photos of one calendar day, not in a Bursts group | Feature-print distance below 0.45 to the group's first photo. `isUtility` images never group. | As Bursts. |
-| Low Quality | All other candidates | Vision aesthetics score at or below −0.75 | Delete |
+| Low Quality | All other candidates | Vision aesthetics score at or below −0.75 | Delete. Edited photos: keep. |
 
 Every pass skips favorites, videos, photos in your own albums, and photos already in its own albums.
 

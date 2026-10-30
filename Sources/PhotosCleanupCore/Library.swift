@@ -80,7 +80,7 @@ public struct PhotoKitLibrary: PhotoLibrary {
                 Photo(
                     uuid: id, date: a.creationDate, screenshot: a.mediaSubtypes.contains(.photoScreenshot),
                     isMovie: a.mediaType == .video,
-                    favorite: a.isFavorite, albums: albumsOf[id] ?? []))
+                    favorite: a.isFavorite, edited: a.hasAdjustments, albums: albumsOf[id] ?? []))
         }
         return out
     }

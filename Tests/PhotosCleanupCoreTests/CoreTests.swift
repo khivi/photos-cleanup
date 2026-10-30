@@ -352,3 +352,24 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     #expect(try await c.candidates("similar").isEmpty)
     #expect(try await c.candidates("low-quality").map(\.uuid) == ["a"])
 }
+
+@Test func editedShotWinsTheBurst() async throws {
+    var photos = dated(["a": 0, "b": 10, "c": 20])
+    photos[0].edited = true
+    let scores = ["a": vr(0.1), "b": vr(0.9), "c": vr(0.5)]
+    let (c, _) = try await makeCleanup(photos, vision: scores)
+    #expect(try await c.pass("bursts").groups.map(\.best) == ["a"])
+
+    photos[2].edited = true  // two edited: the higher score wins
+    let (c2, _) = try await makeCleanup(photos, vision: scores)
+    #expect(try await c2.pass("bursts").groups.map(\.best) == ["c"])
+}
+
+@Test func editedShotWinsTheSimilarGroup() async throws {
+    var photos = atHours(["a": 1, "b": 3, "c": 5])
+    photos[0].edited = true
+    photos[2].edited = true
+    let vision: [String: VisionResult?] = ["a": vr(0.1, [0]), "b": vr(0.9, [0.2]), "c": vr(0.5, [0.4])]
+    let (c, _) = try await makeCleanup(photos, vision: vision)
+    #expect(try await c.pass("similar").groups.map(\.best) == ["c"])
+}

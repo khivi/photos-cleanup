@@ -8,6 +8,7 @@ public struct Photo: Sendable, Hashable, Identifiable {
     public var screenshot = false
     public var isMovie = false
     public var favorite = false
+    public var edited = false
     public var albums: [String] = []
 }
 
