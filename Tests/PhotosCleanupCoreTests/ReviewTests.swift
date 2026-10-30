@@ -9,6 +9,35 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
 
 @MainActor
 @Suite struct ReviewTests {
+    @Test func editedPhotosStartKeep() async throws {
+        let (c, _) = try await makeCleanup(
+            [Photo(uuid: "q", edited: true), Photo(uuid: "r")], vision: ["q": vr(-0.9), "r": vr(-0.9)])
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("low-quality"))
+        #expect(m.decisions == ["q": .keep, "r": .delete])
+
+        var burst = dated(["x": 0, "y": 1, "z": 2])
+        burst[0].edited = true
+        burst[2].edited = true
+        let (c2, _) = try await makeCleanup(burst, vision: ["x": vr(0.1), "y": vr(0.9), "z": vr(0.2)])
+        let m2 = ReviewModel(cleanup: c2)
+        await m2.select(.pass("bursts"))
+        #expect(m2.decisions == ["x": .keep, "y": .delete, "z": .keep])
+        #expect(["x", "y", "z"].map(m2.isBest) == [false, false, true])
+
+        // Screenshots ignore edits.
+        let (c3, _) = try await makeCleanup(
+            [Photo(uuid: "s", screenshot: true, edited: true)], verdicts: ["s": dropV], judge: FakeJudge(off: "off"))
+        let m3 = ReviewModel(cleanup: c3)
+        await m3.select(.pass("screenshots"))
+        #expect(m3.decisions == ["s": .delete])
+        let (c4, _) = try await makeCleanup(
+            [Photo(uuid: "t", screenshot: true, edited: true)], judge: FakeJudge(off: "off"))
+        let m4 = ReviewModel(cleanup: c4)
+        await m4.select(.pass("screenshots"))
+        #expect(m4.decisions == ["t": .keep] && m4.keepers.isEmpty)  // no verdict: an edit doesn't file it in Keep
+    }
+
     @Test func initialDecisionsPerPass() async throws {
         // Screenshots: delete only on a not-keep verdict; unjudged keeps.
         let (c, _) = try await makeCleanup(

@@ -157,8 +157,9 @@ public actor Cleanup {
         if kind != "screenshots" { (photos, result.progress) = analysed(kind, photos, threshold: threshold) }
         if Passes.grouped.contains(kind) {
             result.groups = groups(kind, photos).reversed().map { g in  // newest group first
-                // First max wins ties: the earliest shot.
-                BurstGroup(photos: g, best: g.reduce(g[0]) { score($1) > score($0) ? $1 : $0 }.uuid)
+                // An edited shot wins, then the highest score; first max wins ties: the earliest shot.
+                let pool = g.contains(where: \.edited) ? g.filter(\.edited) : g
+                return BurstGroup(photos: g, best: pool.reduce(pool[0]) { score($1) > score($0) ? $1 : $0 }.uuid)
             }
             return result
         }
