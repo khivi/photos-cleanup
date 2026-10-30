@@ -86,7 +86,7 @@ public final class ReviewModel {
         let best = best
         return photos.filter {
             decisions[$0.id] == .keep
-                && (touched.contains($0.id) || $0.verdict != nil || best.contains($0.id) || view == .pass("videos"))
+                && (touched.contains($0.id) || $0.verdict != nil || best.contains($0.id))
         }
     }
     /// The "Move to Albums?" dialog is open. The toolbar button and Photo > Move to Albums both set it.

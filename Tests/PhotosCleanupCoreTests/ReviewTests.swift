@@ -16,7 +16,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("videos"))
         #expect(m.decisions == ["s": .delete, "e": .keep, "l": .keep])
-        #expect(m.keepers.count == 2)  // long videos are filed in Videos - Keep too
+        #expect(m.keepers.isEmpty)  // only videos marked Keep by hand are filed; the rest come back
         m.click("l")
         m.togglePreview()
         #expect(m.preview?.video == true)
