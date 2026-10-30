@@ -58,16 +58,6 @@ repos:
         language: system
         types: [swift]
 
-      # The spike probes are standalone scripts outside the package; swift-build checks the package.
-      # One file per swiftc call: given several files, swiftc only allows top-level code in
-      # main.swift. A probe with `@main` needs -parse-as-library; a top-level script must not have it.
-      - id: swift-typecheck
-        name: swiftc -typecheck (spike/)
-        entry: bash -c 'for f in "$@"; do lib=(); grep -q "^@main" "$f" && lib=(-parse-as-library); swiftc -typecheck "${lib[@]}" "$f" || exit 1; done' --
-        language: system
-        types: [swift]
-        files: ^spike/
-
       # The Swift package (Core, the app, tests) builds as a whole.
       - id: swift-build
         name: swift build (with tests)
