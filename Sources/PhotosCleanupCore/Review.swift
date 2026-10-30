@@ -57,8 +57,15 @@ public final class ReviewModel {
     public let undoManager = UndoManager()
 
     private let cleanup: Cleanup
+    private let dir: URL
+    /// Months marked Done in All, by "2024-03" key, with the photo count when marked.
+    public private(set) var reviewedMonths: [String: Int]
 
-    public init(cleanup: Cleanup) { self.cleanup = cleanup }
+    public init(cleanup: Cleanup, dir: URL = settingsDir) {
+        self.cleanup = cleanup
+        self.dir = dir
+        reviewedMonths = loadReviewedMonths(dir: dir)
+    }
 
     public var best: Set<String> { Set(groups.map(\.best)) }
 
@@ -244,7 +251,9 @@ public final class ReviewModel {
                     Passes.grouped.contains(key) ? Self.flat(r.groups) : r.photos, r.groups, r.progress
                 )
             } else {
-                items = await cleanup.photos.map { PassPhoto(photo: $0) }
+                let all = await cleanup.photos
+                gs = Self.monthGroups(all)
+                items = Self.flat(gs)
             }
             view = v
             clearSelection()
@@ -515,9 +524,11 @@ public final class ReviewModel {
             let seen = Set(committed.map(\.id))
             committed = doomed.map(\.photo).filter { !seen.contains($0.id) } + committed
             for p in doomed { committedAlbum[p.id] = r.album }
-            if inPass { photos.removeAll { gone.contains($0.id) } }  // All keeps them, badged Delete Me
-            groups = groups.map { BurstGroup(photos: $0.photos.filter { !gone.contains($0.id) }, best: $0.best) }
-                .filter { !$0.photos.isEmpty }
+            if inPass {  // All keeps them, badged Delete Me
+                photos.removeAll { gone.contains($0.id) }
+                groups = groups.map { BurstGroup(photos: $0.photos.filter { !gone.contains($0.id) }, best: $0.best) }
+                    .filter { !$0.photos.isEmpty }
+            }
             for id in gone { decisions[id] = nil }
             undoManager.removeAllActions()
             touched.subtract(gone)
@@ -529,6 +540,48 @@ public final class ReviewModel {
         } catch {
             status = "\(error)"
         }
+    }
+}
+
+// MARK: Month sections in All
+
+extension ReviewModel {
+    static let unknownMonth = "unknown"
+
+    /// All's sections as `BurstGroup`s whose `best` is the month key ("2024-03", or "unknown" for photos
+    /// without a date, last). Months and photos keep the order of `photos`.
+    static func monthGroups(_ photos: [Photo], timeZone: TimeZone = .current) -> [BurstGroup] {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        var order: [String] = []
+        var byMonth: [String: [Photo]] = [:]
+        for p in photos {
+            let key =
+                p.date.map { d in
+                    let c = cal.dateComponents([.year, .month], from: d)
+                    return String(format: "%04d-%02d", c.year!, c.month!)
+                } ?? unknownMonth
+            if byMonth[key] == nil { order.append(key) }
+            byMonth[key, default: []].append(p)
+        }
+        order.sort { ($0 == unknownMonth ? 1 : 0) < ($1 == unknownMonth ? 1 : 0) }  // stable: keeps the rest in place
+        return order.map { BurstGroup(photos: byMonth[$0]!, best: $0) }
+    }
+
+    /// A section header: "October 2026 · 214" in All, the burst's date and count in Bursts.
+    public func header(_ g: BurstGroup, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        guard view == .all else { return g.headerLabel(locale: locale, timeZone: timeZone) }
+        let style = Date.FormatStyle(locale: locale, timeZone: timeZone).year().month(.wide)
+        let month = g.photos.compactMap(\.date).first.map { $0.formatted(style) } ?? "Unknown date"
+        return "\(month) · \(g.photos.count.formatted(.number.locale(locale)))"
+    }
+
+    /// Marked Done, and not grown since.
+    public func isDone(_ g: BurstGroup) -> Bool { reviewedMonths[g.best].map { g.photos.count <= $0 } ?? false }
+
+    public func toggleDone(_ g: BurstGroup) {
+        if isDone(g) { reviewedMonths[g.best] = nil } else { reviewedMonths[g.best] = g.photos.count }
+        do { try saveReviewedMonths(reviewedMonths, dir: dir) } catch { self.error = "\(error)" }
     }
 }
 

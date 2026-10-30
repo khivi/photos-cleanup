@@ -126,6 +126,8 @@ After such a change, rename the constant to force a recompute. Old files stay in
 
 `~/Library/Application Support/photos-cleanup/albums_ignore` lists albums whose membership doesn't protect a photo.
 
+`~/Library/Application Support/photos-cleanup/reviewed_months` lists the months marked Done in All, as `2024-03 312` (month and photo count when marked). A month with more photos than that shows as not done.
+
 ## Security
 
 - The app has its own Photos access. It needs no Full Disk Access.
