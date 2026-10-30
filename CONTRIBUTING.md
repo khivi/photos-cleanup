@@ -39,7 +39,6 @@ The commit hook runs the linters and builds the Swift package.
 - `Sources/PhotosCleanupApp/` — the native SwiftUI app, its `Info.plist` (the release version) and its entitlements
 - `scripts/app.sh` — builds and signs the app bundle
 - `Tests/` — Core tests
-- `spike/` — research probes
 
 ## Release
 

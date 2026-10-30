@@ -18,10 +18,9 @@ Keep this sibling-repo note out of code and config comments — it belongs only 
 ## Layout
 
 - `Sources/PhotosCleanupCore/` — no UI framework. `Library.swift`: PhotoKit and Vision behind the `PhotoLibrary` protocol. `Verdicts.swift`: Foundation Models behind `Judge`. `Passes.swift`: pass names, tooltips, thresholds, candidate filter, time grouping. `Cleanup.swift`: the `Cleanup` actor (photo list, Vision job, verdict queue, commits, caches). `Review.swift`: `ReviewModel`, the screen's state and every label it shows
-- `Sources/PhotosCleanupApp/` — the SwiftUI app: views only, no decisions. `Thumbnails.swift`: `PHCachingImageManager` with settings measured in `spike/grid_probe.swift`. `Info.plist` holds the release version; `PhotosCleanup.entitlements` the Photos entitlement the hardened runtime requires; `AppIcon.svg` the icon
+- `Sources/PhotosCleanupApp/` — the SwiftUI app: views only, no decisions. `Thumbnails.swift`: `PHCachingImageManager` with settings measured in the grid spike (`feea7cb`; removed, see git history). `Info.plist` holds the release version; `PhotosCleanup.entitlements` the Photos entitlement the hardened runtime requires; `AppIcon.svg` the icon
 - `scripts/app.sh` — builds, bundles and signs `.build/Photos Cleanup.app`; `run` opens it. A bare binary from a shell never gets its window in front
 - `Tests/` — Core tests with a fake `PhotoLibrary` and `Judge`, so they run without a library or Apple Intelligence
-- `spike/` — standalone research probes
 - Public docs: `README.md`, `CONTRIBUTING.md` (dev and release), `SECURITY.md`, `ARCHITECTURE.md`
 
 ## Naming a pass

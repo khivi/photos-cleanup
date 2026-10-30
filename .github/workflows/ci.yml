@@ -18,7 +18,7 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     env:
-      SKIP: swift-format,swift-typecheck,swift-build
+      SKIP: swift-format,swift-build
     steps:
       - uses: actions/checkout@v7
         with:
@@ -69,15 +69,14 @@ jobs:
           done
 
       # The ubuntu pre-commit job skips the Swift hooks: swift-format lints with the Xcode
-      # toolchain's formatter here, and spike/ is only type-checked here.
+      # toolchain's formatter here.
       # setup-python: the runner's Homebrew Python refuses a global `pip install` (PEP 668).
       - uses: actions/setup-python@v7
         if: matrix.runner == 'xcode-27'
         with:
           python-version: "3.13"
-      - name: Swift lint and type-check hooks
+      - name: Swift lint hook
         if: matrix.runner == 'xcode-27'
         run: |
           pip install pre-commit
           pre-commit run swift-format --all-files
-          pre-commit run swift-typecheck --all-files
