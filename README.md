@@ -72,7 +72,7 @@ If access is off, the app shows an Open Privacy Settings button.
 | --- | --- |
 | Click, ⇧-click, ⌘-click, ⌘A | Select |
 | Arrow keys | Move the selection |
-| K / ⌫ | Mark the selection keep / delete |
+| K / ⌫ | Mark the selection keep / delete; with one photo selected, move to the next |
 | ⌥⌘K / ⇧⌘⌫ | Mark every photo in the pass keep / delete |
 | Space, Esc | Show or close the large preview |
 | ⌘I | Show or hide the Info panel |

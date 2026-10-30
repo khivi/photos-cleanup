@@ -22,6 +22,9 @@ Not pursuing:
 - **HEIC savings estimate** (from the old command-line tool). Photos and iCloud already store new photos as HEIC, and converting goes through Photos' Export.
 - **Threshold settings** (the old tool's `--threshold`, `--window`). The constants in `Passes` are set by eye on the real library; add a setting only when a pass's picks are wrong in practice.
 - **Dry run** (the old tool's `--dry-run`). Nothing moves until Move to Albums is confirmed.
+- **Face-based best pick** (decided 2026-10-30). `VNDetectFaceCaptureQualityRequest` would rank people shots by their worst face; the aesthetics ★ is rarely wrong in practice.
+- **Side-by-side compare in a group** (decided 2026-10-30), as in PhotoSweeper's Face-to-Face. The ★ is rarely wrong, and ←/→ in the preview already flips between frames.
+- **Streaks, widgets, reminders, video compression, Live Photo → still** (swipe apps, CleanMy Phone). Phone retention features; compression and conversion re-import through PhotoKit and lose metadata.
 
 ## Native app plan
 
@@ -106,9 +109,22 @@ The same scene shot minutes or days apart. Bursts only joins shots within 60 s o
 4. **Tune by eye**: like Bursts and Low Quality, look at 30–40 real groups; start at 0.45 and lower it if different photos join.
 5. **Docs**: README pass list and tooltip (`Passes.about`), ARCHITECTURE passes table.
 
+### From the competitor review (decided 2026-10-30)
+
+Compared against CleanMy Phone, Gemini 2, PhotoSweeper, PowerPhotos, Slidebox/Swipewipe, Google Photos' Review and delete, and Photos' Utilities. The passes cover photos; the gap is videos.
+
+- [x] **Mark and advance** — K / ⌫ with exactly one photo selected marks it and moves to the next (`moveSelection(by: 1)` in `markSelection`), in the grid and the preview. Several selected: stays. No setting. The swipe apps' one-key-per-photo flow.
+- [ ] **Edited photos** — `PHAsset.hasAdjustments` as `Photo.edited`. Low Quality: an edited photo starts Keep. Bursts and Similar: an edited frame wins the ★ (the highest-scored edited one if several), and every edited frame starts Keep. Screenshots and Paperwork are unchanged: markup and crops there don't mean keep.
+- [ ] **Delete in Photos…** — on To be deleted, delete the photos already in the Delete Me albums with `PHAssetChangeRequest.deleteAssets`. macOS shows its own confirmation, and Photos keeps them in Recently Deleted for 30 days. Move to Albums stays the review step. Changes the "never deletes" rule in README Safety, SECURITY, ARCHITECTURE and CLAUDE.md.
+- [ ] **All by month** — section headers in All ("October 2026 · 214"), reusing the grouped-pass sections. A Done mark per month, saved as `2024-03 312` (month and photo count) in the settings folder; a month whose count has grown shows as not done again.
+- [ ] **Video playback in the preview** — `PHImageManager.requestPlayerItem` and AVKit's `VideoPlayer`; Space, ←/→, K and ⌫ stay the app's keys. Both video passes need it: a poster frame doesn't show what a video is.
+- [ ] **Videos pass** — every video (not favorites, not in the user's albums), longest first by `PHAsset.duration`, the duration on each cell. Videos under ~2 s (accidental record taps; a `Passes` constant set by eye) start Delete, the rest Keep. Albums "Videos - Delete Me" / "Videos - Keep". Sort by size instead if Space freed lands.
+- [ ] **Screen Recordings pass** — `PHAssetMediaSubtypeVideoScreenRecording` (macOS 10.15+), read like `.photoScreenshot`. All start Delete, longest first. First count them in Photos (Albums → Utilities → Screen Recordings): if only a handful, leave them in Videos instead.
+- [ ] **Saved Images: measure first** — WhatsApp/Telegram saves, memes, forwards. Count `PHAssetResource.originalFilename` matching `-WA\d+` and photos with no location. A few dozen: drop it. Thousands: design a pass that starts Keep and preselects Delete only where Vision finds no people (photos family send look the same by filename).
+
 ### Future (not next up)
 
-- [ ] **Space freed per pass** — "Bursts · 66 · 1.2 GB" in the sidebar and the move dialog, like the old tool's savings report. PhotoKit has no public file size; `PHAssetResource`'s `fileSize` is an undocumented key. Only if the number matters.
+- [ ] **Space freed per pass** — "Bursts · 66 · 1.2 GB" in the sidebar and the move dialog, like the old tool's savings report. PhotoKit has no public file size; `PHAssetResource`'s `fileSize` is an undocumented key. Only if the number matters. Not now (2026-10-30). If built: guard with `responds(to: Selector(("fileSize")))`, since a dropped key raises an Objective-C exception Swift can't catch; sum all of a photo's resources; the figure is iCloud storage, freed once deleted in Photos and Recently Deleted empties. Measure the per-asset cost on the real library first.
 
 - [ ] **Thumbnail zoom (was Phase 5's V9)** — toolbar slider and ⌘+ / ⌘−, kept across launches; View menu items for both. Cells are 120–150pt today.
 - [ ] **VoiceOver (was Phase 5's A11y)** — each cell reads its date, kind and mark; the sidebar reads its counts.

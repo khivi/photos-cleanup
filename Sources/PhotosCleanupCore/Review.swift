@@ -328,10 +328,11 @@ public final class ReviewModel {
         if grouping { undoManager.endUndoGrouping() }
     }
 
-    /// Marks the selected photos; only a pass and All have marks.
+    /// Marks the selected photos; only a pass and All have marks. One selected photo: moves on to the next.
     public func markSelection(_ d: Decision) {
         guard canMark else { return }
         mark(selected, d)
+        if selected.count == 1 { moveSelection(by: 1) }
     }
 
     public func setAll(_ d: Decision) {

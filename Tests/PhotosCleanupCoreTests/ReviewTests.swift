@@ -201,6 +201,24 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.decisions[ids[3]] == .delete && m.touched.contains(ids[3]))
     }
 
+    @Test func markingOnePhotoMovesToTheNext() async throws {
+        let (c, _) = try await makeCleanup(shots("a", "b", "c"), judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("screenshots"))
+        let ids = m.displayed.map(\.id)
+        m.click(ids[0])
+        m.togglePreview()
+        m.markSelection(.delete)
+        #expect(m.decisions[ids[0]] == .delete && m.selected == [ids[1]] && m.preview?.id == ids[1])
+        m.click(ids[2])
+        m.markSelection(.delete)  // the last photo stays selected
+        #expect(m.decisions[ids[2]] == .delete && m.selected == [ids[2]])
+        m.click(ids[0])
+        m.click(ids[1], toggle: true)
+        m.markSelection(.keep)  // several selected: no move
+        #expect(m.selected == [ids[0], ids[1]])
+    }
+
     @Test func arrowKeysMoveTheSelection() async throws {
         let (c, _) = try await makeCleanup(shots("a", "b", "c"), judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
