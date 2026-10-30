@@ -110,7 +110,7 @@ public actor Cleanup {
                 photos, ignoring: ignoreAlbums, onlyScreenshots: true, keepAlbumPhotos: keepAlbumPhotos)
         case "paperwork", "low-quality":
             found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos)
-        case "bursts":
+        case "bursts", "similar":
             found = candidatePhotos(
                 photos, ignoring: ignoreAlbums, requireValidDate: true, keepAlbumPhotos: keepAlbumPhotos)
         default: throw CleanupError.unknownPass
@@ -138,14 +138,23 @@ public actor Cleanup {
         return groupByTime(dated, window: Passes.burstWindow, minSize: 2).flatMap { splitSimilar($0, vision: vision) }
     }
 
+    /// Same-scene groups across a day, leaving out photos already in a Bursts group.
+    func similar(_ photos: [Photo]) -> [[Photo]] {
+        let inBursts = Set(bursts((try? candidates("bursts")) ?? []).joined().map(\.uuid))
+        return groupSimilar(photos.filter { !inBursts.contains($0.uuid) }, vision: vision)
+    }
+
+    /// The groups of a grouped pass, oldest first.
+    func groups(_ kind: String, _ photos: [Photo]) -> [[Photo]] { kind == "bursts" ? bursts(photos) : similar(photos) }
+
     func score(_ p: Photo) -> Double { (vision[p.uuid] ?? nil)?.score ?? -2 }  // unanalysed sort last
 
     public func pass(_ kind: String, threshold: Double = Passes.lowQualityMax) throws -> PassResult {
         var photos = try candidates(kind)
         var result = PassResult()
         if kind != "screenshots" { (photos, result.progress) = analysed(kind, photos, threshold: threshold) }
-        if kind == "bursts" {
-            result.groups = bursts(photos).reversed().map { g in  // newest group first
+        if Passes.grouped.contains(kind) {
+            result.groups = groups(kind, photos).reversed().map { g in  // newest group first
                 // First max wins ties: the earliest shot.
                 BurstGroup(photos: g, best: g.reduce(g[0]) { score($1) > score($0) ? $1 : $0 }.uuid)
             }
@@ -183,8 +192,8 @@ public actor Cleanup {
             } else if kind == "paperwork" {
                 let judged = narrowed.compactMap { verdicts[$0.uuid] }
                 out[kind] = judged.count == narrowed.count ? judged.filter { $0.kind != "picture" }.count : nil
-            } else if kind == "bursts" {
-                out[kind] = bursts(narrowed).reduce(0) { $0 + $1.count }
+            } else if Passes.grouped.contains(kind) {
+                out[kind] = groups(kind, narrowed).reduce(0) { $0 + $1.count }
             } else {
                 out[kind] = narrowed.count
             }
