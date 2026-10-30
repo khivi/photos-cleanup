@@ -265,7 +265,7 @@ import Testing
     }
     let denied = FakeLibrary([Photo(uuid: "a")], status: "denied")
     let (d, _) = try await makeCleanup([], library: denied)
-    await #expect(throws: CleanupError.accessDenied) { try await d.commit("screenshots", delete: ["a"], keep: []) }
+    await #expect(throws: LibraryError.accessDenied) { try await d.commit("screenshots", delete: ["a"], keep: []) }
 }
 
 @Test func commitLogsDecisionsAndVerdictStats() async throws {

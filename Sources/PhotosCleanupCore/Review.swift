@@ -52,8 +52,8 @@ public final class ReviewModel {
     /// The large in-window preview of the anchor photo is open.
     public private(set) var previewing = false
 
-    /// Marks register their undo here. The app swaps in the window's manager so ⌘Z reaches it.
-    public var undoManager = UndoManager()
+    /// Marks register their undo here; Edit > Undo and Redo drive it.
+    public let undoManager = UndoManager()
 
     private let cleanup: Cleanup
 
@@ -109,16 +109,6 @@ public final class ReviewModel {
         + Passes.all.map { (.pass($0.key), $0.title, Passes.about[$0.key] ?? "") }
         + [(.deleted, "To be deleted", "Photos waiting in a Delete Me album. Delete them there in Photos.")]
 
-    public func tabLabel(_ v: ReviewView, _ title: String) -> String {
-        let n: Int? =
-            switch v {
-            case .all: counts["all"] ?? nil
-            case .pass(let k): counts[k] ?? nil
-            case .deleted: deleted.isEmpty ? nil : deleted.count
-            }
-        return n.map { "\(title) (\($0.formatted()))" } ?? title
-    }
-
     // MARK: Sidebar
 
     public struct SidebarItem: Identifiable, Sendable {
@@ -165,10 +155,6 @@ public final class ReviewModel {
         }
         let n = "\(photos.count.formatted()) \(photos.count == 1 ? "photo" : "photos")"
         return doomed.isEmpty ? n : "\(n) · \(doomed.count) to delete"
-    }
-
-    public var commitLabel: String {
-        committing ? "Moving…" : "Commit: \(doomed.count) delete · \(keepers.count) keep"
     }
 
     /// Progress text and fraction while Vision or verdicts run in a pass.
@@ -338,9 +324,6 @@ public final class ReviewModel {
         if let name { undoManager.setActionName(name) }
         if grouping { undoManager.endUndoGrouping() }
     }
-
-    /// Flips one photo.
-    public func toggle(_ uuid: String) { mark([uuid], decisions[uuid] == .delete ? .keep : .delete) }
 
     /// Marks the selected photos; only a pass and All have marks.
     public func markSelection(_ d: Decision) {

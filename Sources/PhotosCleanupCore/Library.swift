@@ -14,13 +14,13 @@ public protocol PhotoLibrary: Sendable {
     func add(album: String, uuids: [String]) throws -> Int
 }
 
-public enum LibraryError: Error, CustomStringConvertible {
+public enum LibraryError: Error, Equatable, CustomStringConvertible {
     case accessDenied
     case failed(String)
 
     public var description: String {
         switch self {
-        case .accessDenied: "Photos access not granted"
+        case .accessDenied: "Photos access not granted. Allow it in System Settings, Privacy & Security, Photos."
         case .failed(let why): why
         }
     }
@@ -78,9 +78,8 @@ public struct PhotoKitLibrary: PhotoLibrary {
             let id = Self.uuid(a)
             out.append(
                 Photo(
-                    uuid: id, date: a.creationDate, width: a.pixelWidth, height: a.pixelHeight,
-                    screenshot: a.mediaSubtypes.contains(.photoScreenshot),
-                    livePhoto: a.mediaSubtypes.contains(.photoLive), isMovie: a.mediaType == .video,
+                    uuid: id, date: a.creationDate, screenshot: a.mediaSubtypes.contains(.photoScreenshot),
+                    isMovie: a.mediaType == .video,
                     favorite: a.isFavorite, albums: albumsOf[id] ?? []))
         }
         return out

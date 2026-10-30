@@ -43,7 +43,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let (c, _) = try await makeCleanup(shots("a", "b"), judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("screenshots"))
-        m.toggle("a")
+        m.mark(["a"], .delete)
         #expect(m.decisions["a"] == .delete && m.touched == ["a"])
         m.setAll(.keep)
         #expect(m.decisions == ["a": .keep, "b": .keep] && m.touched == ["a", "b"])
@@ -54,8 +54,8 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("screenshots"))
         // a has a verdict, b is untouched without one (not sent), c is touched twice back to keep.
-        m.toggle("c")
-        m.toggle("c")
+        m.mark(["c"], .delete)
+        m.mark(["c"], .keep)
         #expect(Set(m.keepers.map(\.id)) == ["a", "c"])
         #expect(m.doomed.isEmpty)
 
@@ -71,7 +71,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("screenshots"))
         #expect(m.decisions == ["a": .keep, "b": .keep])
-        m.toggle("a")  // user: delete
+        m.mark(["a"], .delete)  // user: delete
         await c.recordVerdict("a", keepV)
         await c.recordVerdict("b", dropV)
         await m.refresh()
@@ -88,7 +88,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("low-quality"))
         #expect(m.photos.map(\.id) == ["a"] && m.progress.pending == 1)
-        m.toggle("a")  // keep
+        m.mark(["a"], .keep)  // keep
         lib.gate.open()
         await settle(c)
         await m.refresh()
@@ -121,9 +121,9 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let (c, _) = try await makeCleanup([], judge: FakeJudge(off: "off"), library: lib)
         let m = ReviewModel(cleanup: c)
         await m.select(.pass("screenshots"))
-        m.toggle("a")
+        m.mark(["a"], .delete)
         await m.commit()
-        #expect(m.status == "\(CleanupError.accessDenied)")
+        #expect(m.status == "\(LibraryError.accessDenied)")
         #expect(m.photos.map(\.id) == ["a"] && m.deleted.isEmpty)
     }
 
@@ -136,14 +136,14 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
             ])
         await m.refreshCounts()
         await m.select(.all)
-        #expect(m.summary == "2 photos" && m.tabLabel(.all, "All") == "All (2)")
-        #expect(m.tabLabel(.deleted, "To be deleted") == "To be deleted")
+        #expect(m.summary == "2 photos" && badge(m, .all) == 2)
+        #expect(badge(m, .deleted) == nil)
         await m.select(.pass("screenshots"))
         #expect(m.summary == "2 candidates · 1 to delete")
-        #expect(m.commitLabel == "Commit: 1 delete · 0 keep")
+        #expect(m.commitPreview.map(\.label) == ["1 → Screenshots - Delete Me"])
         #expect(m.banner == nil && !m.showsEmptyState)
         await m.commit()
-        #expect(m.tabLabel(.deleted, "To be deleted") == "To be deleted (1)")
+        #expect(badge(m, .deleted) == 1)
         #expect(m.banner == m.status && m.status?.hasPrefix("Moved") == true)
         m.setAll(.delete)
         await m.commit()
@@ -151,7 +151,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         await m.select(.deleted)
         #expect(m.summary == "2 queued for deletion" && m.banner?.hasPrefix("Nothing is deleted yet") == true)
         #expect(m.banner?.contains("“Screenshots - Delete Me” (2)") == true)
-        #expect("\(CleanupError.accessDenied)".hasPrefix("Photos access not granted"))
+        #expect("\(LibraryError.accessDenied)".hasPrefix("Photos access not granted"))
     }
 
     @Test func sidebarSectionsAndBadges() async throws {
@@ -197,7 +197,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.touched == [ids[1], ids[2]])
         m.markSelection(.keep)
         #expect(m.decisions[ids[1]] == .keep && m.decisions[ids[2]] == .keep)
-        m.toggle(ids[3])  // marking one photo
+        m.mark([ids[3]], .delete)  // marking one photo
         #expect(m.decisions[ids[3]] == .delete && m.touched.contains(ids[3]))
     }
 
@@ -291,10 +291,10 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         m.click(ids[0])
         m.click(ids[1], extend: true)
         m.markSelection(.delete)
-        m.toggle(ids[2])
+        m.mark([ids[2]], .delete)
         #expect(m.decisions.values.allSatisfy { $0 == .delete } && m.touched.count == 3)
 
-        m.undoManager.undo()  // the toggle
+        m.undoManager.undo()  // that mark
         #expect(m.decisions[ids[2]] == .keep && !m.touched.contains(ids[2]))
         m.undoManager.undo()  // the selection mark
         #expect(m.decisions.values.allSatisfy { $0 == .keep } && m.touched.isEmpty)
@@ -314,7 +314,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(lib.adds.withLock { $0 }.count == 1 && m.photos.map(\.id) == [ids[2]])
 
         await m.select(.pass("screenshots"))
-        m.toggle(ids[2])
+        m.mark([ids[2]], .delete)
         await m.select(.all)  // another list: nothing to undo
         #expect(!m.undoManager.canUndo)
     }
@@ -330,7 +330,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let (c, _) = try await makeCleanup(lib, judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
         await m.refreshCounts()
-        #expect(m.tabLabel(.deleted, "To be deleted") == "To be deleted (2)")
+        #expect(badge(m, .deleted) == 2)
         await m.select(.deleted)
         #expect(Set(m.displayed.map(\.id)) == ["s", "u"])
         #expect(m.deletedAlbum == ["s": "Screenshots - Delete Me", "u": "Utility - Delete Me"])
@@ -480,4 +480,9 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         await m.select(.pass("screenshots"))
         #expect(m.canSetAll)
     }
+}
+
+@MainActor
+private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
+    m.sidebar.flatMap(\.items).first { $0.view == v }?.badge
 }

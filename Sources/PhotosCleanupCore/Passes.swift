@@ -4,29 +4,11 @@ import Foundation
 public struct Photo: Sendable, Hashable, Identifiable {
     public var id: String { uuid }
     public var uuid: String
-    public var date: Date?
-    public var width: Int
-    public var height: Int
-    public var screenshot: Bool
-    public var livePhoto: Bool
-    public var isMovie: Bool
-    public var favorite: Bool
-    public var albums: [String]
-
-    public init(
-        uuid: String, date: Date? = nil, width: Int = 0, height: Int = 0, screenshot: Bool = false,
-        livePhoto: Bool = false, isMovie: Bool = false, favorite: Bool = false, albums: [String] = []
-    ) {
-        self.uuid = uuid
-        self.date = date
-        self.width = width
-        self.height = height
-        self.screenshot = screenshot
-        self.livePhoto = livePhoto
-        self.isMovie = isMovie
-        self.favorite = favorite
-        self.albums = albums
-    }
+    public var date: Date? = nil
+    public var screenshot = false
+    public var isMovie = false
+    public var favorite = false
+    public var albums: [String] = []
 }
 
 /// One photo's Vision analysis: feature print, Vision's isUtility, and its aesthetics score.
@@ -34,12 +16,6 @@ public struct VisionResult: Sendable, Equatable {
     public var print: [Float]
     public var utility: Bool
     public var score: Double
-
-    public init(print: [Float], utility: Bool, score: Double) {
-        self.print = print
-        self.utility = utility
-        self.score = score
-    }
 }
 
 /// A Foundation Models keep/delete call. kind "picture": Vision says it isn't a utility image.
@@ -47,28 +23,16 @@ public struct Verdict: Sendable, Hashable {
     public var keep: Bool
     public var kind: String
     public var reason: String
-
-    public init(keep: Bool, kind: String, reason: String) {
-        self.keep = keep
-        self.kind = kind
-        self.reason = reason
-    }
 }
 
 /// Background work the UI shows as a progress bar.
 public struct JobProgress: Sendable, Equatable {
     public var pending = 0
     public var total = 0
-    public var error: String?
-
-    public init(pending: Int = 0, total: Int = 0, error: String? = nil) {
-        self.pending = pending
-        self.total = total
-        self.error = error
-    }
+    public var error: String? = nil
 }
 
-/// One name per pass: the key is the URL (/cleanup/<key>) and the UI view; the title is the
+/// One name per pass: the key is the UI view and the decisions.jsonl kind; the title is the
 /// tab label and the album prefix. Album names are derived, never written out.
 public enum Passes {
     public static let all: [(key: String, title: String)] = [

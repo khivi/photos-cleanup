@@ -5,8 +5,6 @@ public struct PassResult: Sendable {
     public var photos: [PassPhoto] = []
     public var groups: [BurstGroup] = []
     public var progress = JobProgress()
-
-    public init() {}
 }
 
 /// A photo in a pass, with the model's verdict where the pass has one.
@@ -25,18 +23,11 @@ public struct PassPhoto: Sendable, Hashable, Identifiable {
 public struct BurstGroup: Sendable, Hashable {
     public var photos: [Photo]
     public var best: String
-
-    public init(photos: [Photo], best: String) {
-        self.photos = photos
-        self.best = best
-    }
 }
 
 public enum CleanupError: Error, Equatable {
     case unknownPass
     case noMatchingPhotos
-    case accessDenied
-    case failed(String)
 }
 
 extension CleanupError: CustomStringConvertible {
@@ -44,14 +35,12 @@ extension CleanupError: CustomStringConvertible {
         switch self {
         case .unknownPass: "Unknown pass."
         case .noMatchingPhotos: "Those photos are no longer in the library."
-        case .accessDenied: "Photos access not granted. Allow it in System Settings, Privacy & Security, Photos."
-        case .failed(let m): m
         }
     }
 }
 
 /// The app's state and background work: the photo list, the Vision analysis, the verdict
-/// queue, commits and the on-disk caches. Pure Swift; the HTTP layer is a thin shell over it.
+/// queue, commits and the on-disk caches.
 public actor Cleanup {
     let library: any PhotoLibrary
     let judge: any Judge
@@ -109,8 +98,6 @@ public actor Cleanup {
         photos = all.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
         byUUID = Dictionary(photos.map { ($0.uuid, $0) }, uniquingKeysWith: { a, _ in a })
     }
-
-    public func photo(_ uuid: String) -> Photo? { byUUID[uuid] }
 
     // MARK: Passes
 
@@ -333,13 +320,7 @@ public actor Cleanup {
         guard !doomed.isEmpty || !kept.isEmpty else { throw CleanupError.noMatchingPhotos }
         let library = library
         for (uuids, name) in [(doomed, album), (kept, keepAlbum)] where !uuids.isEmpty {
-            do {
-                _ = try await offload { try library.add(album: name, uuids: uuids) }
-            } catch LibraryError.accessDenied {
-                throw CleanupError.accessDenied
-            } catch {
-                throw CleanupError.failed("\(error)")
-            }
+            _ = try await offload { try library.add(album: name, uuids: uuids) }
         }
         committed.formUnion(doomed + kept)
         if Passes.verdictKinds.contains(kind) {
