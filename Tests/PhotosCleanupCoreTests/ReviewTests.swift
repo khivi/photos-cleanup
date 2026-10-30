@@ -319,6 +319,53 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(!m.undoManager.canUndo)
     }
 
+    private func waiting() -> [Photo] {
+        [
+            Photo(uuid: "s", screenshot: true, albums: ["Screenshots - Delete Me"]),
+            Photo(uuid: "u", albums: ["Utility - Delete Me"]),
+            Photo(uuid: "k", albums: ["Screenshots - Keep"]),
+            Photo(uuid: "n", screenshot: true),
+        ]
+    }
+
+    @Test func deleteInPhotosDeletesOnlyDeleteMePhotos() async throws {
+        let (c, lib) = try await makeCleanup(waiting(), judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("screenshots"))
+        m.mark(["n"], .delete)
+        await m.commit()  // n joins the list this session
+        await m.select(.deleted)
+        #expect(m.canDeleteInPhotos)
+        await m.deleteInPhotos()
+        #expect(lib.deletes.withLock { $0 }.flatMap { $0 }.sorted() == ["n", "s", "u"])
+        #expect(m.deleted.isEmpty && m.displayed.isEmpty && !m.canDeleteInPhotos)
+        #expect(m.summary == "0 queued for deletion")
+        #expect(m.status?.hasPrefix("Deleted 3 photos.") == true && m.error == nil)
+        await m.refreshCounts()
+        #expect(m.deleted.isEmpty)
+        #expect(await c.photos.map(\.uuid) == ["k"])
+    }
+
+    @Test func cancelledDeleteDeletesNothing() async throws {
+        let (c, lib) = try await makeCleanup(waiting(), judge: FakeJudge(off: "off"))
+        lib.cancelsDelete.withLock { $0 = true }
+        let m = ReviewModel(cleanup: c)
+        await m.select(.deleted)
+        await m.deleteInPhotos()
+        #expect(Set(m.deleted.map(\.id)) == ["s", "u"] && m.canDeleteInPhotos)
+        #expect(m.status == nil && m.error == nil)
+        #expect(lib.deletes.withLock { $0 }.isEmpty)
+    }
+
+    @Test func deleteInPhotosDisabledWhenEmpty() async throws {
+        let (c, lib) = try await makeCleanup([Photo(uuid: "n", screenshot: true)], judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        await m.select(.deleted)
+        #expect(!m.canDeleteInPhotos)
+        await m.deleteInPhotos()
+        #expect(lib.deletes.withLock { $0 }.isEmpty)
+    }
+
     @Test func deletedListSurvivesRestart() async throws {
         let lib = [
             Photo(uuid: "s", screenshot: true, albums: ["Screenshots - Delete Me"]),

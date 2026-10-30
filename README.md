@@ -8,10 +8,12 @@ When you move them to albums, the app files the photos into albums in Photos.
 
 ## Safety
 
-The app never deletes a photo.
+The app deletes only photos in Delete Me albums.
+It deletes only when you click Delete in Photos…, and only after macOS asks you to confirm.
+Photos keeps deleted photos in Recently Deleted for 30 days.
 Photos you mark delete go into an album for that pass, such as "Screenshots - Delete Me".
 Photos you mark keep go into a "Keep" album, such as "Screenshots - Keep". Later runs skip them.
-You delete the photos yourself from that album in Photos.
+You can also delete them yourself from that album in Photos.
 The app skips favorites and photos that are already in your own albums.
 
 ## Privacy
@@ -66,7 +68,7 @@ If access is off, the app shows an Open Privacy Settings button.
 4. Select photos and change the marks: K keeps, ⌫ deletes. Space shows the selected photo large.
 5. Click Move to Albums and confirm. Photos marked delete go into the pass's "Delete Me" album. Keepers go into its "Keep" album.
 6. You can also mark photos delete in All. They start unmarked, and Move to Albums sends the marked ones to "All - Delete Me". All has no Keep album. Every pass skips photos in that album.
-7. Open that album in Photos. Check it, then delete the photos there. To be deleted lists the albums.
+7. Open To be deleted. It lists the photos in the Delete Me albums. Click Delete in Photos… and confirm in the macOS dialog. This deletes every photo in the list. If you cancel, nothing is deleted.
 
 | Key | Action |
 | --- | --- |

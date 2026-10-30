@@ -12,6 +12,9 @@ public protocol PhotoLibrary: Sendable {
     func vision(_ uuids: [String]) -> [String: VisionResult?]
     /// Adds the photos it finds in the user's own library; returns how many.
     func add(album: String, uuids: [String]) throws -> Int
+    /// Deletes the photos it finds; macOS asks the user first. Returns how many were deleted:
+    /// 0 when the user cancels.
+    func delete(uuids: [String]) throws -> Int
 }
 
 public enum LibraryError: Error, Equatable, CustomStringConvertible {
@@ -143,6 +146,27 @@ public struct PhotoKitLibrary: PhotoLibrary {
             throw LibraryError.failed(error.localizedDescription)
         }
         return mine.count
+    }
+
+    public func delete(uuids: [String]) throws -> Int {
+        try requireAccess()
+        let found = Array(assets(uuids).values)
+        guard !found.isEmpty else { return 0 }
+        do {
+            try PHPhotoLibrary.shared().performChangesAndWait {
+                PHAssetChangeRequest.deleteAssets(found as NSArray)
+            }
+        } catch {
+            let e = error as NSError
+            // Cancelling macOS's confirmation: PHPhotosError.userCancelled, or Cocoa's NSUserCancelledError.
+            if (e.domain == PHPhotosErrorDomain && e.code == PHPhotosError.userCancelled.rawValue)
+                || (e.domain == NSCocoaErrorDomain && e.code == NSUserCancelledError)
+            {
+                return 0
+            }
+            throw LibraryError.failed(error.localizedDescription)
+        }
+        return found.count
     }
 }
 

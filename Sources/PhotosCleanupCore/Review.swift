@@ -41,6 +41,7 @@ public final class ReviewModel {
     public private(set) var counts: [String: Int?] = [:]
     public private(set) var loading = false
     public private(set) var committing = false
+    public private(set) var deleting = false
     public private(set) var status: String?
     public private(set) var error: String?
     public var verdictsOff: String? { cleanup.verdictsOff }
@@ -170,11 +171,13 @@ public final class ReviewModel {
 
     public var banner: String? {
         guard view == .deleted else { return status }
+        if let status { return status }
         let albums = Dictionary(grouping: deleted.compactMap { deletedAlbum[$0.id] }, by: { $0 })
             .sorted { $0.key < $1.key }
             .map { "“\($0.key)” (\($0.value.count))" }
         guard !albums.isEmpty else { return "Nothing is waiting in a Delete Me album." }
-        return "Nothing is deleted yet. In Photos, open \(albums.joined(separator: ", ")), select all, and delete."
+        return
+            "Nothing is deleted yet. Delete in Photos… deletes every photo in \(albums.joined(separator: ", ")) after macOS asks you to confirm. Photos keeps them in Recently Deleted for 30 days."
     }
 
     public var showsEmptyState: Bool { inPass && !loading && displayed.isEmpty }
@@ -204,6 +207,9 @@ public final class ReviewModel {
     public var windowTitle: String { Self.tabs.first { $0.view == view }?.title ?? "" }
     /// Window subtitle: "41 candidates · 12 to delete", "N photos" or "N queued for deletion".
     public var windowSubtitle: String { loading ? "Loading…" : summary }
+    public var deleteInPhotosLabel: String { deleting ? "Deleting…" : "Delete in Photos…" }
+    /// Delete in Photos can run now: the To be deleted view, not empty.
+    public var canDeleteInPhotos: Bool { view == .deleted && !loading && !deleting && !deleted.isEmpty }
     public var moveButtonLabel: String { committing ? "Moving…" : "Move to Albums…" }
     public var inspectorToggleLabel: String { showsInspector ? "Hide Info" : "Show Info" }
     public static let keepAllLabel = "Keep All"
@@ -456,6 +462,32 @@ public final class ReviewModel {
         selected.formIntersection(ids)
         if let a = anchor, !ids.contains(a) { anchor = nil }
         if selected.isEmpty { previewing = false }
+    }
+
+    // MARK: Delete
+
+    /// Deletes every photo in the To be deleted list. macOS asks first; a cancel deletes nothing.
+    public func deleteInPhotos() async {
+        guard canDeleteInPhotos else { return }
+        deleting = true
+        status = nil
+        defer { deleting = false }
+        do {
+            let gone = Set(try await cleanup.delete(deleted.map(\.id)))
+            guard !gone.isEmpty else { return }
+            committed.removeAll { gone.contains($0.id) }
+            loaded.removeAll { gone.contains($0.id) }
+            for id in gone {
+                committedAlbum[id] = nil
+                loadedAlbum[id] = nil
+            }
+            clearSelection()
+            counts = await cleanup.counts()
+            status =
+                "Deleted \(gone.count) \(gone.count == 1 ? "photo" : "photos"). Photos keeps them in Recently Deleted for 30 days."
+        } catch {
+            status = "\(error)"
+        }
     }
 
     // MARK: Commit

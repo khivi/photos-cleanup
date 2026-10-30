@@ -2,7 +2,7 @@
 
 Photos Cleanup is a native macOS app, written in Swift and SwiftUI.
 It reads the Photos library, suggests photos to clear, and files your choices into albums.
-Everything runs on your Mac. The app never deletes photos. It only adds them to albums.
+Everything runs on your Mac. The app deletes only photos in Delete Me albums, only when you click Delete in Photos…, and only after macOS asks you to confirm. Otherwise it only adds photos to albums.
 
 ## Overview
 
@@ -40,7 +40,7 @@ The Swift package has no dependencies.
 | `Verdicts.swift` | The `Judge` protocol and `FoundationModelsJudge`. It returns kind, keep/delete and a short summary for one photo. It needs macOS 27 and Apple Intelligence. |
 | `Passes.swift` | `Passes.all` (one key and title per pass), the tooltips, the thresholds, the candidate filter, time grouping and the similarity split. |
 | `Cleanup.swift` | The `Cleanup` actor. It holds the photo list, the Vision job, the verdict queue, commits and the caches. |
-| `Review.swift` | `ReviewModel` (`@Observable`, main actor). The sidebar and its counts, keep/delete marks with undo, the selection, the preview, what Move to Albums sends, progress, the To be deleted list (read from the Delete Me albums), and every label the window shows. |
+| `Review.swift` | `ReviewModel` (`@Observable`, main actor). The sidebar and its counts, keep/delete marks with undo, the selection, the preview, what Move to Albums sends, Delete in Photos…, progress, the To be deleted list (read from the Delete Me albums), and every label the window shows. |
 
 `PhotosCleanupApp` has four files:
 
@@ -104,6 +104,7 @@ sequenceDiagram
 3. **Verdicts.** When you open Screenshots or Paperwork, the classifier queues the photos with no verdict. It renders each as a 1024 px image and asks Foundation Models. Verdicts go to a disk cache. A photo the model cannot judge is not queued again until the next launch.
 4. **Thumbnails and preview.** The views ask `PHCachingImageManager` directly. Nothing is written to disk. The preview shows the local copy first. If the full photo is only in iCloud, Photos downloads it.
 5. **Move to Albums.** After you confirm, `Cleanup.commit` adds the photos to each album. It also logs your decision against the model's verdict. Undo covers marks, not the move. In All, only the Delete marks move, to one album ("All - Delete Me"); nothing is logged, because All has no verdicts.
+6. **Delete in Photos.** In To be deleted, `Cleanup.delete` keeps only photos in a Delete Me album and calls `PhotoLibrary.delete`. macOS shows its own confirmation. If you cancel, PhotoKit reports a user cancel, the library returns 0 and nothing changes. Otherwise the photos leave the model's lists. Photos keeps them in Recently Deleted for 30 days.
 
 Blocking PhotoKit and Vision calls run off the actor, so the screen never waits behind a batch.
 

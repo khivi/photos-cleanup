@@ -9,6 +9,9 @@ final class FakeLibrary: PhotoLibrary {
     let analysis: [String: VisionResult?]
     let status: String
     let adds = Mutex<[(album: String, uuids: [String])]>([])
+    let deletes = Mutex<[[String]]>([])
+    /// Makes delete() act as if the user cancelled macOS's confirmation.
+    let cancelsDelete = Mutex(false)
     let visionCalls = Mutex<[[String]]>([])
     /// Blocks vision() until released, to observe a job mid-run.
     let gate = Gate()
@@ -31,6 +34,13 @@ final class FakeLibrary: PhotoLibrary {
     func add(album: String, uuids: [String]) throws -> Int {
         guard status == "authorized" else { throw LibraryError.accessDenied }
         adds.withLock { $0.append((album, uuids)) }
+        return uuids.count
+    }
+
+    func delete(uuids: [String]) throws -> Int {
+        guard status == "authorized" else { throw LibraryError.accessDenied }
+        if cancelsDelete.withLock({ $0 }) { return 0 }
+        deletes.withLock { $0.append(uuids) }
         return uuids.count
     }
 }
