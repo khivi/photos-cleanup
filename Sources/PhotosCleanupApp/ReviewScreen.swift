@@ -19,7 +19,7 @@ struct ReviewScreen: View {
     private var countsKey: [Bool] { [model.loading, model.committing, model.progress.pending == 0] }
 
     private var items: [PassPhoto] {
-        model.view == .deleted ? model.deleted.map { PassPhoto(photo: $0) } : model.photos
+        model.view == .deleted ? model.deleted.map { PassPhoto(photo: $0) } : model.shownPhotos
     }
 
     private var selection: Binding<ReviewView?> {
@@ -57,6 +57,14 @@ struct ReviewScreen: View {
                 }
         }
         .focusedSceneValue(\.reviewModel, model)
+        .onChange(of: model.anchor) {
+            guard let a = model.anchor else { return }
+            if let j = model.sectionJump, j.photo == a {
+                position.scrollTo(id: sectionID(j.key), anchor: .top)
+            } else {
+                position.scrollTo(id: a)
+            }
+        }
         .onChange(of: model.showsInspector) { UserDefaults.standard.set(model.showsInspector, forKey: inspectorKey) }
         .task(id: pollKey) {
             while model.inPass && model.progress.pending > 0 {
@@ -87,6 +95,16 @@ struct ReviewScreen: View {
         }
         ToolbarItem {
             Button(model.inspectorToggleLabel, systemImage: "info.circle") { model.showsInspector.toggle() }
+        }
+        if model.canFilter {
+            ToolbarItem {
+                @Bindable var model = model
+                Toggle(
+                    ReviewModel.onlyDeleteLabel, systemImage: "line.3.horizontal.decrease.circle",
+                    isOn: $model.onlyDelete
+                )
+                .help(ReviewModel.onlyDeleteLabel)
+            }
         }
         if model.inPass {
             ToolbarItemGroup {
@@ -132,13 +150,13 @@ struct ReviewScreen: View {
 
     @ViewBuilder private var content: some View {
         if model.showsEmptyState {
-            ContentUnavailableView(ReviewModel.emptyState, systemImage: "checkmark.circle")
+            ContentUnavailableView(model.emptyStateLabel, systemImage: "checkmark.circle")
         } else {
             // One ScrollView for every list: a second one would leave keyboard focus on the old one.
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize, maximum: cellMax), spacing: 4)], spacing: 4) {
                     if model.view == .all || model.view.passKey.map(Passes.grouped.contains) == true {
-                        ForEach(model.groups, id: \.best) { group in
+                        ForEach(model.shownGroups, id: \.best) { group in
                             Section {
                                 ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
                             } header: {
@@ -152,6 +170,7 @@ struct ReviewScreen: View {
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                                .id(sectionID(group.best))
                             }
                         }
                     } else {
@@ -170,7 +189,7 @@ struct ReviewScreen: View {
         }
     }
 
-    /// An arrow key: the model moves the selection, then the grid scrolls it into view.
+    /// An arrow key: the model moves the selection; `onChange(of: model.anchor)` scrolls it into view.
     private func move(_ key: KeyEquivalent) {
         let step = model.previewing ? 1 : columns  // in the preview, up and down are one photo like left and right
         switch key {
@@ -179,7 +198,6 @@ struct ReviewScreen: View {
         case .upArrow: model.moveSelection(by: -step)
         default: model.moveSelection(by: step)
         }
-        if let a = model.anchor { position.scrollTo(id: a) }
     }
 
     private func cell(_ p: PassPhoto) -> some View {
@@ -260,9 +278,7 @@ struct ReviewCommands: Commands {
             Divider()
             Group {
                 Button(ReviewModel.keepAllLabel) { model?.setAll(.keep) }
-                    .keyboardShortcut("k", modifiers: [.command, .option])  // ⇧⌘K is often taken by other apps
                 Button(ReviewModel.deleteAllLabel) { model?.setAll(.delete) }
-                    .keyboardShortcut(.delete, modifiers: [.command, .shift])
             }
             .disabled(model?.canSetAll != true)
             Divider()
@@ -273,14 +289,22 @@ struct ReviewCommands: Commands {
             Button(model?.deleteInPhotosLabel ?? "Delete in Photos…") { Task { await model?.deleteInPhotos() } }
                 .disabled(model?.canDeleteInPhotos != true)
             Button("Move to Albums…") { model?.confirmingMove = true }
-                .keyboardShortcut(.return)
                 .disabled(model?.canMove != true)
         }
         CommandGroup(after: .toolbar) {
             Divider()
-            ForEach(Array(ReviewModel.tabs.prefix(9).enumerated()), id: \.offset) { i, tab in
+            Button(ReviewModel.onlyDeleteLabel) { model?.onlyDelete.toggle() }
+                .keyboardShortcut("d", modifiers: [.command, .option])
+                .disabled(model?.canFilter != true)
+            Button("Next Section") { model?.moveSection(by: 1) }
+                .keyboardShortcut(.downArrow, modifiers: .option)
+                .disabled(model?.canMoveSection != true)
+            Button("Previous Section") { model?.moveSection(by: -1) }
+                .keyboardShortcut(.upArrow, modifiers: .option)
+                .disabled(model?.canMoveSection != true)
+            Divider()
+            ForEach(ReviewModel.tabs, id: \.title) { tab in
                 Button(tab.title) { if let model { Task { await model.select(tab.view) } } }
-                    .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")))
                     .disabled(model == nil)
             }
         }
@@ -294,6 +318,9 @@ struct ReviewCommands: Commands {
 }
 
 let inspectorKey = "showsInspector"
+
+/// A section header's scroll id. Prefixed: a burst's key is its best photo's id, which its cell already uses.
+private func sectionID(_ key: String) -> String { "section-\(key)" }
 
 /// The Info panel. Nothing in it takes focus: marking hands focus back to the grid so the arrows keep working.
 struct InspectorView: View {

@@ -589,6 +589,64 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.canSetAll)
     }
 
+    @Test func onlyDeleteFiltersEveryView() async throws {
+        let (c, _) = try await makeCleanup(
+            shots("a", "b", "c"), verdicts: ["a": dropV, "c": dropV], judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        m.undoManager.groupsByEvent = false  // no run loop here to close the groups
+        await m.select(.pass("screenshots"))
+        let ids = m.displayed.map(\.id)
+        let doomed = ids.filter { m.decision($0) == .delete }
+        #expect(doomed.count == 2)
+        m.click(ids.first { m.decision($0) != .delete }!)
+        m.onlyDelete = true
+        #expect(m.displayed.map(\.id) == doomed && m.selected.isEmpty)  // the hidden photo leaves the selection
+        m.click(doomed[0])
+        m.markSelection(.keep)  // hidden now: the next one takes its place
+        #expect(m.displayed.map(\.id) == [doomed[1]] && m.selected == [doomed[1]])
+        m.markSelection(.keep)
+        #expect(m.displayed.isEmpty && m.selected.isEmpty && m.showsEmptyState)
+        #expect(m.emptyStateLabel == "Nothing marked Delete.")
+        m.undoManager.undo()
+        #expect(m.displayed.map(\.id) == [doomed[1]])
+
+        await m.select(.all)  // a view change turns it off
+        #expect(!m.onlyDelete && m.displayed.count == 3)
+        m.onlyDelete = true
+        #expect(m.displayed.isEmpty)  // All starts unmarked
+        m.onlyDelete = false
+        m.click(ids[1])
+        m.markSelection(.delete)
+        m.onlyDelete = true
+        #expect(m.displayed.map(\.id) == [ids[1]])
+    }
+
+    @Test func sectionsMoveMonthToMonth() async throws {
+        func at(_ iso: String) -> Date { ISO8601DateFormatter().date(from: iso)! }
+        let photos = [
+            Photo(uuid: "a", date: at("2026-10-20T12:00:00Z")), Photo(uuid: "b", date: at("2026-10-15T12:00:00Z")),
+            Photo(uuid: "c", date: at("2026-08-05T12:00:00Z")), Photo(uuid: "d", date: at("2024-03-05T12:00:00Z")),
+        ]
+        let (c, _) = try await makeCleanup(photos, judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c, dir: tempDir())
+        await m.select(.all)
+        let firsts = m.groups.map { $0.photos[0].id }
+        #expect(m.canMoveSection && firsts.count == 3)
+        m.moveSection(by: 1)  // nothing selected: the first section
+        #expect(m.selected == [firsts[0]])
+        m.click(m.groups[0].photos[1].id)  // from inside a section
+        m.moveSection(by: 1)
+        #expect(m.selected == [firsts[1]])
+        // The grid puts this section's header on top.
+        #expect(m.sectionJump?.key == m.groups[1].best && m.sectionJump?.photo == firsts[1])
+        m.moveSection(by: 5)  // clamped
+        #expect(m.anchor == firsts[2])
+        m.moveSection(by: -1)
+        #expect(m.anchor == firsts[1])
+        await m.select(.pass("low-quality"))
+        #expect(!m.canMoveSection)
+    }
+
     @Test func allGroupsByMonthWithDone() async throws {
         let utc = TimeZone(identifier: "UTC")!
         let en = Locale(identifier: "en_US")

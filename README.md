@@ -76,12 +76,11 @@ If access is off, the app shows an Open Privacy Settings button.
 | Click, ⇧-click, ⌘-click, ⌘A | Select |
 | Arrow keys | Move the selection |
 | K / ⌫ | Mark the selection keep / delete; with one photo selected, move to the next |
-| ⌥⌘K / ⇧⌘⌫ | Mark every photo in the pass keep / delete |
 | Space, Esc | Show or close the large preview |
 | ⌘I | Show or hide the Info panel |
 | ⌘Z / ⇧⌘Z | Undo / redo a mark |
-| ⌘↩ | Move to Albums |
-| ⌘1 – ⌘8 | Go to a sidebar item |
+| ⌥⌘D | Show only photos marked delete (in All, also those in a Delete Me album) |
+| ⌥↓ / ⌥↑ | Next / previous month in All, or group in Bursts and Similar |
 
 Photos keeps deleted items in Recently Deleted for 30 days.
 Restore a photo from there if you change your mind.

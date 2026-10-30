@@ -69,6 +69,25 @@ public final class ReviewModel {
 
     public var best: Set<String> { Set(groups.map(\.best)) }
 
+    /// Show only photos marked Delete (in All, also those already in a Delete Me album). Off on every view change.
+    public var onlyDelete = false {
+        didSet { pruneSelection() }
+    }
+    public static let onlyDeleteLabel = "Show Only Delete"
+    public var canFilter: Bool { canMark }
+
+    private func shown(_ id: String) -> Bool {
+        !onlyDelete || decisions[id] == .delete || (view == .all && deletedAlbum[id] != nil)
+    }
+    /// `photos` under the filter: what the grid shows.
+    public var shownPhotos: [PassPhoto] { photos.filter { shown($0.id) } }
+    /// `groups` under the filter, empty groups dropped.
+    public var shownGroups: [BurstGroup] {
+        guard onlyDelete else { return groups }
+        return groups.map { BurstGroup(photos: $0.photos.filter { shown($0.id) }, best: $0.best) }
+            .filter { !$0.photos.isEmpty }
+    }
+
     /// Vision's pick of a group, shown with a star in the grouped passes only.
     public func isBest(_ id: String) -> Bool { view.passKey.map(Passes.grouped.contains) == true && best.contains(id) }
 
@@ -88,7 +107,7 @@ public final class ReviewModel {
     public func decision(_ uuid: String) -> Decision? { decisions[uuid] }
 
     /// Photos to show: the To be deleted list, or the loaded ones.
-    public var displayed: [Photo] { view == .deleted ? deleted : photos.map(\.photo) }
+    public var displayed: [Photo] { view == .deleted ? deleted : shownPhotos.map(\.photo) }
 
     public var doomed: [PassPhoto] { photos.filter { decisions[$0.id] == .delete } }
     public var keepers: [PassPhoto] {
@@ -192,7 +211,8 @@ public final class ReviewModel {
             "Nothing is deleted yet. Delete in Photos… deletes every photo in \(albums.joined(separator: ", ")) after macOS asks you to confirm. Photos keeps them in Recently Deleted for 30 days."
     }
 
-    public var showsEmptyState: Bool { inPass && !loading && displayed.isEmpty }
+    public var showsEmptyState: Bool { (inPass || onlyDelete) && !loading && displayed.isEmpty }
+    public var emptyStateLabel: String { onlyDelete ? "Nothing marked Delete." : Self.emptyState }
     public static let emptyState = "Nothing left to review. Photos already filed in this pass’s albums are hidden."
 
     // MARK: Commit preview (Phase 5 labels)
@@ -232,6 +252,7 @@ public final class ReviewModel {
     public func select(_ v: ReviewView) async {
         status = nil
         previewing = false
+        onlyDelete = false
         if v == .deleted {
             await loadWaiting()
             view = v
@@ -351,8 +372,17 @@ public final class ReviewModel {
     /// Marks the selected photos; only a pass and All have marks. One selected photo: moves on to the next.
     public func markSelection(_ d: Decision) {
         guard canMark else { return }
+        let one = selected.count == 1
+        let before = order
+        let at = anchor.flatMap { before.firstIndex(of: $0) }
         mark(selected, d)
-        if selected.count == 1 { moveSelection(by: 1) }
+        guard one, let at else { return pruneSelection() }
+        let ids = order
+        if let a = anchor, ids.contains(a) { return moveSelection(by: 1) }
+        // The filter hid the photo: select the one that took its place.
+        guard !ids.isEmpty else { return clearSelection() }
+        selected = [ids[min(at, ids.count - 1)]]
+        anchor = ids[min(at, ids.count - 1)]
     }
 
     public func setAll(_ d: Decision) {
@@ -467,6 +497,22 @@ public final class ReviewModel {
         selected = [id]
         anchor = id
     }
+
+    /// ⌥↓ / ⌥↑: selects the first photo of the next or previous section (a month in All, a group in a grouped pass).
+    public func moveSection(by delta: Int) {
+        let gs = shownGroups
+        guard view == .all || view.passKey.map(Passes.grouped.contains) == true, !gs.isEmpty else { return }
+        let at = anchor.flatMap { a in gs.firstIndex { $0.photos.contains { $0.id == a } } }
+        let i = at.map { min(gs.count - 1, max(0, $0 + delta)) } ?? (delta > 0 ? 0 : gs.count - 1)
+        let id = gs[i].photos[0].id
+        sectionJump = (gs[i].best, id)
+        selected = [id]
+        anchor = id
+    }
+    /// The last section jump: the section's key and the photo it selected. The grid scrolls that
+    /// section's header to the top when the anchor lands on that photo.
+    public private(set) var sectionJump: (key: String, photo: String)?
+    public var canMoveSection: Bool { view == .all || view.passKey.map(Passes.grouped.contains) == true }
 
     public func clearSelection() {
         selected = []
