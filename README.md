@@ -84,6 +84,14 @@ Photos keeps deleted items in Recently Deleted for 30 days.
 Restore a photo from there if you change your mind.
 Delete it from Recently Deleted to free space at once.
 
+## Duplicates
+
+The app does not look for duplicate copies of a photo. The Photos app does this better: it can merge copies.
+
+1. In Photos, open Utilities > Duplicates in the sidebar. The album appears only after Photos finds duplicates.
+2. Click Merge on a set, or select all and merge them at once.
+3. Photos keeps the best copy and combines the keywords, captions, favorites and albums of the copies into it. The other copies go to Recently Deleted.
+
 ## Albums that protect photos
 
 Passes skip favorites and photos in your own albums.
