@@ -18,6 +18,10 @@ Decided for the native app, starting 2026-10-29:
 Not pursuing:
 
 - **Mac App Store.** It needs a sandboxed app bundle.
+- **Edited copies** (from the old command-line tool). Photos keeps edits inside the same photo; exported copies saved back are exact or near duplicates, which Photos' own Duplicates album (Albums → Utilities) finds.
+- **HEIC savings estimate** (from the old command-line tool). Photos and iCloud already store new photos as HEIC, and converting goes through Photos' Export.
+- **Threshold settings** (the old tool's `--threshold`, `--window`). The constants in `Passes` are set by eye on the real library; add a setting only when a pass's picks are wrong in practice.
+- **Dry run** (the old tool's `--dry-run`). Nothing moves until Move to Albums is confirmed.
 
 ## Native app plan
 
@@ -92,7 +96,19 @@ Homebrew is the only install path: the cask in `khivi/homebrew-photos-cleanup` i
 - [ ] **Measure verdicts against real choices** — `Cleanup.commit` logs the user's final decision against each verdict (`decisions.jsonl`; `Cleanup.verdictStats()` sums it). After real use of Screenshots and Paperwork, read the agreement rate by hand, from `decisions.jsonl` or `Cleanup.verdictStats()`, and tune the prompt in `Sources/PhotosCleanupCore/Verdicts.swift`. Baseline: `f1751a9` (summary before `keep`, greedy, new kinds) matched 96/102 filed screenshots, but those filings mostly accepted the old preselected verdicts. Known miss: a medicine-box photo gets delete; adding "medical or health information" to the keep list didn't fix it and flipped another photo. Tried and dropped: asking for facts (`timeSensitive`/`reusableInfo`) and deciding in code — 66/101. After a prompt change, rename `Cleanup.verdictCache` to re-judge everything.
 - [ ] **Recheck kept photos when the on-device model improves** — a pass's "Keep" album is the record of what was kept. Load it (hidden from candidates today), re-classify bypassing the verdict cache (a constant name today, so an OS model update alone doesn't invalidate it; key on the OS build too), show only new delete verdicts, and on commit move them Keep → Delete Me (needs album-removal code). Wait for an actual model update first.
 
+### Similar pass (from the old command-line tool's `similar`)
+
+The same scene shot minutes or days apart. Bursts only joins shots within 60 s of each other.
+
+1. **Core** (`Passes.swift`, `Cleanup.swift`): a pass `("similar", "Similar")`, so its albums are "Similar - Delete Me" and "Similar - Keep". Candidates: the Bursts candidates (dated, not screenshots, not favorites) minus every photo already in a Bursts group, and minus utility images, which look alike. Group by calendar day. Within a day, in time order, a photo joins the first group whose first photo is within `Passes.similarMaxDistance` (the feature-print distance Bursts uses); otherwise it starts a group. Groups of one are dropped. Comparing to each group's first photo, not to any member, stops chains of slowly changing shots merging into one group. `ponytail:` per-day only, so a scene shot on two days stays two groups; widen to a week if that misses real repeats.
+2. **Best and marks**: as Bursts, the highest Vision aesthetics score starts as Keep and the rest as Delete. Reuse `BurstGroup`, the grid sections and the ★; the Bursts-only checks become "a grouped pass" (`view == .pass("bursts")` today in `ReviewModel` and `ReviewScreen`).
+3. **Tests**: same-day grouping, a photo two days later not joining, the first-photo rule against chaining, Bursts members excluded, utility excluded, best pick.
+4. **Tune by eye**: like Bursts and Low Quality, look at 30–40 real groups; start at 0.45 and lower it if different photos join.
+5. **Docs**: README pass list and tooltip (`Passes.about`), ARCHITECTURE passes table.
+
 ### Future (not next up)
+
+- [ ] **Space freed per pass** — "Bursts · 66 · 1.2 GB" in the sidebar and the move dialog, like the old tool's savings report. PhotoKit has no public file size; `PHAssetResource`'s `fileSize` is an undocumented key. Only if the number matters.
 
 - [ ] **Thumbnail zoom (was Phase 5's V9)** — toolbar slider and ⌘+ / ⌘−, kept across launches; View menu items for both. Cells are 120–150pt today.
 - [ ] **VoiceOver (was Phase 5's A11y)** — each cell reads its date, kind and mark; the sidebar reads its counts.
