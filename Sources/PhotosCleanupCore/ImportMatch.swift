@@ -16,10 +16,11 @@ public struct LibraryIndex {
     }
 
     /// EXIF times carry no time zone: a match may be off by whole quarter hours, up to 14 hours.
-    public func match(date: Date, width: Int, height: Int) -> String? {
+    /// `excluding`: photos already matched, e.g. by an earlier frame of the same second.
+    public func match(date: Date, width: Int, height: Int, excluding: Set<String> = []) -> String? {
         let s = Self.seconds(date)
         return byKey[Self.key(s, width, height)]?.first {
-            abs(s - $0.seconds) <= 14 * 3600 && (s - $0.seconds) % 900 == 0
+            abs(s - $0.seconds) <= 14 * 3600 && (s - $0.seconds) % 900 == 0 && !excluding.contains($0.id)
         }?.id
     }
 

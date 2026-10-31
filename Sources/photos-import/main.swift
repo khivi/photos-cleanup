@@ -132,7 +132,7 @@ let imageStems = Set(files.filter(isImage).map(\.stem))
 // In the same folder: frames from one second, so new; a skipped photo is lost, an extra
 // import lands in Photos' Duplicates album.
 var newShots = LibraryIndex()
-var claimed = Set<String>()
+var claimed: [String: Set<String>] = [:]  // library ids matched, per folder
 var rows: [(status: String, file: File, detail: String)] = []
 for (n, f) in files.enumerated() {
     if n % 5000 == 0 { log("\(n)/\(files.count)") }
@@ -170,8 +170,8 @@ for (n, f) in files.enumerated() {
     let dims = "\(info.width)x\(info.height)"
     if let d = info.date {
         let dir = f.url.deletingLastPathComponent().path
-        if let id = index.match(date: d, width: info.width, height: info.height),
-            claimed.insert(dir + "\t" + id).inserted
+        if let id = index.match(date: d, width: info.width, height: info.height, excluding: claimed[dir] ?? []),
+            claimed[dir, default: []].insert(id).inserted
         {
             row("in library", "\(dims)\t\(id)")
         } else if let orig = newShots.match(date: d, width: info.width, height: info.height),
@@ -182,7 +182,10 @@ for (n, f) in files.enumerated() {
             newShots.add(id: f.rel, date: d, width: info.width, height: info.height)
             row("new", dims)
         }
-    } else if let d = f.fileDate, let id = index.match(date: d, width: info.width, height: info.height) {
+    } else if let d = f.fileDate,
+        // Photos sometimes dates an undated file a second before its file date.
+        let id = [d, d - 1].lazy.compactMap({ index.match(date: $0, width: info.width, height: info.height) }).first
+    {
         row("in library by file date", "\(dims)\t\(id)")
     } else {
         row("new undated", dims)

@@ -430,3 +430,10 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     seen.add(id: "Export/a.jpg", date: t, width: 640, height: 480)
     #expect(seen.match(date: t + 3600, width: 480, height: 640) == "Export/a.jpg")
 }
+
+@Test func libraryIndexSkipsPhotosAlreadyMatched() {
+    let t = Date(timeIntervalSince1970: 1_400_000_000)
+    let index = LibraryIndex([(id: "a", date: t, width: 640, height: 480), (id: "b", date: t, width: 640, height: 480)])
+    #expect(index.match(date: t, width: 640, height: 480, excluding: ["a"]) == "b")
+    #expect(index.match(date: t, width: 640, height: 480, excluding: ["a", "b"]) == nil)
+}
