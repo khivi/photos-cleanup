@@ -2,9 +2,12 @@
 
 ![Photos Cleanup icon](Sources/PhotosCleanupApp/AppIcon.svg)
 
-Photos Cleanup is a Mac app. It helps you clear unwanted photos from your Photos library.
+Photos Cleanup is a Mac app. It clears screenshots, bursts and blurry shots out of your Photos library.
 You review each cleanup pass as a thumbnail grid and mark photos keep or delete.
-When you move them to albums, the app files the photos into albums in Photos.
+The app files your choices into albums in Photos. It never deletes on its own.
+Everything runs on your Mac, with no network calls.
+
+![The Videos pass: candidate videos in a grid, longest first, with the pass list in the sidebar](docs/screenshot.jpg)
 
 ## Safety
 
