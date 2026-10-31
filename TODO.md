@@ -145,3 +145,10 @@ Open 2026-10-31. Decided: import stays through Photos (drag or File → Import, 
 - [ ] **Replace `--plan` with `--done`** — the tool moves only Done files into `Done/` (paths mirrored); everything else stays where it is, so no Keep folder. `Done/manifest.tsv` records each file's library id or the original it copies. Every run rechecks `Done/` against the manifest and moves back any file whose library photo is gone or in Delete Me.
 - [ ] **`--skip` exports** — never moved by the tool. An export is a deletion record (keeps deleted photos' copies from showing as new) and a stale backup; delete it once a current backup exists (incremental export, e.g. osxphotos `--update`, or Time Machine).
 - [ ] **Tests for the Done logic** — `inLibrary`/`done` in `main.swift` have none; move them into Core next to `LibraryIndex`.
+
+## Incremental export (rethink 2026-11-01)
+
+Photos Takeout stalls on "Fetching assets" with 0 photos (likely no Photos access) and isn't wanted. A current incremental backup is also what lets old `--skip` exports be deleted.
+
+- [ ] **Try osxphotos first** — `osxphotos export <dest> --update` is incremental (its own database of what's exported), handles edits, Live Photos and iCloud downloads. Personal backup, not app code, so the no-osxphotos rule doesn't apply; needs Full Disk Access for the terminal.
+- [ ] **Only if osxphotos falls short: a `photos-export` target** next to `photos-import`, ~150 lines of PhotoKit. `PHAssetResourceManager.writeData` per resource; a manifest of `localIdentifier` → modification date so a rerun copies only new or changed photos. Hard parts: iCloud "Optimize Storage" downloads (slow, network), Live Photo pairs, edits plus originals, name collisions, and what to do with photos deleted from the library (keep, so the export stays a deletion record for `--skip`).
