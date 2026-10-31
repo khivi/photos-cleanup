@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 
 let arguments = CommandLine.arguments.dropFirst()
 guard let rootArg = arguments.first else {
-    print("usage: photos-import <dir> [--skip <subdir>]... [--stage <new dir> [--only <subdir>]]")
+    print("usage: photos-import <dir> [--skip <subdir>]... [--stage <new dir> [--only <subdir>]] [--plan]")
     exit(64)
 }
 let options = zip(arguments, arguments.dropFirst())
@@ -61,7 +61,10 @@ let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentTypeKey, 
 var files: [File] = []
 let all = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])!
 for case let url as URL in all.allObjects {
-    guard let v = try? url.resourceValues(forKeys: Set(keys)), v.isRegularFile == true else { continue }
+    guard let v = try? url.resourceValues(forKeys: Set(keys)), v.isRegularFile == true,
+        !arguments.contains("--plan")
+            || !(url.path.hasPrefix(root.path + "/Done/") || url.path.hasPrefix(root.path + "/Keep/"))
+    else { continue }
     files.append(File(url: url, size: v.fileSize ?? 0, type: v.contentType, fileDate: v.creationDate))
 }
 func isSkipped(_ f: File) -> Bool { skip.contains { f.rel.hasPrefix($0 + "/") } }
@@ -223,4 +226,85 @@ if let stage {
         }
     }
     log("staged: \(linked) files in \(stage.path)")
+}
+
+// Done: in the library, or a copy of a file that is; Keep: everything else. Writes a
+// script of moves into Done/ and Keep/ under the root, paths mirrored; moving is the user's call.
+if arguments.contains("--plan") {
+    let byRel = Dictionary(rows.map { ($0.file.rel, $0) }, uniquingKeysWith: { a, _ in a })
+    let stills = Dictionary(grouping: rows.filter { isImage($0.file) }, by: \.file.stem)
+    let byStem = Dictionary(grouping: rows.filter { isImage($0.file) || isMovie($0.file) }, by: \.file.stem)
+    var memo: [String: Bool] = [:]
+    func origin(_ r: (status: String, file: File, detail: String)) -> String {
+        String(r.detail.split(separator: "\t").last ?? "")
+    }
+    func inLibrary(_ rel: String) -> Bool {
+        if let d = memo[rel] { return d }
+        guard let r = byRel[rel] else { return false }
+        let d: Bool
+        switch r.status {
+        case "in library", "in library by file date": d = true
+        case "copy", "same shot": d = inLibrary(origin(r))
+        // A Live Photo's video may exist only here: it needs its photo in the library, not just a copy.
+        case "live video", "other":
+            d = stills[r.file.stem]?.contains { $0.file.rel != rel && inLibrary($0.file.rel) } ?? false
+        default: d = false
+        }
+        memo[rel] = d
+        return d
+    }
+    // A copy is redundant wherever its original goes: the library, or Keep. A --skip folder stays whole.
+    func done(_ rel: String) -> Bool {
+        guard let f = byRel[rel]?.file, !isSkipped(f) else { return false }
+        let status = byRel[rel]?.status
+        // A sidecar goes with its photo or video; Apple names an edit's original-adjustments `<name>O.aae`.
+        if status == "other",
+            let media = byStem[f.stem] ?? (f.stem.hasSuffix("o") ? byStem[String(f.stem.dropLast())] : nil)
+        {
+            return media.contains { $0.file.rel != rel && done($0.file.rel) }
+        }
+        return status == "copy" || status == "same shot" || status == "library cache" || inLibrary(rel)
+    }
+    // A Photos library package moves whole: Keep unless every file in it is done.
+    func unit(_ rel: String) -> String {
+        guard let r = rel.range(of: ".photoslibrary/") else { return rel }
+        return String(rel[..<r.lowerBound]) + ".photoslibrary"
+    }
+    var unitDone: [String: Bool] = [:]
+    for r in rows {
+        unitDone[unit(r.file.rel), default: true] = unitDone[unit(r.file.rel), default: true] && done(r.file.rel)
+    }
+    // Per folder, the sides its units go to; a folder going one way moves in one line.
+    var sides: [String: Set<Bool>] = [:]
+    for (u, d) in unitDone {
+        var dir = (u as NSString).deletingLastPathComponent
+        while !dir.isEmpty {
+            sides[dir, default: []].insert(d)
+            dir = (dir as NSString).deletingLastPathComponent
+        }
+    }
+    func q(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
+    var lines = ["#!/bin/sh", "set -eu", "cd \(q(root.path))"]
+    // Keep moves out first, by the largest folders holding only Keep; what remains is all Done.
+    var moved: Set<String> = []
+    for (u, d) in unitDone.sorted(by: { $0.key < $1.key }) where !d {
+        var top = u
+        var dir = (u as NSString).deletingLastPathComponent
+        while !dir.isEmpty, sides[dir] == [false] {
+            top = dir
+            dir = (dir as NSString).deletingLastPathComponent
+        }
+        guard moved.insert(top).inserted else { continue }
+        lines.append("mkdir -p \(q("Keep/" + (top as NSString).deletingLastPathComponent))")
+        lines.append("mv -n \(q(top)) \(q("Keep/" + top))")
+    }
+    lines.append("mkdir -p Done")
+    lines.append("for e in *; do case \"$e\" in Done|Keep) ;; *) mv -n \"$e\" Done/ ;; esac; done")
+    // Folders emptied by Keep moves land in Done; drop them there.
+    lines.append("find Done -name .DS_Store -delete")
+    lines.append("find Done -depth -type d -empty -delete")
+    let plan = URL(filePath: "/tmp/sort-old-photos.sh")
+    try (lines.joined(separator: "\n") + "\n").write(to: plan, atomically: true, encoding: .utf8)
+    let doneCount = rows.count { unitDone[unit($0.file.rel)]! }
+    log("plan: \(doneCount) files to Done, \(rows.count - doneCount) to Keep, \(moved.count + 1) moves: \(plan.path)")
 }
