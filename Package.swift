@@ -17,6 +17,8 @@ let package = Package(
             dependencies: ["PhotosCleanupCore"],
             exclude: ["Info.plist", "PhotosCleanup.entitlements", "AppIcon.svg"]
         ),
+        // Dev tool, not shipped: dry run over a folder before importing it into Photos.
+        .executableTarget(name: "photos-import", dependencies: ["PhotosCleanupCore"]),
         .testTarget(name: "PhotosCleanupCoreTests", dependencies: ["PhotosCleanupCore"]),
     ]
 )

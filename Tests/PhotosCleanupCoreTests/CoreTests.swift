@@ -409,3 +409,24 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     #expect(Photo(uuid: "a", isMovie: true, duration: 3600).durationLabel == "60:00")
     #expect(Photo(uuid: "a", duration: 5).durationLabel == nil)
 }
+
+@Test func libraryIndexMatchesSizeAndTimeAcrossZones() {
+    let t = Date(timeIntervalSince1970: 1_400_000_000.7)
+    let index = LibraryIndex([(id: "a", date: t, width: 4032, height: 3024)])
+    #expect(index.match(date: t, width: 4032, height: 3024) == "a")
+    #expect(index.match(date: t, width: 3024, height: 4032) == "a")
+    #expect(index.match(date: t + 5.5 * 3600, width: 4032, height: 3024) == "a")  // EXIF clock in India
+    #expect(index.match(date: t - 8 * 3600, width: 4032, height: 3024) == "a")
+    #expect(index.match(date: t + 7 * 60, width: 4032, height: 3024) == nil)
+    #expect(index.match(date: t + 1, width: 4032, height: 3024) == nil)
+    #expect(index.match(date: t + 15 * 3600, width: 4032, height: 3024) == nil)
+    #expect(index.match(date: t, width: 4032, height: 3023) == nil)
+}
+
+@Test func libraryIndexAddsAsItGoes() {
+    let t = Date(timeIntervalSince1970: 1_400_000_000)
+    var seen = LibraryIndex()
+    #expect(seen.match(date: t, width: 640, height: 480) == nil)
+    seen.add(id: "Export/a.jpg", date: t, width: 640, height: 480)
+    #expect(seen.match(date: t + 3600, width: 480, height: 640) == "Export/a.jpg")
+}
