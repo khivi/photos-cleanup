@@ -134,3 +134,14 @@ Compared against CleanMy Phone, Gemini 2, PhotoSweeper, PowerPhotos, Slidebox/Sw
 - [ ] **Thumbnail zoom (was Phase 5's V9)** — toolbar slider and ⌘+ / ⌘−, kept across launches; View menu items for both. Cells are 120–150pt today.
 - [ ] **VoiceOver (was Phase 5's A11y)** — each cell reads its date, kind and mark; the sidebar reads its counts.
 - [ ] **Show in Photos** — an Inspector button (⌘R) that opens Photos at the photo, through Photos' AppleScript `spotlight (first media item whose id is "<id>")`, which selects it (S2, Phase 5). First check by hand, with a Photos window open, whether it also scrolls Photos to the photo (S2b); if it only selects, drop the idea. Shipping it needs the `com.apple.security.automation.apple-events` entitlement, `NSAppleEventsUsageDescription` and a one-time Automation prompt, all in the docs (entitlements file, Info.plist, README permissions, SECURITY).
+
+## photos-import: Done and Keep (rethink 2026-11-01)
+
+Open 2026-10-31. Decided: import stays through Photos (drag or File → Import, for its duplicate detection); the tool stays read-only on the library.
+
+- [ ] **False "in library" matches** — `LibraryIndex.match` accepts any 15-minute offset within ±14 h at the same pixel size and second: 113 candidate times. With ~200 iPhone shots (4032×3024) near one photo, a photo the library lacks matches ~20% of the time, and `--plan` sends it to Done. Match the exact time first, use EXIF `OffsetTimeOriginal` when present, and take the nearest offset, not the first.
+- [ ] **Delete Me counts as in library** — a photo in a `<Title> - Delete Me` album sends its file to Done; after Delete in Photos… the file is the only copy. Treat Delete Me photos as not in the library.
+- [ ] **`--plan` sweeps unscanned files into Done** — the last line moves everything except Done/Keep: hidden files inside folders and files added after the scan go too.
+- [ ] **Replace `--plan` with `--done`** — the tool moves only Done files into `Done/` (paths mirrored); everything else stays where it is, so no Keep folder. `Done/manifest.tsv` records each file's library id or the original it copies. Every run rechecks `Done/` against the manifest and moves back any file whose library photo is gone or in Delete Me.
+- [ ] **`--skip` exports** — never moved by the tool. An export is a deletion record (keeps deleted photos' copies from showing as new) and a stale backup; delete it once a current backup exists (incremental export, e.g. osxphotos `--update`, or Time Machine).
+- [ ] **Tests for the Done logic** — `inLibrary`/`done` in `main.swift` have none; move them into Core next to `LibraryIndex`.
