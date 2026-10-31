@@ -22,6 +22,8 @@ Not pursuing:
 - **HEIC savings estimate** (from the old command-line tool). Photos and iCloud already store new photos as HEIC, and converting goes through Photos' Export.
 - **Threshold settings** (the old tool's `--threshold`, `--window`). The constants in `Passes` are set by eye on the real library; add a setting only when a pass's picks are wrong in practice.
 - **Dry run** (the old tool's `--dry-run`). Nothing moves until Move to Albums is confirmed.
+- **Date range** (the old tool's `--since`, `--last`, `--until`). Each pass's Keep album hides reviewed photos, so a rerun shows only new ones; All by month covers browsing by date.
+- **Album name override** (the old tool's `--album-name`). A pass's albums are always derived from its title (`everyPassHasOneName`).
 - **Face-based best pick** (decided 2026-10-30). `VNDetectFaceCaptureQualityRequest` would rank people shots by their worst face; the aesthetics ★ is rarely wrong in practice.
 - **Side-by-side compare in a group** (decided 2026-10-30), as in PhotoSweeper's Face-to-Face. The ★ is rarely wrong, and ←/→ in the preview already flips between frames.
 - **Screen Recordings pass** (decided 2026-10-30). The library has 4; they show in Videos.
@@ -107,7 +109,7 @@ The same scene shot minutes or days apart. Bursts only joins shots within 60 s o
 1. **Core** (`Passes.swift`, `Cleanup.swift`): a pass `("similar", "Similar")`, so its albums are "Similar - Delete Me" and "Similar - Keep". Candidates: the Bursts candidates (dated, not screenshots, not favorites) minus every photo already in a Bursts group, and minus utility images, which look alike. Group by calendar day. Within a day, in time order, a photo joins the first group whose first photo is within `Passes.similarMaxDistance` (the feature-print distance Bursts uses); otherwise it starts a group. Groups of one are dropped. Comparing to each group's first photo, not to any member, stops chains of slowly changing shots merging into one group. `ponytail:` per-day only, so a scene shot on two days stays two groups; widen to a week if that misses real repeats.
 2. **Best and marks**: as Bursts, the highest Vision aesthetics score starts as Keep and the rest as Delete. Reuse `BurstGroup`, the grid sections and the ★; the Bursts-only checks become "a grouped pass" (`view == .pass("bursts")` today in `ReviewModel` and `ReviewScreen`).
 3. **Tests**: same-day grouping, a photo two days later not joining, the first-photo rule against chaining, Bursts members excluded, utility excluded, best pick.
-4. **Tune by eye**: like Bursts and Low Quality, look at 30–40 real groups; start at 0.45 and lower it if different photos join.
+4. **Tune by eye**: like Bursts and Low Quality, look at 30–40 real groups; start at 0.45 and lower it if different photos join. A help, from the old tool's `debug/score-thresholds.py`: log the distance percentiles of photos that joined a group and of near misses to `/tmp/photos-cleanup-app.log`, one line per run, no UI.
 5. **Docs**: README pass list and tooltip (`Passes.about`), ARCHITECTURE passes table.
 
 ### From the competitor review (decided 2026-10-30)
@@ -126,6 +128,8 @@ Compared against CleanMy Phone, Gemini 2, PhotoSweeper, PowerPhotos, Slidebox/Sw
 ### Future (not next up)
 
 - [ ] **Space freed per pass** — "Bursts · 66 · 1.2 GB" in the sidebar and the move dialog, like the old tool's savings report. PhotoKit has no public file size; `PHAssetResource`'s `fileSize` is an undocumented key. Only if the number matters. Not now (2026-10-30). If built: guard with `responds(to: Selector(("fileSize")))`, since a dropped key raises an Objective-C exception Swift can't catch; sum all of a photo's resources; the figure is iCloud storage, freed once deleted in Photos and Recently Deleted empties. Measure the per-asset cost on the real library first.
+
+- [ ] **Skipped counts** (from the old command-line tool's "Skipped:" line) — why a photo isn't a candidate: "Skipped: 120 favorited, 300 in your albums, 4 undated". `candidatePhotos` in `Passes.swift` returns the counts; they show in the empty state and the window subtitle.
 
 - [ ] **Thumbnail zoom (was Phase 5's V9)** — toolbar slider and ⌘+ / ⌘−, kept across launches; View menu items for both. Cells are 120–150pt today.
 - [ ] **VoiceOver (was Phase 5's A11y)** — each cell reads its date, kind and mark; the sidebar reads its counts.
