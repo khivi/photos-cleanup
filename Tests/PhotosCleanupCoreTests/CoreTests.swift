@@ -300,18 +300,20 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     await #expect(throws: LibraryError.accessDenied) { try await d.commit("screenshots", delete: ["a"], keep: []) }
 }
 
-@Test func commitLogsDecisionsAndVerdictStats() async throws {
+@Test func commitLogsDecisionsAgainstVerdicts() async throws {
     let verdicts = [
         "a": Verdict(keep: false, kind: "receipt", reason: ""),  // user deletes: agree
         "b": Verdict(keep: false, kind: "ticket", reason: ""),  // user keeps: override
     ]  // c has no verdict: not logged
+    let dir = tempDir()
     let (c, _) = try await makeCleanup(
-        "abc".map { Photo(uuid: String($0)) }, verdicts: verdicts, judge: FakeJudge(off: "off"))
-    #expect(await c.verdictStats().isEmpty)
+        "abc".map { Photo(uuid: String($0)) }, verdicts: verdicts, judge: FakeJudge(off: "off"), cacheDir: dir)
     _ = try await c.commit("screenshots", delete: ["a", "c"], keep: ["b"])
     _ = try await c.commit("low-quality", delete: ["a"], keep: [])  // not a verdict pass
-    let stats = await c.verdictStats()
-    #expect(stats.count == 1 && stats["screenshots"]?.agree == 1 && stats["screenshots"]?.total == 2)
+    let rows = readJSONLines(dir.appendingPathComponent(Cleanup.decisionsLog))
+    #expect(
+        rows.map { "\($0["kind"]!) \($0["uuid"]!) \(($0["verdict_keep"] as? Bool)!) \($0["decision"]!)" }
+            == ["screenshots a false delete", "screenshots b false keep"])
 }
 
 @Test func visionCacheRoundTrips() {
@@ -339,11 +341,12 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
 }
 
 @Test func commitInAllFilesDeletesOnlyAndLogsNothing() async throws {
-    let (c, lib) = try await makeCleanup("ab".map { Photo(uuid: String($0)) })
+    let dir = tempDir()
+    let (c, lib) = try await makeCleanup("ab".map { Photo(uuid: String($0)) }, cacheDir: dir)
     let done = try await c.commit(Passes.allKey, delete: ["a"], keep: ["b"])
     #expect(done == .init(added: 1, album: "All - Delete Me", kept: 0, keepAlbum: ""))
     #expect(lib.adds.withLock { $0.map(\.album) } == ["All - Delete Me"])
-    #expect(await c.verdictStats().isEmpty)
+    #expect(readJSONLines(dir.appendingPathComponent(Cleanup.decisionsLog)).isEmpty)
 }
 
 @Test func similarSkipsPhotosBurstsFiled() async throws {

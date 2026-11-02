@@ -99,8 +99,6 @@ public enum Passes {
         "low-quality": ["Low Quality - Review Me"],
         "paperwork": ["Utility - Delete Me", "Utility - Keep"],
     ]
-    /// Earlier pass keys, as written in decisions.jsonl.
-    public static let legacyKeys = ["utility": "paperwork"]
     /// Passes judged by Foundation Models.
     public static let verdictKinds: Set<String> = ["screenshots", "paperwork"]
 

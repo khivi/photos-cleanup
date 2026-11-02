@@ -386,22 +386,6 @@ public actor Cleanup {
             })
     }
 
-    /// Per pass: how many committed photos matched the model's verdict.
-    public func verdictStats() -> [String: (agree: Int, total: Int)] {
-        var out: [String: (agree: Int, total: Int)] = [:]
-        for row in readJSONLines(cacheDir.appendingPathComponent(Self.decisionsLog)) {
-            guard let logged = row["kind"] as? String, let keep = row["verdict_keep"] as? Bool,
-                let decision = row["decision"] as? String
-            else { continue }
-            let kind = Passes.legacyKeys[logged] ?? logged
-            var s = out[kind] ?? (0, 0)
-            s.total += 1
-            s.agree += keep == (decision == "keep") ? 1 : 0
-            out[kind] = s
-        }
-        return out
-    }
-
     // MARK: Cache files (JSON lines)
 
     func appendLines(_ name: String, _ lines: [String]) {
