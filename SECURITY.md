@@ -15,5 +15,6 @@ Upgrade with `brew upgrade --cask photos-cleanup`.
 
 - The app deletes only photos in Delete Me albums. It deletes only when you click Delete in Photos…, after macOS asks you to confirm. Photos keeps them in Recently Deleted for 30 days. Otherwise the app only adds photos to albums.
 - The app reads the library with its own Photos access, granted in the macOS prompt. It needs no Full Disk Access.
-- The release is signed with Developer ID, uses the hardened runtime and is notarized. Its one entitlement is Photos library access.
+- The release is signed with Developer ID, uses the hardened runtime and is notarized. Its entitlements are Photos library access and Apple Events.
+- The app sends Apple Events only to Photos, and only when you click Show in Photos. It asks Photos to select one photo. macOS asks you once to allow it.
 - The app makes no network calls and opens no network port. When you preview a photo that is stored only in iCloud, Photos downloads it.

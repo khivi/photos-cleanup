@@ -534,6 +534,22 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
 
 @MainActor
 @Suite struct InspectorTests {
+    @Test func showInPhotosNeedsExactlyOneSelected() async throws {
+        let (c, _) = try await makeCleanup([Photo(uuid: "a", screenshot: true), Photo(uuid: "b", screenshot: true)])
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("screenshots"))
+        #expect(!m.canShowInPhotos)
+        m.selectAll()
+        #expect(!m.canShowInPhotos)
+        m.click("a")
+        #expect(m.canShowInPhotos)
+        var script = ""
+        await m.showInPhotos { script = $0 }
+        #expect(script.contains("\"a/L0/001\""))
+        await m.showInPhotos { _ in throw CocoaError(.fileNoSuchFile) }
+        #expect(m.status != nil)
+    }
+
     @Test func infoFollowsSelection() async throws {
         let when = Date(timeIntervalSince1970: 0)
         let photos = [

@@ -64,6 +64,10 @@ The app needs one macOS permission: Photos access, with Full Access.
 To change this later, open System Settings > Privacy & Security > Photos.
 If access is off, the app shows an Open Privacy Settings button.
 
+Show in Photos (⌘R) needs a second, optional permission: Automation for Photos.
+The first time you use it, macOS asks if Photos Cleanup may control Photos. Click OK.
+To change this later, open System Settings > Privacy & Security > Automation.
+
 ## Usage
 
 1. Open Photos Cleanup. It reads your library and shows every photo.

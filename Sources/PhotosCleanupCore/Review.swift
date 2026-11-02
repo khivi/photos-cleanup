@@ -499,6 +499,27 @@ public final class ReviewModel {
     /// The Info side panel is open. The app persists it.
     public var showsInspector = false
 
+    public static let showInPhotosLabel = "Show in Photos"
+
+    public var canShowInPhotos: Bool { inspectorInfo() != nil }
+
+    /// Selects the one selected photo in Photos. `run` executes the AppleScript; its error goes to `status`.
+    public func showInPhotos(run: (String) async throws -> Void) async {
+        guard let id = inspectorInfo()?.id else { return }
+        status = nil
+        do {
+            try await run(
+                """
+                tell application "Photos"
+                    activate
+                    spotlight (first media item whose id is "\(id + PhotoKitLibrary.idSuffix)")
+                end tell
+                """)
+        } catch {
+            status = "\(error)"
+        }
+    }
+
     /// What the Info panel shows for the one selected photo.
     public struct Info: Sendable, Equatable {
         public let id: String

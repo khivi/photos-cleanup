@@ -24,6 +24,8 @@
     <string>public.app-category.photography</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Show in Photos asks Photos to select the photo you're looking at.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>photos-cleanup reads your library to find photos to review and files them into review albums. It never deletes.</string>
 </dict>

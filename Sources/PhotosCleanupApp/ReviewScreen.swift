@@ -315,6 +315,8 @@ struct ReviewCommands: Commands {
                 .disabled(model?.canDeleteInPhotos != true)
             Button("Move to Albums…") { model?.confirmingMove = true }
                 .disabled(model?.canMove != true)
+            Button(ReviewModel.showInPhotosLabel) { Task { await model?.showInPhotos(run: runAppleScript) } }
+                .keyboardShortcut("r").disabled(model?.canShowInPhotos != true)
         }
         CommandGroup(after: .toolbar) {
             Divider()
@@ -343,6 +345,19 @@ struct ReviewCommands: Commands {
 }
 
 let inspectorKey = "showsInspector"
+
+private struct ScriptError: LocalizedError {
+    let errorDescription: String?
+}
+
+/// Runs AppleScript off the main thread. The first run asks for Automation access to Photos.
+private func runAppleScript(_ source: String) async throws {
+    try await Task.detached {
+        var info: NSDictionary?
+        _ = NSAppleScript(source: source)?.executeAndReturnError(&info)
+        if let info { throw ScriptError(errorDescription: info[NSAppleScript.errorMessage] as? String ?? "\(info)") }
+    }.value
+}
 
 /// A section header's scroll id. Prefixed: a burst's key is its best photo's id, which its cell already uses.
 private func sectionID(_ key: String) -> String { "section-\(key)" }
@@ -381,6 +396,13 @@ struct InspectorView: View {
                         }
                         .pickerStyle(.segmented).labelsHidden().focusable(false)
                     }
+                    Button(ReviewModel.showInPhotosLabel) {
+                        Task {
+                            await model.showInPhotos(run: runAppleScript)
+                            refocus()
+                        }
+                    }
+                    .focusable(false)
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
