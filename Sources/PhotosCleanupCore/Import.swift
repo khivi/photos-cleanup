@@ -7,7 +7,9 @@ import UniformTypeIdentifiers
 // Import sorts a folder of old photos against the library. It never writes to the library: it
 // moves files within the folder, into Done/ (in the library, or a copy of a file that is) and
 // Import/ (to drag into Photos), paths mirrored. A rerun moves what Import/ now has in the library
-// to Done/, and what Done/ has that the library lacks back to Import/. A skipped folder (a library
+// to Done/, and what Done/ has that the library lacks back to Import/.
+// Done/manifest.tsv: the library photo each Done/ file stands for. A file with a row is
+// never matched again while that photo is in the library. A skipped folder (a library
 // export) is never moved, and never new, nor are its photos' copies elsewhere: it still holds
 // photos deleted from the library.
 
@@ -66,17 +68,73 @@ public struct ImportMove: Sendable, Equatable {
 /// One folder's check: every file's status, and the moves that sort it.
 public struct ImportScan: Sendable {
     public static let checkDate = "Import/Check date/"
+    static let manifestPath = "Done/manifest.tsv"
 
     public let root: URL
     public let skip: [String]
     public let rows: [ImportRow]
     public let moves: [ImportMove]
+    /// After the moves: each Done/ file matched to the library (path under Done/) and its photo's uuid.
+    let manifest: [String: String]
 
     public init(root: URL, skip: [String], rows: [ImportRow]) {
         self.root = root
         self.skip = skip
         self.rows = rows
         moves = Self.plan(rows, skip: skip)
+        manifest = Self.manifest(rows, moves: moves)
+    }
+
+    /// The library photo a row stands for: its own match, a copy's original's, or a Live Photo
+    /// video's or sidecar's still's.
+    static func libraryIDs(_ rows: [ImportRow]) -> [String: String] {
+        let byRel = Dictionary(rows.map { ($0.rel, $0) }, uniquingKeysWith: { a, _ in a })
+        let stills = Dictionary(grouping: rows.filter(\.isImage), by: \.stem)
+        var memo: [String: String?] = [:]
+        func id(_ rel: String) -> String? {
+            if let d = memo[rel] { return d }
+            guard let r = byRel[rel] else { return nil }
+            let d: String?
+            switch r.status {
+            case .inLibrary, .inLibraryByFileDate, .inLibraryByName: d = r.match
+            case .copy, .sameShot: d = r.match.flatMap(id)
+            // A Live Photo's video may exist only here: it needs its photo in the library, not just a copy.
+            case .liveVideo, .other: d = stills[r.stem]?.lazy.filter { $0.rel != rel }.compactMap { id($0.rel) }.first
+            default: d = nil
+            }
+            memo[rel] = d
+            return d
+        }
+        return rows.reduce(into: [:]) { ids, r in ids[r.rel] = id(r.rel) }
+    }
+
+    /// Rows a match decided (not a video or sidecar, which follow their still), at their path after `moves`.
+    static func manifest(_ rows: [ImportRow], moves: [ImportMove]) -> [String: String] {
+        let ids = libraryIDs(rows)
+        let to = Dictionary(moves.map { ($0.from, $0.to) }, uniquingKeysWith: { a, _ in a })
+        func after(_ rel: String) -> String {
+            if let t = to[rel] { return t }
+            guard let r = rel.range(of: ".photoslibrary/"), let t = to[String(rel[..<r.lowerBound]) + ".photoslibrary"]
+            else { return rel }
+            return t + "/" + rel[r.upperBound...]
+        }
+        let matched: Set<ImportStatus> = [.inLibrary, .inLibraryByFileDate, .inLibraryByName, .copy, .sameShot]
+        var m: [String: String] = [:]
+        for r in rows where matched.contains(r.status) {
+            let path = after(r.rel)
+            if path.hasPrefix("Done/"), let id = ids[r.rel] { m[String(path.dropFirst("Done/".count))] = id }
+        }
+        return m
+    }
+
+    static func readManifest(_ root: URL) -> [String: String] {
+        guard let text = try? String(contentsOf: root.appending(path: manifestPath), encoding: .utf8) else {
+            return [:]
+        }
+        return text.split(whereSeparator: \.isNewline).reduce(into: [:]) { m, line in
+            let c = line.split(separator: "\t", maxSplits: 1).map(String.init)
+            if c.count == 2 { m["Done/" + c[0]] = c[1] }
+        }
     }
 
     public func count(_ s: ImportStatus) -> Int { rows.count { $0.status == s } }
@@ -91,28 +149,14 @@ public struct ImportScan: Sendable {
     /// Not done: a photo or video Photos can read goes to Import/, its sidecar with it; the rest stays.
     static func plan(_ rows: [ImportRow], skip: [String]) -> [ImportMove] {
         let byRel = Dictionary(rows.map { ($0.rel, $0) }, uniquingKeysWith: { a, _ in a })
-        let stills = Dictionary(grouping: rows.filter(\.isImage), by: \.stem)
         let byStem = Dictionary(grouping: rows.filter { $0.isImage || $0.isMovie }, by: \.stem)
         // A sidecar goes with its photo or video; Apple names an edit's original-adjustments `<name>O.aae`.
         func media(_ r: ImportRow) -> [ImportRow]? {
             guard r.status == .other else { return nil }
             return byStem[r.stem] ?? (r.stem.hasSuffix("o") ? byStem[String(r.stem.dropLast())] : nil)
         }
-        var memo: [String: Bool] = [:]
-        func inLibrary(_ rel: String) -> Bool {
-            if let d = memo[rel] { return d }
-            guard let r = byRel[rel] else { return false }
-            let d: Bool
-            switch r.status {
-            case .inLibrary, .inLibraryByFileDate, .inLibraryByName: d = true
-            case .copy, .sameShot: d = r.match.map(inLibrary) ?? false
-            // A Live Photo's video may exist only here: it needs its photo in the library, not just a copy.
-            case .liveVideo, .other: d = stills[r.stem]?.contains { $0.rel != rel && inLibrary($0.rel) } ?? false
-            default: d = false
-            }
-            memo[rel] = d
-            return d
-        }
+        let ids = libraryIDs(rows)
+        func inLibrary(_ rel: String) -> Bool { ids[rel] != nil }
         // A copy is done once its original is in the library; until then it stays put, so Done/
         // never holds the only copy of a photo to import.
         func done(_ rel: String) -> Bool {
@@ -161,7 +205,7 @@ public struct ImportScan: Sendable {
     }
 
     /// Makes the moves, then drops folders they emptied; Done/, Import/ and skipped folders stay.
-    /// Returns the moves that failed, with why.
+    /// Rewrites Done/manifest.tsv for what Done/ now holds. Returns the moves that failed, with why.
     public func apply() -> [String: String] {
         let fm = FileManager.default
         var failed: [String: String] = [:]
@@ -172,6 +216,17 @@ public struct ImportScan: Sendable {
                 try fm.moveItem(at: root.appending(path: m.from), to: dest)
             } catch {
                 failed[m.from] = error.localizedDescription
+            }
+        }
+        // A failed move leaves a row for a missing path; the next scan drops it.
+        let tsv = manifest.sorted { $0.key < $1.key }.map { "\($0.key)\t\($0.value)\n" }.joined()
+        let url = root.appending(path: Self.manifestPath)
+        if !manifest.isEmpty || fm.fileExists(atPath: url.path) {
+            do {
+                try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try tsv.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                failed[Self.manifestPath] = error.localizedDescription
             }
         }
         let dirs = (fm.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey])?.allObjects as? [URL] ?? [])
@@ -240,6 +295,9 @@ public actor Importer {
         let shots = try await offload { try lib.importIndex() }
         let index = LibraryIndex(shots.map { ($0.id, $0.date, $0.width, $0.height) })
         let bySize = Dictionary(grouping: shots) { [max($0.width, $0.height), min($0.width, $0.height)] }
+        // A recorded decision holds while its photo is in the library (importIndex leaves out Delete Me).
+        let present = Set(shots.map(\.id))
+        let sticky = ImportScan.readManifest(root).filter { present.contains($0.value) }
 
         (namesMemo, thumbs) = ([:], [:])
 
@@ -249,9 +307,11 @@ public actor Importer {
             at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])
         for case let url as URL in all?.allObjects ?? [] {
             guard let v = try? url.resourceValues(forKeys: Set(keys)), v.isRegularFile == true else { continue }
+            let rel = String(url.path.dropFirst(root.path.count + 1))
+            if rel == ImportScan.manifestPath { continue }
             files.append(
                 File(
-                    url: url, rel: String(url.path.dropFirst(root.path.count + 1)), size: v.fileSize ?? 0,
+                    url: url, rel: rel, size: v.fileSize ?? 0,
                     type: v.contentType, fileDate: v.creationDate))
         }
         // For copies: skipped folders, then Import/, then Done/ first, so their photos are the originals
@@ -288,6 +348,9 @@ public actor Importer {
             return dir
         }
         var claimed: [String: Set<String>] = [:]  // library ids matched
+        // Recorded first, so no sibling takes a photo a Done/ file already stands for.
+        let onDisk = Set(files.map(\.rel))
+        for (rel, id) in sticky where onDisk.contains(rel) { claimed[mirrored(rel), default: []].insert(id) }
         let siblings = Dictionary(grouping: files) { mirrored($0.rel) }.mapValues {
             Set($0.map { $0.url.lastPathComponent.lowercased() })
         }
@@ -322,6 +385,10 @@ public actor Importer {
                     ImportRow(
                         status: status, rel: f.rel, match: match, detail: detail, stem: f.stem, isImage: f.isImage,
                         isMovie: f.isMovie))
+            }
+            if let id = sticky[f.rel] {
+                row(.inLibrary, id, "manifest")
+                continue
             }
             // Inside a Photos library package only originals/ holds photos; resources/ is its previews and renders.
             if f.rel.contains(".photoslibrary/") && !f.rel.contains(".photoslibrary/originals/") {

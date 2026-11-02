@@ -164,3 +164,48 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     let moved = Dictionary(uniqueKeysWithValues: again.rows.map { ($0.rel, $0.match) })
     #expect(moved["Done/trip/IMG_1.jpg"] == "B" && moved["Done/trip/IMG_2.jpg"] == "A")
 }
+
+@Test func importManifestRecordsWhatDoneStandsFor() {
+    let rows = [
+        row(.inLibrary, "2012/a.jpg", match: "A"),
+        row(.liveVideo, "2012/a.mov"),  // follows its still: no row of its own
+        row(.copy, "copies/a.jpg", match: "2012/a.jpg"),  // its original's photo
+        row(.new, "2012/b.jpg"),
+        row(.inLibrary, "Import/g.jpg", match: "G"),
+        row(.new, "Done/h.jpg"),  // leaving Done/
+        row(.inLibrary, "Old.photoslibrary/originals/p.jpg", match: "P"),  // its package moves whole
+    ]
+    #expect(
+        ImportScan.manifest(rows, moves: ImportScan.plan(rows, skip: [])) == [
+            "2012/a.jpg": "A", "copies/a.jpg": "A", "g.jpg": "G", "Old.photoslibrary/originals/p.jpg": "P",
+        ])
+}
+
+@Test func importDecisionsHoldUntilTheirPhotoLeavesTheLibrary() async throws {
+    let taken = exifFormatter("yyyy:MM:dd HH:mm:ss").date(from: "2024:01:01 10:00:00")!
+    let lib = FakeLibrary([Photo(uuid: "A", date: taken), Photo(uuid: "B", date: taken)])
+    lib.sizes.withLock { $0 = ["A": (64, 48), "B": (64, 48)] }
+    lib.files.withLock { $0 = ["A": ["img_2.jpg"], "B": ["img_1.jpg"]] }
+    let root = tempDir()
+    try jpeg(root.appending(path: "trip/IMG_1.jpg"), 64, 48, taken: "2024:01:01 10:00:00")
+    try jpeg(root.appending(path: "trip/IMG_2.jpg"), 64, 48, taken: "2024:01:01 10:00:00", gray: 0.2)
+    #expect(try await Importer(library: lib).scan(root).apply().isEmpty)
+    let manifest = root.appending(path: "Done/manifest.tsv")
+    #expect(try String(contentsOf: manifest, encoding: .utf8) == "trip/IMG_1.jpg\tB\ntrip/IMG_2.jpg\tA\n")
+
+    // Names that would now pair the frames the other way: the recorded decisions stand.
+    lib.files.withLock { $0 = ["A": ["img_1.jpg"], "B": ["img_2.jpg"]] }
+    let again = try await Importer(library: lib).scan(root)
+    #expect(again.moves.isEmpty)
+    let match = Dictionary(uniqueKeysWithValues: again.rows.map { ($0.rel, $0.match) })
+    #expect(match["Done/trip/IMG_1.jpg"] == "B" && match["Done/trip/IMG_2.jpg"] == "A")
+
+    // B deleted from the library: its file goes back to Import/, and its row goes.
+    let later = FakeLibrary([Photo(uuid: "A", date: taken)])
+    later.sizes.withLock { $0 = ["A": (64, 48)] }
+    later.files.withLock { $0 = ["A": ["img_2.jpg"]] }
+    let after = try await Importer(library: later).scan(root)
+    #expect(after.moves == [ImportMove(from: "Done/trip/IMG_1.jpg", to: "Import/trip/IMG_1.jpg")])
+    #expect(after.apply().isEmpty)
+    #expect(try String(contentsOf: manifest, encoding: .utf8) == "trip/IMG_2.jpg\tA\n")
+}

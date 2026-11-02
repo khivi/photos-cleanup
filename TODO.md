@@ -145,6 +145,7 @@ Decided: import stays through Photos (drag or File → Import, for its duplicate
 - [x] **Wrong dates after import** — of 20,931 photos imported 2026-10-31, ~2,140 had no camera date and Photos took the file creation date (when the backup was copied); ~23 had junk EXIF years (1900, 17, 1719). These now go to `Import/Check date/`; after fixing the date in Photos, a rerun matches them by file name and size.
 - [ ] **Suggest the date for Check date files** — many carry it in the file name (`IMG_0008.2014-06-01_164455.JPG`, `20120916-191041-=-IMG_0290.JPG`) or folder name (`…, May 10, 1992`). Write it to the report.
 - [x] **Done/ is rechecked** — each run moves a photo in `Done/` that the library lacks back to `Import/`. The old `--plan` sent every copy to Done, even of photos never imported: ~9,000 such files in `OLD PHOTOS` (2026-11-02).
+- [x] **Sticky decisions** — `Done/manifest.tsv`: path → library photo uuid. Re-judging every file each run let moves change verdicts (four separate swap bugs in `2739ef3`); a recorded decision holds until its photo leaves the library or goes to Delete Me.
 - [ ] **`--skip` exports** — never moved by the tool. An export is a deletion record (keeps deleted photos' copies from showing as new).
 - [x] **Tests for the Done logic** — the move plan is `ImportScan.plan` in Core, tested in `ImportTests.swift`.
 
