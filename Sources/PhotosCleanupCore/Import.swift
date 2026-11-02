@@ -27,6 +27,8 @@ public enum ImportStatus: String, CaseIterable, Sendable {
     case libraryCache = "library cache"
     case skipped
     case other
+    /// In Done/ for a library photo since removed (merged or deleted): goes to Removed/, never back to Import/.
+    case removed = "removed from library"
 
     public var isInLibrary: Bool { [.inLibrary, .inLibraryByFileDate, .inLibraryByName].contains(self) }
     public var isNew: Bool { [.new, .newCheckDate, .newUndated].contains(self) }
@@ -71,6 +73,8 @@ public struct ImportScan: Sendable {
     public static let checkDate = "Check date/"
     /// Waiting to be imported: Import/ and Check date/.
     static func isWaiting(_ rel: String) -> Bool { rel.hasPrefix("Import/") || rel.hasPrefix(checkDate) }
+    /// Files whose photo was in the library and was removed from it; the scan never moves them again.
+    static let removed = "Removed/"
     static let manifestPath = "Done/manifest.tsv"
 
     public let root: URL
@@ -142,9 +146,10 @@ public struct ImportScan: Sendable {
 
     public func count(_ s: ImportStatus) -> Int { rows.count { $0.status == s } }
     public var toDone: Int { moves.count { $0.to.hasPrefix("Done/") } }
-    public var toImport: Int { moves.count - toDone }
-    /// Moves out of Done/: photos no longer in the library.
-    public var fromDone: Int { moves.count { $0.from.hasPrefix("Done/") } }
+    public var toImport: Int { moves.count { Self.isWaiting($0.to) } }
+    public var toRemoved: Int { moves.count { $0.to.hasPrefix(Self.removed) } }
+    /// Moves from Done/ back to Import/: files no match ever recorded as imported.
+    public var fromDone: Int { moves.count { $0.from.hasPrefix("Done/") && Self.isWaiting($0.to) } }
 
     static func isSkipped(_ rel: String, _ skip: [String]) -> Bool { skip.contains { rel.hasPrefix($0 + "/") } }
 
@@ -181,14 +186,21 @@ public struct ImportScan: Sendable {
         func needsCheck(_ r: ImportRow) -> Bool {
             checkStems.contains(r.stem) || (r.stem.hasSuffix("o") && checkStems.contains(String(r.stem.dropLast())))
         }
+        // A removed photo's video and sidecar go with it.
+        let removedStems = Set(rows.filter { $0.status == .removed }.map(\.stem))
+        func wasRemoved(_ r: ImportRow) -> Bool {
+            r.rel.hasPrefix("Done/")
+                && (removedStems.contains(r.stem)
+                    || (r.stem.hasSuffix("o") && removedStems.contains(String(r.stem.dropLast()))))
+        }
         var unitDone: [String: Bool] = [:]
         for r in rows { unitDone[unit(r.rel), default: true] = unitDone[unit(r.rel), default: true] && done(r.rel) }
 
         var moves: [ImportMove] = []
         for (u, d) in unitDone.sorted(by: { $0.key < $1.key }) {
-            guard let r = byRel[u] ?? rows.first(where: { unit($0.rel) == u }), !isSkipped(r.rel, skip) else {
-                continue
-            }
+            guard let r = byRel[u] ?? rows.first(where: { unit($0.rel) == u }), !isSkipped(r.rel, skip),
+                !u.hasPrefix(removed)
+            else { continue }
             let inImport = isWaiting(u)
             let inDone = u.hasPrefix("Done/")
             let prefix =
@@ -196,6 +208,8 @@ public struct ImportScan: Sendable {
             let rel = String(u.dropFirst(prefix))
             if d {
                 if !inDone { moves.append(ImportMove(from: u, to: "Done/" + rel)) }
+            } else if u == r.rel, wasRemoved(r) {
+                moves.append(ImportMove(from: u, to: removed + rel))
             } else if !inImport, u == r.rel, toImport(u) {
                 // From Done/ too: a photo there is not in the library (deleted since, or sorted by an
                 // older matcher), and its copies elsewhere wait on it.
@@ -207,7 +221,8 @@ public struct ImportScan: Sendable {
         return moves
     }
 
-    /// Makes the moves, then drops folders they emptied; Done/, Import/, Check date/ and skipped folders stay.
+    /// Makes the moves, then drops folders they emptied; Done/, Import/, Check date/, Removed/ and skipped
+    /// folders stay.
     /// Rewrites Done/manifest.tsv for what Done/ now holds. Returns the moves that failed, with why.
     public func apply() -> [String: String] {
         let fm = FileManager.default
@@ -236,7 +251,7 @@ public struct ImportScan: Sendable {
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
             .map { String($0.path.dropFirst(root.path.count + 1)) }
             .filter { d in
-                !["Done", "Import", String(Self.checkDate.dropLast())].contains(d)
+                !["Done", "Import", String(Self.checkDate.dropLast()), String(Self.removed.dropLast())].contains(d)
                     && !skip.contains { d == $0 || d.hasPrefix($0 + "/") }
             }
             .filter { !$0.contains(".photoslibrary") }
@@ -304,7 +319,8 @@ public actor Importer {
         let bySecond = Dictionary(grouping: shots) { LibraryIndex.seconds($0.date) }
         // A recorded decision holds while its photo is in the library (importIndex leaves out Delete Me).
         let present = Set(shots.map(\.id))
-        let sticky = ImportScan.readManifest(root).filter { present.contains($0.value) }
+        let recorded = ImportScan.readManifest(root)
+        let sticky = recorded.filter { present.contains($0.value) }
 
         (namesMemo, thumbs) = ([:], [:])
 
@@ -358,9 +374,10 @@ public actor Importer {
         // Recorded first, so no sibling takes a photo a Done/ file already stands for.
         let onDisk = Set(files.map(\.rel))
         for (rel, id) in sticky where onDisk.contains(rel) { claimed[mirrored(rel), default: []].insert(id) }
-        let siblings = Dictionary(grouping: files) { mirrored($0.rel) }.mapValues {
-            Set($0.map { $0.url.lastPathComponent.lowercased() })
-        }
+        let siblings = Dictionary(grouping: files.filter { !$0.rel.hasPrefix(ImportScan.removed) }) { mirrored($0.rel) }
+            .mapValues {
+                Set($0.map { $0.url.lastPathComponent.lowercased() })
+            }
         func stem(_ name: String) -> String { (name as NSString).deletingPathExtension }
         /// Whether library photo `id` is this file's rather than a sibling's in its folder (burst frames of
         /// one second, or `IMG_1.JPG` and its rotated `IMG_1.jpeg`, match the same photo). Decided by
@@ -395,6 +412,10 @@ public actor Importer {
             }
             if let id = sticky[f.rel] {
                 row(.inLibrary, id, "manifest")
+                continue
+            }
+            if f.rel.hasPrefix(ImportScan.removed) || recorded[f.rel] != nil {
+                row(.removed, recorded[f.rel], nil)
                 continue
             }
             // Inside a Photos library package only originals/ holds photos; resources/ is its previews and renders.

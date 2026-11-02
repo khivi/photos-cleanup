@@ -53,7 +53,7 @@ log("report: \(report.path)")
 let dryRun = arguments.contains("--dry-run")
 log(
     "\(dryRun ? "would move" : "moving"): \(scan.toDone) to Done, \(scan.toImport) to Import"
-        + " (\(scan.fromDone) of them from Done/, not in the library)")
+        + " (\(scan.fromDone) of them from Done/, not in the library), \(scan.toRemoved) to Removed")
 if dryRun { exit(0) }
 let failed = scan.apply()
 for (from, why) in failed.sorted(by: { $0.key < $1.key }) { log("not moved: \(from): \(why)") }

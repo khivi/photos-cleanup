@@ -923,7 +923,8 @@ extension ReviewModel {
     public var importSortPreview: String {
         guard let s = importScan else { return "" }
         var lines = ["\(s.toDone.formatted()) → Done", "\(s.toImport.formatted()) → Import"]
-        if s.fromDone > 0 { lines.append("\(s.fromDone.formatted()) of them from Done: no longer in your library") }
+        if s.fromDone > 0 { lines.append("\(s.fromDone.formatted()) of them from Done: not in your library") }
+        if s.toRemoved > 0 { lines.append("\(s.toRemoved.formatted()) → Removed: removed from your library since") }
         return lines.joined(separator: "\n")
     }
 

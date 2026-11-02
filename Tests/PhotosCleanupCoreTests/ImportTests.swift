@@ -34,6 +34,9 @@ private func moves(_ rows: [ImportRow], skip: [String] = []) -> [String: String]
             row(.new, "Import/f.jpg"),  // already waiting
             row(.inLibrary, "Import/g.jpg", match: "G"),  // imported since
             row(.newUndated, "Check date/j.jpg"),  // waiting beside Import/: stays
+            row(.removed, "Done/r.jpg", match: "R"),  // its photo merged or deleted since
+            row(.liveVideo, "Done/r.mov"),  // goes with it
+            row(.removed, "Removed/s.jpg"),  // stays
             row(.inLibraryByName, "Check date/k.jpg", match: "K"),  // imported and its date fixed
             row(.new, "Done/h.jpg"),  // deleted from the library since
             row(.skipped, "Export/i.jpg"),
@@ -45,6 +48,7 @@ private func moves(_ rows: [ImportRow], skip: [String] = []) -> [String: String]
             "copies/a.jpg": "Done/copies/a.jpg",
             "2012/c.jpg": "Check date/2012/c.jpg", "2012/d.jpg": "Check date/2012/d.jpg",
             "Import/g.jpg": "Done/g.jpg", "Done/h.jpg": "Import/h.jpg", "Check date/k.jpg": "Done/k.jpg",
+            "Done/r.jpg": "Removed/r.jpg", "Done/r.mov": "Removed/r.mov",
         ])
 }
 
@@ -104,7 +108,8 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     #expect(fm.fileExists(atPath: root.appending(path: "2024/notes.txt").path))  // not a photo: stays
     #expect(!fm.fileExists(atPath: root.appending(path: "backup").path))  // emptied, dropped
 
-    // A rerun after importing: Import/ moves to Done/; Delete Me photos count as not in the library.
+    // A rerun after importing: Import/ moves to Done/. A Delete Me photo counts as removed from the
+    // library: its files (and copies) go to Removed/, not back to Import/.
     let later = FakeLibrary([
         Photo(uuid: "A", date: taken, albums: [Passes.allDeleteAlbum]),
         Photo(uuid: "B", date: taken + 3600),
@@ -113,8 +118,9 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     let again = try await Importer(library: later).scan(root)
     let to = Dictionary(uniqueKeysWithValues: again.moves.map { ($0.from, $0.to) })
     #expect(to["Import/2024/IMG_2.jpg"] == "Done/2024/IMG_2.jpg")
-    #expect(to["Done/2024/IMG_1.jpg"] == "Import/2024/IMG_1.jpg")
-    #expect(again.fromDone == 1)
+    #expect(to["Done/2024/IMG_1.jpg"] == "Removed/2024/IMG_1.jpg")
+    #expect(to["Done/backup/IMG_1.jpg"] == "Removed/backup/IMG_1.jpg")
+    #expect((again.fromDone, again.toRemoved) == (0, 2))
 }
 
 @MainActor @Test func importScreenChecksSortsAndRemembersFolders() async throws {
@@ -202,14 +208,17 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     let match = Dictionary(uniqueKeysWithValues: again.rows.map { ($0.rel, $0.match) })
     #expect(match["Done/trip/IMG_1.jpg"] == "B" && match["Done/trip/IMG_2.jpg"] == "A")
 
-    // B deleted from the library: its file goes back to Import/, and its row goes.
+    // B deleted from the library: its file goes to Removed/ for good, and its row goes.
     let later = FakeLibrary([Photo(uuid: "A", date: taken)])
     later.sizes.withLock { $0 = ["A": (64, 48)] }
     later.files.withLock { $0 = ["A": ["img_2.jpg"]] }
     let after = try await Importer(library: later).scan(root)
-    #expect(after.moves == [ImportMove(from: "Done/trip/IMG_1.jpg", to: "Import/trip/IMG_1.jpg")])
+    #expect(after.moves == [ImportMove(from: "Done/trip/IMG_1.jpg", to: "Removed/trip/IMG_1.jpg")])
     #expect(after.apply().isEmpty)
     #expect(try String(contentsOf: manifest, encoding: .utf8) == "trip/IMG_2.jpg\tA\n")
+    let settled = try await Importer(library: later).scan(root)
+    #expect(settled.moves.isEmpty)
+    #expect(settled.rows.first { $0.rel == "Removed/trip/IMG_1.jpg" }?.status == .removed)
 }
 
 @Test func importTakesEveryReencodeOfAPhotoButNotABurstSiblings() async throws {
