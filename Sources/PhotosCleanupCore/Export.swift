@@ -81,6 +81,8 @@ public struct ExportStatus: Sendable, Equatable {
 /// copies only photos new or changed since. Never deletes: a backup keeps photos deleted from the library.
 public actor Exporter {
     public static let manifestName = ".photos-export.tsv"
+    /// Exports in flight at once: iCloud originals download, and 4 keeps PhotoKit from queuing too much.
+    static let parallel = 4
 
     let library: PhotoLibrary
     let calendar: Calendar
@@ -157,7 +159,7 @@ public actor Exporter {
         destination == nil ? 0 : uuids.count { manifest.entries[$0] == nil }
     }
 
-    /// Runs `run()` in the background; `stop()` ends it after the photo it is on.
+    /// Runs `run()` in the background; `stop()` ends it once the photos in flight finish.
     public func start() {
         guard !running else { return }
         task = Task { await run() }
@@ -180,19 +182,36 @@ public actor Exporter {
         }
         let todo = items.filter { !manifest.isCurrent(id: $0.uuid, modified: $0.modified) }
         (done, total) = (0, todo.count)
-        for item in todo {
-            if Task.isCancelled { break }
-            defer { done += 1 }
-            guard let name = library.exportName(item.uuid) else { continue }  // gone since the refresh
-            let stem = manifest.stem(for: item.uuid, dir: month(item.date), name: name)
-            current = stem
-            do {
-                try await library.export(item.uuid, stem: stem, to: dest)
-                manifest.record(id: item.uuid, modified: item.modified, stem: stem)
-            } catch {
-                failed[stem] = error.localizedDescription
+        let lib = library
+        await withTaskGroup(of: (ExportItem, String, String?).self) { group in
+            var queue = todo[...]
+            var inFlight = 0
+            while true {
+                while inFlight < Self.parallel, !Task.isCancelled, let item = queue.popFirst() {
+                    guard let name = lib.exportName(item.uuid) else {  // gone since the refresh
+                        done += 1
+                        continue
+                    }
+                    let stem = manifest.stem(for: item.uuid, dir: month(item.date), name: name)
+                    current = stem
+                    inFlight += 1
+                    group.addTask {
+                        do {
+                            try await lib.export(item.uuid, stem: stem, to: dest)
+                            return (item, stem, nil)
+                        } catch { return (item, stem, error.localizedDescription) }
+                    }
+                }
+                guard let (item, stem, error) = await group.next() else { break }
+                inFlight -= 1
+                if let error {
+                    failed[stem] = error
+                } else {
+                    manifest.record(id: item.uuid, modified: item.modified, stem: stem)
+                }
+                done += 1
+                if done % 100 == 0 { save() }
             }
-            if done % 100 == 99 { save() }
         }
         save()
     }

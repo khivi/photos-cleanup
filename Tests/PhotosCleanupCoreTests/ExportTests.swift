@@ -46,6 +46,21 @@ let utc = TimeZone(identifier: "UTC")!
     #expect(await third.status.failed.isEmpty)
 }
 
+@Test func exporterCopiesSeveralAtOnce() async throws {
+    let lib = FakeLibrary((0..<12).map { Photo(uuid: "p\($0)", date: t0) })
+    lib.names.withLock { $0 = Dictionary(uniqueKeysWithValues: (0..<12).map { ("p\($0)", "IMG") }) }
+    let dest = tempDir()
+    let ex = Exporter(library: lib, destination: dest, timeZone: utc)
+    await ex.run()
+    let peak = lib.inFlight.withLock { $0.max }
+    #expect(peak > 1 && peak <= 4)
+    #expect(lib.exported.withLock { $0 }.sorted() == (0..<12).map { "p\($0)" }.sorted())
+    let s = await ex.status
+    #expect((s.exported, s.done, s.total, s.failed.count) == (12, 12, 12, 0))
+    let files = try FileManager.default.subpathsOfDirectory(atPath: dest.path).filter { $0.hasSuffix(".jpg") }
+    #expect(Set(files).count == 12)
+}
+
 @Test func exporterWithoutDestinationOrDiskDoesNothing() async throws {
     let lib = FakeLibrary([Photo(uuid: "a", date: t0)])
     let none = Exporter(library: lib)

@@ -51,6 +51,8 @@ final class FakeLibrary: PhotoLibrary {
     /// uuids whose `export` throws.
     let exportFails = Mutex<Set<String>>([])
     let exported = Mutex<[String]>([])
+    /// Exports running now, and the most at once.
+    let inFlight = Mutex((now: 0, max: 0))
 
     func exportable() throws -> [ExportItem] {
         let m = modified.withLock { $0 }
@@ -80,6 +82,12 @@ final class FakeLibrary: PhotoLibrary {
 
     /// Writes `<stem>.jpg` holding the uuid.
     func export(_ uuid: String, stem: String, to dest: URL) async throws {
+        inFlight.withLock {
+            $0.now += 1
+            $0.max = max($0.max, $0.now)
+        }
+        defer { inFlight.withLock { $0.now -= 1 } }
+        try await Task.sleep(for: .milliseconds(20))
         if exportFails.withLock({ $0.contains(uuid) }) { throw LibraryError.failed("offline") }
         let url = dest.appending(path: stem + ".jpg")
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
