@@ -437,3 +437,19 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     #expect(index.match(date: t, width: 640, height: 480, excluding: ["a"]) == "b")
     #expect(index.match(date: t, width: 640, height: 480, excluding: ["a", "b"]) == nil)
 }
+
+@Test func exportManifestNumbersCollidingNamesAndKeepsThemAcrossRuns() {
+    var m = ExportManifest()
+    #expect(m.stem(for: "a", dir: "2024/05", name: "IMG_0001") == "2024/05/IMG_0001")
+    #expect(m.stem(for: "b", dir: "2024/05", name: "img_0001") == "2024/05/img_0001 (1)")
+    #expect(m.stem(for: "c", dir: "2024/06", name: "IMG_0001") == "2024/06/IMG_0001")
+    m.record(id: "a", modified: 1_700_000_000.123456, stem: "2024/05/IMG_0001")
+    m.record(id: "b", modified: 5, stem: "2024/05/img_0001 (1)")
+
+    var rerun = ExportManifest(tsv: m.tsv)
+    #expect(rerun.isCurrent(id: "a", modified: 1_700_000_000.123456))
+    #expect(!rerun.isCurrent(id: "b", modified: 6))
+    #expect(!rerun.isCurrent(id: "c", modified: 0))
+    #expect(rerun.stem(for: "b", dir: "2025/01", name: "other") == "2024/05/img_0001 (1)")
+    #expect(rerun.stem(for: "d", dir: "2024/05", name: "IMG_0001") == "2024/05/IMG_0001 (2)")
+}

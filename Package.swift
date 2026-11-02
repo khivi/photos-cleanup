@@ -19,6 +19,8 @@ let package = Package(
         ),
         // Dev tool, not shipped: dry run over a folder before importing it into Photos.
         .executableTarget(name: "photos-import", dependencies: ["PhotosCleanupCore"]),
+        // Dev tool, not shipped: incremental backup of the library's originals and edits.
+        .executableTarget(name: "photos-export", dependencies: ["PhotosCleanupCore"]),
         .testTarget(name: "PhotosCleanupCoreTests", dependencies: ["PhotosCleanupCore"]),
     ]
 )
