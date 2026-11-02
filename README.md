@@ -16,38 +16,49 @@ It also does two jobs around the library:
 
 ## Safety
 
-The app deletes only photos in Delete Me albums.
-It deletes only when you click Delete in Photos…, and only after macOS asks you to confirm.
-Photos keeps deleted photos in Recently Deleted for 30 days.
-Photos you mark delete go into an album for that pass, such as "Screenshots - Delete Me".
-Photos you mark keep go into a "Keep" album, such as "Screenshots - Keep". Later runs skip them.
-You can also delete them yourself from that album in Photos.
-The app skips favorites and photos that are already in your own albums.
-Photos you edited in Photos start as keep in Bursts, Similar and Low Quality.
+**Nothing is deleted until you say so.**
 
-Export and Import never delete files.
-Export only adds and updates files in its destination.
-Import only moves files inside the folder you give it. It never writes to your library.
+- Marking a photo delete only files it into an album, such as "Screenshots - Delete Me".
+- Photos are deleted only when you click Delete in Photos… and confirm in the macOS dialog.
+- Deleted photos stay in Photos' Recently Deleted for 30 days.
+
+**Some photos are protected from the start.**
+
+- Favorites are never suggested. Photos in your own albums are not either, unless you change it in Settings.
+- Photos you edited start as keep in Bursts, Similar and Low Quality.
+- Photos you keep go into a "Keep" album, such as "Screenshots - Keep". Later runs skip them.
+
+**Export and Import never delete files.**
+
+- Export only adds and updates files in its destination.
+- Import only moves files inside the folder you give it. It never changes your library.
 
 ## Privacy
 
-Everything runs on your Mac.
-The app reads and files photos through PhotoKit, Apple's Photos API.
-It finds bursts and low-quality photos with Apple's on-device Vision.
-Verdicts for screenshots and paperwork come from Apple's on-device Foundation Models.
-It caches analysis and verdicts in `~/Library/Caches/photos-cleanup`.
-Delete that folder to clear them.
-Your Import folder list is in `~/Library/Application Support/photos-cleanup/import_folders`.
-The app makes no network calls and sends no telemetry.
-Photos downloads a photo that is stored only in iCloud when you preview it or export it.
+**Everything stays on your Mac.** The app makes no network calls and sends no telemetry.
+
+It uses only Apple's on-device tools:
+
+- PhotoKit, to read your library and file photos into albums.
+- Vision, to find bursts and low-quality photos.
+- Foundation Models, for the screenshot and paperwork suggestions.
+
+Photos itself may download from iCloud: a photo stored only in iCloud downloads when you preview or export it.
+
+What the app saves:
+
+| What | Where | To clear it |
+| --- | --- | --- |
+| Analysis and suggestions | `~/Library/Caches/photos-cleanup` | Delete the folder |
+| Your Import folder list | `~/Library/Application Support/photos-cleanup/import_folders` | Remove the folders in Import |
 
 ## Requirements
 
 - macOS 15 or later
 - Optional, for AI verdicts: macOS 27 or later with Apple Intelligence on
 
-Without AI verdicts, all passes still work.
-Screenshots and Paperwork then start as "keep", and the app says why.
+Without AI verdicts, Screenshots starts every photo as keep and Paperwork stays empty. All other passes work.
+The app says why. See AI verdicts unavailable, under Troubleshooting.
 
 ## Install
 
@@ -224,10 +235,23 @@ Changes apply the next time the app opens.
 
 ### AI verdicts unavailable
 
-The app shows a note when it cannot run AI verdicts.
-The note gives the reason. Everything else still works.
+Without AI verdicts, Screenshots lists its photos, but every photo starts as keep.
+Paperwork stays empty: only the model can tell a receipt from a photo.
+All other passes work as usual.
+The note under the grid starts with the reason:
 
-- "need macOS 27 or later with Apple Intelligence on": update macOS and turn on Apple Intelligence.
+| Reason in the note | Cause | Fix |
+| --- | --- | --- |
+| `need macOS 27 or later with Apple Intelligence on` | macOS is older than 27. | Update macOS, then turn on Apple Intelligence. |
+| `Foundation Models unavailable: …appleIntelligenceNotEnabled…` | Apple Intelligence is off. | Turn it on in System Settings > Apple Intelligence & Siri. |
+| `Foundation Models unavailable: …modelNotReady…` | The model is still downloading. | Wait, then reopen Photos Cleanup. |
+| `Foundation Models unavailable: …deviceNotEligible…` | This Mac cannot run Apple Intelligence. | None. Mark the photos yourself. |
+| `need a build made with the macOS 27 SDK` | The app was built with an older Xcode. | Install the release from Homebrew, or build with Xcode 27. |
+
+The app checks once, when it opens. After a fix, reopen Photos Cleanup.
+
+Inside Screenshots and Paperwork, the same reason shows as `AI verdicts unavailable: …`.
+`Vision analysis failed`, in any pass, means the on-device image analysis stopped for this run. Reopen Photos Cleanup to try again.
 
 ## Development
 
