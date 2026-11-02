@@ -33,6 +33,8 @@ private func moves(_ rows: [ImportRow], skip: [String] = []) -> [String: String]
             row(.unreadable, "2012/e.jpg"),  // neither: stays
             row(.new, "Import/f.jpg"),  // already waiting
             row(.inLibrary, "Import/g.jpg", match: "G"),  // imported since
+            row(.newUndated, "Check date/j.jpg"),  // waiting beside Import/: stays
+            row(.inLibraryByName, "Check date/k.jpg", match: "K"),  // imported and its date fixed
             row(.new, "Done/h.jpg"),  // deleted from the library since
             row(.skipped, "Export/i.jpg"),
         ], skip: ["Export"])
@@ -41,8 +43,8 @@ private func moves(_ rows: [ImportRow], skip: [String] = []) -> [String: String]
             "2012/a.jpg": "Done/2012/a.jpg", "2012/a.mov": "Done/2012/a.mov", "2012/aO.aae": "Done/2012/aO.aae",
             "2012/b.jpg": "Import/2012/b.jpg", "2012/Live Videos/b.mov": "Import/2012/b.mov",
             "copies/a.jpg": "Done/copies/a.jpg",
-            "2012/c.jpg": "Import/Check date/2012/c.jpg", "2012/d.jpg": "Import/Check date/2012/d.jpg",
-            "Import/g.jpg": "Done/g.jpg", "Done/h.jpg": "Import/h.jpg",
+            "2012/c.jpg": "Check date/2012/c.jpg", "2012/d.jpg": "Check date/2012/d.jpg",
+            "Import/g.jpg": "Done/g.jpg", "Done/h.jpg": "Import/h.jpg", "Check date/k.jpg": "Done/k.jpg",
         ])
 }
 
@@ -95,7 +97,7 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     #expect(scan.apply().isEmpty)
     let fm = FileManager.default
     for p in [
-        "Done/2024/IMG_1.jpg", "Done/backup/IMG_1.jpg", "Import/2024/IMG_2.jpg", "Import/Check date/2024/scan.jpg",
+        "Done/2024/IMG_1.jpg", "Done/backup/IMG_1.jpg", "Import/2024/IMG_2.jpg", "Check date/2024/scan.jpg",
     ] {
         #expect(fm.fileExists(atPath: root.appending(path: p).path), "\(p)")
     }
@@ -233,4 +235,23 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     for i in 0..<3 { #expect(status["export/us - \(i).jpg"]! == (.inLibrary, "A"), "us - \(i)") }
     #expect(status["trip/IMG_1.jpg"]! == (.inLibrary, "B"))
     #expect(status["trip/IMG_2.jpg"]!.0 == .new)
+}
+
+@Test func importTakesASmallerVersionOfAMergedPhoto() async throws {
+    // Merge Duplicates kept the library's 128x96 version; the folder has the 64x48 one.
+    let taken = exifFormatter("yyyy:MM:dd HH:mm:ss").date(from: "2024:01:01 10:00:00")!
+    let root = tempDir()
+    try jpeg(root.appending(path: "old/IMG_1.jpg"), 64, 48, taken: "2024:01:01 10:00:00")
+    try jpeg(root.appending(path: "old/crop.jpg"), 48, 48, taken: "2024:01:01 10:00:00")  // another shape
+    let big = root.appending(path: "big.jpg")
+    try jpeg(big, 128, 96, taken: nil)
+    let lib = FakeLibrary([Photo(uuid: "A", date: taken)])
+    lib.sizes.withLock { $0 = ["A": (128, 96)] }
+    lib.keys.withLock { $0 = ["A": pictureKey(CGImageSourceCreateWithURL(big as CFURL, nil))!] }
+    try FileManager.default.removeItem(at: big)
+
+    let status = Dictionary(
+        uniqueKeysWithValues: try await Importer(library: lib).scan(root).rows.map { ($0.rel, ($0.status, $0.match)) })
+    #expect(status["old/IMG_1.jpg"]! == (.inLibrary, "A"))
+    #expect(status["old/crop.jpg"]!.0 == .new)
 }

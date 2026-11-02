@@ -84,7 +84,7 @@ struct ImportView: View {
                     }
                 } footer: {
                     Text(
-                        "Done: already in your library, or a copy of a file that is. Import: to bring into Photos; “Check date” holds files without a camera date, which Photos would date by when the file was copied. After importing, check again: imported files move to Done."
+                        "Done: already in your library, or a copy of a file that is. Import: to bring into Photos. Check date, beside Import: files without a camera date, which Photos would date by when the file was copied; import them on their own and fix their dates. After importing, check again: imported files move to Done."
                     )
                     .foregroundStyle(.secondary)
                 }

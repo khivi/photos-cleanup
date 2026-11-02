@@ -67,7 +67,10 @@ public struct ImportMove: Sendable, Equatable {
 
 /// One folder's check: every file's status, and the moves that sort it.
 public struct ImportScan: Sendable {
-    public static let checkDate = "Import/Check date/"
+    /// Beside Import/, not in it: dragging Import/ into Photos must not take files it would misdate.
+    public static let checkDate = "Check date/"
+    /// Waiting to be imported: Import/ and Check date/.
+    static func isWaiting(_ rel: String) -> Bool { rel.hasPrefix("Import/") || rel.hasPrefix(checkDate) }
     static let manifestPath = "Done/manifest.tsv"
 
     public let root: URL
@@ -173,7 +176,7 @@ public struct ImportScan: Sendable {
             guard let r = rel.range(of: ".photoslibrary/") else { return rel }
             return String(rel[..<r.lowerBound]) + ".photoslibrary"
         }
-        // A photo whose date Photos would get wrong goes to Import/Check date/, its video and sidecar with it.
+        // A photo whose date Photos would get wrong goes to Check date/, its video and sidecar with it.
         let checkStems = Set(rows.filter { $0.status == .newCheckDate || $0.status == .newUndated }.map(\.stem))
         func needsCheck(_ r: ImportRow) -> Bool {
             checkStems.contains(r.stem) || (r.stem.hasSuffix("o") && checkStems.contains(String(r.stem.dropLast())))
@@ -186,7 +189,7 @@ public struct ImportScan: Sendable {
             guard let r = byRel[u] ?? rows.first(where: { unit($0.rel) == u }), !isSkipped(r.rel, skip) else {
                 continue
             }
-            let inImport = u.hasPrefix("Import/")
+            let inImport = isWaiting(u)
             let inDone = u.hasPrefix("Done/")
             let prefix =
                 u.hasPrefix(checkDate) ? checkDate.count : inImport ? "Import/".count : inDone ? "Done/".count : 0
@@ -204,7 +207,7 @@ public struct ImportScan: Sendable {
         return moves
     }
 
-    /// Makes the moves, then drops folders they emptied; Done/, Import/ and skipped folders stay.
+    /// Makes the moves, then drops folders they emptied; Done/, Import/, Check date/ and skipped folders stay.
     /// Rewrites Done/manifest.tsv for what Done/ now holds. Returns the moves that failed, with why.
     public func apply() -> [String: String] {
         let fm = FileManager.default
@@ -232,7 +235,10 @@ public struct ImportScan: Sendable {
         let dirs = (fm.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey])?.allObjects as? [URL] ?? [])
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
             .map { String($0.path.dropFirst(root.path.count + 1)) }
-            .filter { d in !["Done", "Import"].contains(d) && !skip.contains { d == $0 || d.hasPrefix($0 + "/") } }
+            .filter { d in
+                !["Done", "Import", String(Self.checkDate.dropLast())].contains(d)
+                    && !skip.contains { d == $0 || d.hasPrefix($0 + "/") }
+            }
             .filter { !$0.contains(".photoslibrary") }
         for d in dirs.sorted(by: { $0.count > $1.count }) {
             let url = root.appending(path: d)
@@ -295,6 +301,7 @@ public actor Importer {
         let shots = try await offload { try lib.importIndex() }
         let index = LibraryIndex(shots.map { ($0.id, $0.date, $0.width, $0.height) })
         let bySize = Dictionary(grouping: shots) { [max($0.width, $0.height), min($0.width, $0.height)] }
+        let bySecond = Dictionary(grouping: shots) { LibraryIndex.seconds($0.date) }
         // A recorded decision holds while its photo is in the library (importIndex leaves out Delete Me).
         let present = Set(shots.map(\.id))
         let sticky = ImportScan.readManifest(root).filter { present.contains($0.value) }
@@ -314,10 +321,10 @@ public actor Importer {
                     url: url, rel: rel, size: v.fileSize ?? 0,
                     type: v.contentType, fileDate: v.creationDate))
         }
-        // For copies: skipped folders, then Import/, then Done/ first, so their photos are the originals
+        // For copies: skipped folders, then Import/ and Check date/, then Done/ first, so their photos are the originals
         // that copies elsewhere point to, and a rerun never sends a second copy to Import/.
         func order(_ f: File) -> Int {
-            ImportScan.isSkipped(f.rel, skip) ? 0 : f.rel.hasPrefix("Import/") ? 1 : f.rel.hasPrefix("Done/") ? 2 : 3
+            ImportScan.isSkipped(f.rel, skip) ? 0 : ImportScan.isWaiting(f.rel) ? 1 : f.rel.hasPrefix("Done/") ? 2 : 3
         }
         files.sort { (order($0), $0.url.path) < (order($1), $1.url.path) }
         (done, total) = (0, files.count)
@@ -338,7 +345,7 @@ public actor Importer {
         // In the same folder: frames from one second, so new; a skipped photo is lost, an extra
         // import lands in Photos' Duplicates album.
         var newShots = LibraryIndex()
-        // Per folder, with Done/, Import/ and Import/Check date/ seen as the folder they mirror, so a
+        // Per folder, with Done/, Import/ and Check date/ seen as the folder they mirror, so a
         // file's match doesn't change when it moves.
         func mirrored(_ rel: String) -> String {
             let dir = (rel as NSString).deletingLastPathComponent + "/"
@@ -459,6 +466,17 @@ public actor Importer {
                     owns(f, id), samePicture(lib.pictureKey(id), fileThumb(f.url))
                 {
                     found = id
+                }
+                // Photos' Merge Duplicates keeps the largest version: a smaller one at the exact time,
+                // same shape and same picture is that photo.
+                if found == nil, f.isImage {
+                    let ratio = Double(max(info.width, info.height)) / Double(min(info.width, info.height))
+                    found =
+                        bySecond[LibraryIndex.seconds(d)]?.first { c in
+                            let r = Double(max(c.width, c.height)) / Double(min(c.width, c.height))
+                            return abs(r - ratio) < 0.01 * ratio && owns(f, c.id)
+                                && samePicture(lib.pictureKey(c.id), fileThumb(f.url))
+                        }?.id
                 }
                 if let id = found {
                     claimed[here, default: []].insert(id)
