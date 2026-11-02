@@ -86,6 +86,12 @@ struct ReviewScreen: View {
                 await model.pollExport()
             }
         }
+        .task(id: model.importBusy) {
+            while model.importBusy != nil && !Task.isCancelled {
+                await model.pollImport()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
         .task { await model.refreshExport() }  // the Export badge; the photo list read takes a moment
         .task(id: countsKey) {
             guard !model.loading && !model.committing else { return }
@@ -165,6 +171,8 @@ struct ReviewScreen: View {
     @ViewBuilder private var content: some View {
         if model.view == .export {
             ExportView(model: model)
+        } else if model.view == .importFolders {
+            ImportView(model: model)
         } else if model.showsEmptyState {
             ContentUnavailableView(model.emptyStateLabel, systemImage: "checkmark.circle")
         } else {
@@ -223,7 +231,7 @@ struct ReviewScreen: View {
                 model.decision(p.id).map { .decision($0) } ?? (model.deletedAlbum[p.id] != nil ? .deleteMe : .none)
             case .deleted: .deleteMe
             case .pass: model.decision(p.id).map { .decision($0) } ?? .none
-            case .export: .none
+            case .export, .importFolders: .none
             }
         return PhotoCell(
             photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id),

@@ -61,6 +61,23 @@ final class FakeLibrary: PhotoLibrary {
         all.contains { $0.uuid == uuid } ? names.withLock { $0[uuid] } ?? uuid : nil
     }
 
+    /// Per uuid: the file names `fileNames` reports (the uuid if unset).
+    let files = Mutex<[String: Set<String>]>([:])
+    /// Per uuid: the pixel size `importIndex` reports (4032x3024 if unset).
+    let sizes = Mutex<[String: (Int, Int)]>([:])
+
+    func importIndex() throws -> [LibraryShot] {
+        let s = sizes.withLock { $0 }
+        return all.compactMap { p in
+            guard let d = p.date, Passes.waitingAlbum(in: p.albums) == nil else { return nil }
+            let (w, h) = s[p.uuid] ?? (4032, 3024)
+            return LibraryShot(id: p.uuid, date: d, width: w, height: h)
+        }
+    }
+
+    func fileNames(_ uuid: String) -> Set<String> { files.withLock { $0[uuid] } ?? [uuid.lowercased()] }
+    func pictureKey(_ uuid: String) -> [UInt8]? { nil }
+
     /// Writes `<stem>.jpg` holding the uuid.
     func export(_ uuid: String, stem: String, to dest: URL) async throws {
         if exportFails.withLock({ $0.contains(uuid) }) { throw LibraryError.failed("offline") }

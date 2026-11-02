@@ -202,7 +202,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(
             ReviewModel.tabs.map(\.title) == [
                 "All", "Screenshots", "Paperwork", "Bursts", "Similar", "Low Quality", "Videos", "To be deleted",
-                "Export",
+                "Export", "Import",
             ])
         await m.refreshCounts()
         await m.select(.all)
@@ -229,7 +229,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c)
         let titles = m.sidebar.map { $0.items.map(\.title) }
         #expect(m.sidebar.map(\.title) == ["Library", "Cleanup", "Review", "Transfer"])
-        #expect(titles == [["All"], Passes.all.map(\.title), ["To be deleted"], ["Export"]])
+        #expect(titles == [["All"], Passes.all.map(\.title), ["To be deleted"], ["Export", "Import"]])
         #expect(m.sidebar.flatMap(\.items).allSatisfy { $0.badge == nil && !$0.help.isEmpty })  // nothing counted yet
         await m.refreshCounts()
         var badges: [String: Int?] {

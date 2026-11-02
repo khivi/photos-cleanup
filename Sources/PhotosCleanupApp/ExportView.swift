@@ -51,12 +51,7 @@ struct ExportView: View {
     }
 
     private func choose() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = true
-        panel.prompt = "Export Here"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let url = pickFolder(prompt: "Export Here") else { return }
         UserDefaults.standard.set(url.path, forKey: exportDestinationKey)
         Task { await model.setExportDestination(url) }
     }

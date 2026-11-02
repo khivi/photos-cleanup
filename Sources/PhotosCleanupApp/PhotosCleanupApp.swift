@@ -72,7 +72,7 @@ struct ContentView: View {
         let exporter = Exporter(
             library: library,
             destination: UserDefaults.standard.string(forKey: exportDestinationKey).map { URL(filePath: $0) })
-        let model = ReviewModel(cleanup: cleanup, exporter: exporter)
+        let model = ReviewModel(cleanup: cleanup, exporter: exporter, importer: Importer(library: library))
         model.showsInspector = UserDefaults.standard.bool(forKey: inspectorKey)
         await model.select(.all)
         return .loaded(model, Thumbnails(library: library, uuids: photos.map(\.uuid)))

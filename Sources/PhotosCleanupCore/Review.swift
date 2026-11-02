@@ -6,6 +6,7 @@ public enum ReviewView: Hashable, Sendable {
     case pass(String)  // a key from `Passes.all`
     case deleted  // photos waiting in Delete Me albums
     case export  // the backup to a folder or disk
+    case importFolders  // old photo folders sorted against the library
 
     public var passKey: String? { if case .pass(let k) = self { k } else { nil } }
 }
@@ -44,6 +45,16 @@ public final class ReviewModel {
     public private(set) var export = ExportStatus()
     /// Photos in `deleted` the export doesn't hold: Delete in Photos would lose them.
     public private(set) var deletedNotExported = 0
+    public private(set) var importFolders: [ImportFolder] = []
+    /// This session's checks, by folder.
+    public private(set) var importScans: [URL: ImportScan] = [:]
+    /// The folder the Import screen shows.
+    public var importFolder: URL?
+    /// The folder being checked or sorted, and the check's files done of total.
+    public private(set) var importBusy: URL?
+    public private(set) var importProgress = (done: 0, total: 0)
+    /// The last sort's moves that failed, "from: why".
+    public private(set) var importFailures: [String] = []
     public private(set) var counts: [String: Int?] = [:]
     public private(set) var loading = false
     public private(set) var committing = false
@@ -64,15 +75,19 @@ public final class ReviewModel {
 
     private let cleanup: Cleanup
     private let exporter: Exporter?
+    private let importer: Importer?
     private let dir: URL
     /// Months marked Done in All, by "2024-03" key, with the photo count when marked.
     public private(set) var reviewedMonths: [String: Int]
 
-    public init(cleanup: Cleanup, exporter: Exporter? = nil, dir: URL = settingsDir) {
+    public init(cleanup: Cleanup, exporter: Exporter? = nil, importer: Importer? = nil, dir: URL = settingsDir) {
         self.cleanup = cleanup
         self.exporter = exporter
+        self.importer = importer
         self.dir = dir
         reviewedMonths = loadReviewedMonths(dir: dir)
+        importFolders = loadImportFolders(dir: dir)
+        importFolder = importFolders.first?.url
     }
 
     public var best: Set<String> { Set(groups.map(\.best)) }
@@ -153,6 +168,10 @@ public final class ReviewModel {
                 .export, "Export",
                 "Copies every photo and video to a folder or disk. Each run copies only what’s new or changed."
             ),
+            (
+                .importFolders, "Import",
+                "Sorts folders of old photos into Done (already in your library) and Import (to bring into Photos)."
+            ),
         ]
 
     // MARK: Sidebar
@@ -174,7 +193,7 @@ public final class ReviewModel {
         public var id: String { title }
     }
 
-    /// Library (All), Cleanup (the passes), Review (To be deleted), Transfer (Export), built from `tabs`.
+    /// Library (All), Cleanup (the passes), Review (To be deleted), Transfer (Export, Import), built from `tabs`.
     public var sidebar: [SidebarSection] {
         func item(_ t: (view: ReviewView, title: String, help: String)) -> SidebarItem {
             let n: Int? =
@@ -183,6 +202,7 @@ public final class ReviewModel {
                 case .pass(let k): counts[k] ?? nil
                 case .deleted: deleted.count
                 case .export: export.destination == nil ? nil : export.pending
+                case .importFolders: importScans.values.map(\.newCount).reduce(0, +)
                 }
             return SidebarItem(
                 view: t.view, title: t.title, help: t.help, badge: n.flatMap { $0 > 0 ? $0 : nil },
@@ -193,7 +213,7 @@ public final class ReviewModel {
             SidebarSection(title: "Library", items: items { $0 == .all }),
             SidebarSection(title: "Cleanup", items: items { $0.passKey != nil }),
             SidebarSection(title: "Review", items: items { $0 == .deleted }),
-            SidebarSection(title: "Transfer", items: items { $0 == .export }),
+            SidebarSection(title: "Transfer", items: items { $0 == .export || $0 == .importFolders }),
         ]
     }
 
@@ -203,6 +223,7 @@ public final class ReviewModel {
     public var summary: String {
         if view == .deleted { return "\(deleted.count) queued for deletion" }
         if view == .export { return exportCountsLabel }
+        if view == .importFolders { return importSummary }
         if inPass {
             return "\(photos.count) \(photos.count == 1 ? "candidate" : "candidates") · \(doomed.count) to delete"
         }
@@ -279,11 +300,11 @@ public final class ReviewModel {
         status = nil
         previewing = false
         onlyDelete = false
-        if v == .export {
+        if v == .export || v == .importFolders {
             view = v
             clearSelection()
             undoManager.removeAllActions()
-            await refreshExport()
+            if v == .export { await refreshExport() }
             return
         }
         if v == .deleted {
@@ -775,4 +796,124 @@ extension ReviewModel {
 
     /// The last run's failures, "2024/05/IMG_0001: reason", sorted; a rerun retries them.
     public var exportFailures: [String] { export.failed.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" } }
+}
+
+// MARK: Import
+
+extension ImportScan {
+    /// Photos and videos not in the library: the ones Import/ holds, or will after the sort.
+    public var newCount: Int { rows.count { $0.status.isNew && !Self.isSkipped($0.rel, skip) } }
+}
+
+extension ReviewModel {
+    public func addImportFolder(_ url: URL) async {
+        if !importFolders.contains(where: { $0.url == url }) {
+            importFolders.append(ImportFolder(url: url))
+            saveFolders()
+        }
+        importFolder = url
+        await checkImportFolder(url)
+    }
+
+    public func removeImportFolder(_ url: URL) {
+        importFolders.removeAll { $0.url == url }
+        importScans[url] = nil
+        if importFolder == url { importFolder = importFolders.first?.url }
+        saveFolders()
+    }
+
+    /// Marks a subfolder (a path under the folder) as a library export, or unmarks it; rechecks.
+    public func setLibraryExport(_ sub: String, in url: URL, _ on: Bool) async {
+        guard let i = importFolders.firstIndex(where: { $0.url == url }) else { return }
+        importFolders[i].skip.removeAll { $0 == sub }
+        if on { importFolders[i].skip.append(sub) }
+        saveFolders()
+        await checkImportFolder(url)
+    }
+
+    private func saveFolders() {
+        do { try saveImportFolders(importFolders, dir: dir) } catch { self.error = "\(error)" }
+    }
+
+    public func checkImportFolder(_ url: URL) async {
+        guard let importer, importBusy == nil, let folder = importFolders.first(where: { $0.url == url }) else {
+            return
+        }
+        importBusy = url
+        importProgress = (0, 0)
+        defer { importBusy = nil }
+        do {
+            importScans[url] = try await importer.scan(url, skip: folder.skip)
+        } catch {
+            status = "\(error)"
+        }
+    }
+
+    /// One poll tick while a check runs.
+    public func pollImport() async {
+        guard let importer else { return }
+        importProgress = (await importer.done, await importer.total)
+    }
+
+    /// Makes the selected folder's moves, then checks it again.
+    public func sortImportFolder() async {
+        guard canSortImport, let url = importFolder, let scan = importScans[url] else { return }
+        importBusy = url
+        let failed = await Task.detached { scan.apply() }.value
+        importFailures = failed.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }
+        importBusy = nil
+        status = "Moved \(scan.moves.count - failed.count) of \(scan.moves.count) files."
+        await checkImportFolder(url)
+    }
+
+    public var importScan: ImportScan? { importFolder.flatMap { importScans[$0] } }
+    public var importFolderSkip: [String] { importFolders.first { $0.url == importFolder }?.skip ?? [] }
+    public var canSortImport: Bool { importBusy == nil && !(importScan?.moves.isEmpty ?? true) }
+    public var canCheckImport: Bool { importBusy == nil && importFolder != nil }
+    public var importChecking: Bool { importBusy != nil && importBusy == importFolder }
+
+    /// "~/Pictures/Old Laptop".
+    public func importFolderLabel(_ url: URL) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return url.path.hasPrefix(home + "/") ? "~" + url.path.dropFirst(home.count) : url.path
+    }
+
+    /// "341 new · 12,804 in library", or "Not checked".
+    public func importFolderCounts(_ url: URL) -> String {
+        guard let s = importScans[url] else { return "Not checked" }
+        let inLib = s.rows.count { $0.status.isInLibrary }
+        return "\(s.newCount.formatted()) new · \(inLib.formatted()) in library"
+    }
+
+    /// "Checking 1,840 of 5,002 files…".
+    public var importProgressLabel: String? {
+        guard importChecking else { return nil }
+        let (d, t) = importProgress
+        return t == 0 ? "Reading the library…" : "Checking \(d.formatted()) of \(t.formatted()) files…"
+    }
+
+    /// Each status with files in the scan, in `ImportStatus` order: ("in library", 12804).
+    public var importStatusCounts: [(status: String, count: Int)] {
+        guard let s = importScan else { return [] }
+        return ImportStatus.allCases.map { ($0.rawValue, s.count($0)) }.filter { $0.1 > 0 }
+    }
+
+    /// The confirmation's text: what the sort moves where.
+    public var importSortPreview: String {
+        guard let s = importScan else { return "" }
+        var lines = ["\(s.toDone.formatted()) → Done", "\(s.toImport.formatted()) → Import"]
+        if s.fromDone > 0 { lines.append("\(s.fromDone.formatted()) of them from Done: no longer in your library") }
+        return lines.joined(separator: "\n")
+    }
+
+    public var importSummary: String {
+        guard let s = importScan else { return importFolders.isEmpty ? "No folders" : "Not checked" }
+        return "\(s.newCount.formatted()) new · \(s.moves.count.formatted()) to move"
+    }
+
+    /// The selected folder's Import/ folder, if it exists: what to bring into Photos.
+    public var importInbox: URL? {
+        guard let url = importFolder?.appending(path: "Import") else { return nil }
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
 }

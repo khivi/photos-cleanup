@@ -22,6 +22,13 @@ public protocol PhotoLibrary: Sendable {
     /// Writes the photo's files as `<stem>.<ext>` and `<stem>_edited.<ext>` under `dest`,
     /// downloading iCloud originals.
     func export(_ uuid: String, stem: String, to dest: URL) async throws
+    /// Every photo and video with a capture date, for Import to match files against. Photos in a
+    /// Delete Me album are left out: after Delete in Photos… the file is the only copy.
+    func importIndex() throws -> [LibraryShot]
+    /// The file names Photos keeps for the photo (a Live Photo has two), lowercased, without extension.
+    func fileNames(_ uuid: String) -> Set<String>
+    /// The photo's 16×16 grayscale key, from an original already on this Mac; nil if it's only in iCloud.
+    func pictureKey(_ uuid: String) -> [UInt8]?
 }
 
 public enum LibraryError: Error, Equatable, CustomStringConvertible {
@@ -185,12 +192,48 @@ extension PhotoKitLibrary {
         return o
     }
 
-    func resources(_ uuid: String) -> [PHAssetResource] {
-        guard
-            let a = PHAsset.fetchAssets(withLocalIdentifiers: [uuid + Self.idSuffix], options: Self.everyAsset)
-                .firstObject
-        else { return [] }
-        return PHAssetResource.assetResources(for: a)
+    func asset(_ uuid: String) -> PHAsset? {
+        PHAsset.fetchAssets(withLocalIdentifiers: [uuid + Self.idSuffix], options: Self.everyAsset).firstObject
+    }
+
+    func resources(_ uuid: String) -> [PHAssetResource] { asset(uuid).map(PHAssetResource.assetResources) ?? [] }
+
+    public func importIndex() throws -> [LibraryShot] {
+        try requireAccess()
+        var waiting: Set<String> = []
+        PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: nil).enumerateObjects { c, _, _ in
+            guard Passes.waitingAlbum(in: [c.localizedTitle ?? ""]) != nil else { return }
+            PHAsset.fetchAssets(in: c, options: nil).enumerateObjects { a, _, _ in waiting.insert(Self.uuid(a)) }
+        }
+        var out: [LibraryShot] = []
+        PHAsset.fetchAssets(with: Self.everyAsset).enumerateObjects { a, _, _ in
+            let id = Self.uuid(a)
+            if let d = a.creationDate, !waiting.contains(id) {
+                out.append(LibraryShot(id: id, date: d, width: a.pixelWidth, height: a.pixelHeight))
+            }
+        }
+        return out
+    }
+
+    public func fileNames(_ uuid: String) -> Set<String> {
+        // originalFilename is declared non-optional but is nil for some resources.
+        Set(
+            resources(uuid).compactMap { r in
+                (r.originalFilename as String?).map { ($0 as NSString).deletingPathExtension.lowercased() }
+            })
+    }
+
+    /// Only originals already on this Mac: an iCloud download per candidate would take hours.
+    public func pictureKey(_ uuid: String) -> [UInt8]? {
+        guard let a = asset(uuid), a.mediaType == .image else { return nil }
+        let opts = PHImageRequestOptions()
+        opts.isSynchronous = true
+        opts.isNetworkAccessAllowed = false
+        nonisolated(unsafe) var key: [UInt8]?
+        PHImageManager.default().requestImageDataAndOrientation(for: a, options: opts) { data, _, _, _ in
+            key = data.flatMap { PhotosCleanupCore.pictureKey(CGImageSourceCreateWithData($0 as CFData, nil)) }
+        }
+        return key
     }
 
     public func exportable() throws -> [ExportItem] {
