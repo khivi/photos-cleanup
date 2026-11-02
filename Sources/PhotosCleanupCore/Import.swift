@@ -452,6 +452,14 @@ public actor Importer {
                     }
                     excluding.insert(id)
                 }
+                // Already claimed here, at the exact time, by no sibling's name, and the same picture:
+                // another re-encode of that photo (an export may hold one photo nine times).
+                if found == nil, f.isImage,
+                    let id = index.match(date: d, width: info.width, height: info.height),
+                    owns(f, id), samePicture(lib.pictureKey(id), fileThumb(f.url))
+                {
+                    found = id
+                }
                 if let id = found {
                     claimed[here, default: []].insert(id)
                     row(.inLibrary, id, dims)

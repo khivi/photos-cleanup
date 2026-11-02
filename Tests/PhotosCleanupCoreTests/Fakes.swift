@@ -78,7 +78,9 @@ final class FakeLibrary: PhotoLibrary {
     }
 
     func fileNames(_ uuid: String) -> Set<String> { files.withLock { $0[uuid] } ?? [uuid.lowercased() + ".jpg"] }
-    func pictureKey(_ uuid: String) -> [UInt8]? { nil }
+    /// Per uuid: the 16×16 picture key `pictureKey` reports (none if unset, as for an iCloud-only original).
+    let keys = Mutex<[String: [UInt8]]>([:])
+    func pictureKey(_ uuid: String) -> [UInt8]? { keys.withLock { $0[uuid] } }
 
     /// Writes `<stem>.jpg` holding the uuid.
     func export(_ uuid: String, stem: String, to dest: URL) async throws {

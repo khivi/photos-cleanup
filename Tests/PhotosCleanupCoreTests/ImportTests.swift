@@ -209,3 +209,28 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     #expect(after.apply().isEmpty)
     #expect(try String(contentsOf: manifest, encoding: .utf8) == "trip/IMG_2.jpg\tA\n")
 }
+
+@Test func importTakesEveryReencodeOfAPhotoButNotABurstSiblings() async throws {
+    let taken = exifFormatter("yyyy:MM:dd HH:mm:ss").date(from: "2024:01:01 10:00:00")!
+    let root = tempDir()
+    // An export holding one photo three times, re-encoded: same size, time and picture, other bytes.
+    for (i, g) in [0.5, 0.51, 0.52].enumerated() {
+        try jpeg(root.appending(path: "export/us - \(i).jpg"), 64, 48, taken: "2024:01:01 10:00:00", gray: g)
+    }
+    // Burst frames named for the camera: the library holds IMG_1, so IMG_2 is not it, however alike.
+    try jpeg(root.appending(path: "trip/IMG_1.jpg"), 64, 48, taken: "2024:01:01 10:00:05", gray: 0.2)
+    try jpeg(root.appending(path: "trip/IMG_2.jpg"), 64, 48, taken: "2024:01:01 10:00:05", gray: 0.21)
+    func key(_ rel: String) -> [UInt8] {
+        pictureKey(CGImageSourceCreateWithURL(root.appending(path: rel) as CFURL, nil))!
+    }
+    let lib = FakeLibrary([Photo(uuid: "A", date: taken), Photo(uuid: "B", date: taken + 5)])
+    lib.sizes.withLock { $0 = ["A": (64, 48), "B": (64, 48)] }
+    lib.files.withLock { $0 = ["A": ["bf7c91cc.jpeg"], "B": ["img_1.jpg"]] }
+    lib.keys.withLock { $0 = ["A": key("export/us - 0.jpg"), "B": key("trip/IMG_1.jpg")] }
+
+    let scan = try await Importer(library: lib).scan(root)
+    let status = Dictionary(uniqueKeysWithValues: scan.rows.map { ($0.rel, ($0.status, $0.match)) })
+    for i in 0..<3 { #expect(status["export/us - \(i).jpg"]! == (.inLibrary, "A"), "us - \(i)") }
+    #expect(status["trip/IMG_1.jpg"]! == (.inLibrary, "B"))
+    #expect(status["trip/IMG_2.jpg"]!.0 == .new)
+}
