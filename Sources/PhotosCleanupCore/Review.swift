@@ -45,7 +45,7 @@ public final class ReviewModel {
     public private(set) var export = ExportStatus()
     /// Photos in `deleted` the export doesn't hold: Delete in Photos would lose them.
     public private(set) var deletedNotExported = 0
-    public private(set) var importFolders: [ImportFolder] = []
+    public private(set) var importFolders: [URL] = []
     /// This session's checks, by folder.
     public private(set) var importScans: [URL: ImportScan] = [:]
     /// The folder the Import screen shows.
@@ -87,7 +87,7 @@ public final class ReviewModel {
         self.dir = dir
         reviewedMonths = loadReviewedMonths(dir: dir)
         importFolders = loadImportFolders(dir: dir)
-        importFolder = importFolders.first?.url
+        importFolder = importFolders.first
     }
 
     public var best: Set<String> { Set(groups.map(\.best)) }
@@ -807,8 +807,8 @@ extension ImportScan {
 
 extension ReviewModel {
     public func addImportFolder(_ url: URL) async {
-        if !importFolders.contains(where: { $0.url == url }) {
-            importFolders.append(ImportFolder(url: url))
+        if !importFolders.contains(url) {
+            importFolders.append(url)
             saveFolders()
         }
         importFolder = url
@@ -816,19 +816,10 @@ extension ReviewModel {
     }
 
     public func removeImportFolder(_ url: URL) {
-        importFolders.removeAll { $0.url == url }
+        importFolders.removeAll { $0 == url }
         importScans[url] = nil
-        if importFolder == url { importFolder = importFolders.first?.url }
+        if importFolder == url { importFolder = importFolders.first }
         saveFolders()
-    }
-
-    /// Marks a subfolder (a path under the folder) as a library export, or unmarks it; rechecks.
-    public func setLibraryExport(_ sub: String, in url: URL, _ on: Bool) async {
-        guard let i = importFolders.firstIndex(where: { $0.url == url }) else { return }
-        importFolders[i].skip.removeAll { $0 == sub }
-        if on { importFolders[i].skip.append(sub) }
-        saveFolders()
-        await checkImportFolder(url)
     }
 
     private func saveFolders() {
@@ -836,14 +827,12 @@ extension ReviewModel {
     }
 
     public func checkImportFolder(_ url: URL) async {
-        guard let importer, importBusy == nil, let folder = importFolders.first(where: { $0.url == url }) else {
-            return
-        }
+        guard let importer, importBusy == nil, importFolders.contains(url) else { return }
         importBusy = url
         importProgress = (0, 0)
         defer { importBusy = nil }
         do {
-            importScans[url] = try await importer.scan(url, skip: folder.skip)
+            importScans[url] = try await importer.scan(url)
         } catch {
             status = "\(error)"
         }
@@ -867,7 +856,6 @@ extension ReviewModel {
     }
 
     public var importScan: ImportScan? { importFolder.flatMap { importScans[$0] } }
-    public var importFolderSkip: [String] { importFolders.first { $0.url == importFolder }?.skip ?? [] }
     public var canSortImport: Bool { importBusy == nil && !(importScan?.moves.isEmpty ?? true) }
     public var canCheckImport: Bool { importBusy == nil && importFolder != nil }
     public var importChecking: Bool { importBusy != nil && importBusy == importFolder }

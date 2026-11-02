@@ -254,10 +254,10 @@ public actor Importer {
                     url: url, rel: String(url.path.dropFirst(root.path.count + 1)), size: v.fileSize ?? 0,
                     type: v.contentType, fileDate: v.creationDate))
         }
-        // Skipped folders, then Done/, then Import/ first: their photos are the originals that copies
-        // elsewhere point to, so a rerun never sends a second copy to Import/.
+        // For copies: skipped folders, then Import/, then Done/ first, so their photos are the originals
+        // that copies elsewhere point to, and a rerun never sends a second copy to Import/.
         func order(_ f: File) -> Int {
-            ImportScan.isSkipped(f.rel, skip) ? 0 : f.rel.hasPrefix("Done/") ? 1 : f.rel.hasPrefix("Import/") ? 2 : 3
+            ImportScan.isSkipped(f.rel, skip) ? 0 : f.rel.hasPrefix("Import/") ? 1 : f.rel.hasPrefix("Done/") ? 2 : 3
         }
         files.sort { (order($0), $0.url.path) < (order($1), $1.url.path) }
         (done, total) = (0, files.count)
@@ -278,7 +278,41 @@ public actor Importer {
         // In the same folder: frames from one second, so new; a skipped photo is lost, an extra
         // import lands in Photos' Duplicates album.
         var newShots = LibraryIndex()
-        var claimed: [String: Set<String>] = [:]  // library ids matched, per folder
+        // Per folder, with Done/, Import/ and Import/Check date/ seen as the folder they mirror, so a
+        // file's match doesn't change when it moves.
+        func mirrored(_ rel: String) -> String {
+            let dir = (rel as NSString).deletingLastPathComponent + "/"
+            for p in [ImportScan.checkDate, "Import/", "Done/"] where dir.hasPrefix(p) {
+                return String(dir.dropFirst(p.count))
+            }
+            return dir
+        }
+        var claimed: [String: Set<String>] = [:]  // library ids matched
+        let siblings = Dictionary(grouping: files) { mirrored($0.rel) }.mapValues {
+            Set($0.map { $0.url.lastPathComponent.lowercased() })
+        }
+        func stem(_ name: String) -> String { (name as NSString).deletingPathExtension }
+        /// Whether library photo `id` is this file's rather than a sibling's in its folder (burst frames of
+        /// one second, or `IMG_1.JPG` and its rotated `IMG_1.jpeg`, match the same photo). Decided by
+        /// names, never by which file comes first, so the answer doesn't change when a file moves.
+        func owns(_ f: File, _ id: String) -> Bool {
+            let full = f.url.lastPathComponent.lowercased()
+            let n = names(id)
+            let others = (siblings[mirrored(f.rel)] ?? []).subtracting([full])
+            if n.contains(full) { return true }
+            if !n.isDisjoint(with: others) { return false }
+            let stems = Set(n.map(stem))
+            guard stems.contains(stem(full)) else { return others.allSatisfy { !stems.contains(stem($0)) } }
+            return others.allSatisfy { !stems.contains(stem($0)) || full < $0 }
+        }
+        // Matching runs in mirrored order, skipped folders first: where two files tie for one library
+        // photo (burst frames of one second, renamed exports), the first wins, and that must not depend
+        // on whether a file sits in Done/ or Import/, or each run would swap them.
+        files.sort {
+            let a = (ImportScan.isSkipped($0.rel, skip) ? 0 : 1, mirrored($0.rel) + $0.url.lastPathComponent, $0.rel)
+            let b = (ImportScan.isSkipped($1.rel, skip) ? 0 : 1, mirrored($1.rel) + $1.url.lastPathComponent, $1.rel)
+            return a < b
+        }
         var rows: [ImportRow] = []
         for (n, f) in files.enumerated() {
             done = n
@@ -319,25 +353,40 @@ public actor Importer {
             }
             let dims = "\(info.width)x\(info.height)"
             let name = f.url.deletingPathExtension().lastPathComponent.lowercased()
-            // Its date was fixed by hand in Photos after import, so only name and size still match.
+            let stemmed = { (id: String) in self.names(id).map(stem) }
+            // QuickTime's zero date is 1904; a reset camera writes 1900.
+            let dated = info.date.map {
+                info.trusted && Calendar.current.component(.year, from: $0) > 1904 && $0 < Date()
+            }
+            // A Check date photo's date was fixed by hand in Photos after import, so only name and size
+            // still match. By its date, not its folder, so the answer holds once it moves to Done/.
             let byName =
-                f.rel.hasPrefix(ImportScan.checkDate)
+                dated != true
                 ? bySize[[max(info.width, info.height), min(info.width, info.height)]]?.filter {
-                    names($0.id).contains(name)
+                    stemmed($0.id).contains(name)
                 }
                 : nil
             if let byName, byName.count == 1 {
                 row(.inLibraryByName, byName[0].id, dims)
             } else if let d = info.date {
                 let dir = f.url.deletingLastPathComponent().path
-                if let id = index.match(
-                    date: d, width: info.width, height: info.height, excluding: claimed[dir] ?? [],
-                    confirm: {
-                        names($0).contains(name)
-                            || (f.isImage && samePicture(lib.pictureKey($0), fileThumb(f.url)))
-                    }),
-                    claimed[dir, default: []].insert(id).inserted
+                let confirm = { (id: String) in
+                    stemmed(id).contains(name) || (f.isImage && samePicture(lib.pictureKey(id), self.fileThumb(f.url)))
+                }
+                let here = mirrored(f.rel)
+                var excluding = claimed[here] ?? []
+                var found: String?
+                while let id = index.match(
+                    date: d, width: info.width, height: info.height, excluding: excluding, confirm: confirm)
                 {
+                    if owns(f, id) {
+                        found = id
+                        break
+                    }
+                    excluding.insert(id)
+                }
+                if let id = found {
+                    claimed[here, default: []].insert(id)
                     row(.inLibrary, id, dims)
                 } else if let orig = newShots.match(
                     date: d, width: info.width, height: info.height,
@@ -347,9 +396,7 @@ public actor Importer {
                     row(.sameShot, orig, dims)
                 } else {
                     newShots.add(id: f.rel, date: d, width: info.width, height: info.height)
-                    // QuickTime's zero date is 1904; a reset camera writes 1900.
-                    let year = Calendar.current.component(.year, from: d)
-                    row(info.trusted && year > 1904 && d < Date() ? .new : .newCheckDate, nil, dims)
+                    row(dated == true ? .new : .newCheckDate, nil, dims)
                 }
             } else if let d = f.fileDate,
                 // Photos sometimes dates an undated file a second before its file date.
@@ -443,31 +490,16 @@ func movieInfo(_ url: URL) async -> (date: Date?, trusted: Bool, width: Int, hei
     return (date, date != nil, Int(abs(size.width)), Int(abs(size.height)))
 }
 
-/// A folder Import checks, and its subfolders that are library exports (never moved, never new).
-public struct ImportFolder: Sendable, Equatable, Identifiable {
-    public let url: URL
-    public var skip: [String]
-    public var id: URL { url }
-
-    public init(url: URL, skip: [String] = []) {
-        self.url = url
-        self.skip = skip
-    }
-}
-
-/// `import_folders`: one folder per line, its skipped subfolders after tabs.
-public func loadImportFolders(dir: URL = settingsDir) -> [ImportFolder] {
+/// `import_folders`: the folders Import checks, one path per line.
+public func loadImportFolders(dir: URL = settingsDir) -> [URL] {
     guard let text = try? String(contentsOf: dir.appendingPathComponent("import_folders"), encoding: .utf8) else {
         return []
     }
-    return text.split(whereSeparator: \.isNewline).map { line in
-        let f = line.split(separator: "\t").map(String.init)
-        return ImportFolder(url: URL(filePath: f[0]), skip: Array(f.dropFirst()))
-    }
+    return text.split(whereSeparator: \.isNewline).map { URL(filePath: String($0)) }
 }
 
-public func saveImportFolders(_ folders: [ImportFolder], dir: URL = settingsDir) throws {
+public func saveImportFolders(_ folders: [URL], dir: URL = settingsDir) throws {
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    try folders.map { ([$0.url.path] + $0.skip).joined(separator: "\t") + "\n" }.joined()
+    try folders.map { $0.path + "\n" }.joined()
         .write(to: dir.appendingPathComponent("import_folders"), atomically: true, encoding: .utf8)
 }

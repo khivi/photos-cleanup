@@ -25,7 +25,7 @@ public protocol PhotoLibrary: Sendable {
     /// Every photo and video with a capture date, for Import to match files against. Photos in a
     /// Delete Me album are left out: after Delete in Photos… the file is the only copy.
     func importIndex() throws -> [LibraryShot]
-    /// The file names Photos keeps for the photo (a Live Photo has two), lowercased, without extension.
+    /// The file names Photos keeps for the photo (a Live Photo has two), lowercased.
     func fileNames(_ uuid: String) -> Set<String>
     /// The photo's 16×16 grayscale key, from an original already on this Mac; nil if it's only in iCloud.
     func pictureKey(_ uuid: String) -> [UInt8]?
@@ -219,7 +219,7 @@ extension PhotoKitLibrary {
         // originalFilename is declared non-optional but is nil for some resources.
         Set(
             resources(uuid).compactMap { r in
-                (r.originalFilename as String?).map { ($0 as NSString).deletingPathExtension.lowercased() }
+                (r.originalFilename as String?)?.lowercased()
             })
     }
 

@@ -14,13 +14,13 @@ struct ImportView: View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 List(selection: $model.importFolder) {
-                    ForEach(model.importFolders) { f in
+                    ForEach(model.importFolders, id: \.self) { url in
                         VStack(alignment: .leading) {
-                            Text(f.url.lastPathComponent)
-                            Text(model.importFolderCounts(f.url)).font(.caption).foregroundStyle(.secondary)
+                            Text(url.lastPathComponent)
+                            Text(model.importFolderCounts(url)).font(.caption).foregroundStyle(.secondary)
                         }
-                        .help(model.importFolderLabel(f.url))
-                        .tag(f.url)
+                        .help(model.importFolderLabel(url))
+                        .tag(url)
                     }
                 }
                 HStack {
@@ -54,21 +54,6 @@ struct ImportView: View {
             Form {
                 Section {
                     LabeledContent("Folder") { Text(model.importFolderLabel(url)).textSelection(.enabled) }
-                    LabeledContent("Library exports") {
-                        VStack(alignment: .trailing) {
-                            ForEach(model.importFolderSkip, id: \.self) { sub in
-                                HStack {
-                                    Text(sub)
-                                    Button("Remove", systemImage: "xmark.circle") {
-                                        Task { await model.setLibraryExport(sub, in: url, false) }
-                                    }
-                                    .labelStyle(.iconOnly).buttonStyle(.borderless)
-                                }
-                            }
-                            Button("Add…") { addLibraryExport(in: url) }.disabled(model.importBusy != nil)
-                        }
-                    }
-                    .help("An export of your Photos library: never moved, and its photos never count as new.")
                 }
                 Section {
                     ForEach(model.importStatusCounts, id: \.status) { LabeledContent($0.status, value: "\($0.count)") }
@@ -123,22 +108,14 @@ struct ImportView: View {
     private var fraction: Double {
         model.importProgress.total == 0 ? 0 : Double(model.importProgress.done) / Double(model.importProgress.total)
     }
-
-    private func addLibraryExport(in root: URL) {
-        guard let sub = pickFolder(prompt: "Mark as Library Export", in: root),
-            sub.path.hasPrefix(root.path + "/")
-        else { return }
-        Task { await model.setLibraryExport(String(sub.path.dropFirst(root.path.count + 1)), in: root, true) }
-    }
 }
 
-@MainActor func pickFolder(prompt: String, in dir: URL? = nil) -> URL? {
+@MainActor func pickFolder(prompt: String) -> URL? {
     let panel = NSOpenPanel()
     panel.canChooseDirectories = true
     panel.canChooseFiles = false
     panel.canCreateDirectories = true
     panel.prompt = prompt
-    panel.directoryURL = dir
     return panel.runModal() == .OK ? panel.url : nil
 }
 

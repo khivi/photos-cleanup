@@ -132,18 +132,35 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     await m.addImportFolder(root)
     #expect(m.importSummary == "2 new · 3 to move")
     #expect(m.sidebar.first { $0.title == "Transfer" }?.items.map(\.badge) == [nil, 2])
-    await m.setLibraryExport("Export", in: root, true)
-    #expect(m.importSummary == "1 new · 2 to move")
-    #expect(m.importSortPreview == "1 → Done\n1 → Import")
-    #expect(loadImportFolders(dir: settings) == [ImportFolder(url: root, skip: ["Export"])])
+    #expect(m.importSortPreview == "1 → Done\n2 → Import")
+    #expect(loadImportFolders(dir: settings) == [root])
 
     await m.sortImportFolder()
-    #expect(m.status == "Moved 2 of 2 files.")
+    #expect(m.status == "Moved 3 of 3 files.")
     #expect(m.importInbox?.lastPathComponent == "Import")
-    #expect(m.importSummary == "1 new · 0 to move")
+    #expect(m.importSummary == "2 new · 0 to move")
     #expect(!m.canSortImport)
-    #expect(FileManager.default.fileExists(atPath: root.appending(path: "Export/c.jpg").path))
 
     m.removeImportFolder(root)
     #expect(m.importFolder == nil && loadImportFolders(dir: settings).isEmpty)
+}
+
+@Test func importMatchesHoldWhenFilesMove() async throws {
+    // Two frames of one second, same size: each is its own library photo, by name, wherever it sits.
+    let taken = exifFormatter("yyyy:MM:dd HH:mm:ss").date(from: "2024:01:01 10:00:00")!
+    let lib = FakeLibrary([Photo(uuid: "A", date: taken), Photo(uuid: "B", date: taken)])
+    lib.sizes.withLock { $0 = ["A": (64, 48), "B": (64, 48)] }
+    lib.files.withLock { $0 = ["A": ["img_2.jpg"], "B": ["img_1.jpg"]] }
+    let root = tempDir()
+    try jpeg(root.appending(path: "trip/IMG_1.jpg"), 64, 48, taken: "2024:01:01 10:00:00")
+    try jpeg(root.appending(path: "trip/IMG_2.jpg"), 64, 48, taken: "2024:01:01 10:00:00", gray: 0.2)
+    let first = try await Importer(library: lib).scan(root)
+    let match = Dictionary(uniqueKeysWithValues: first.rows.map { ($0.rel, $0.match) })
+    #expect(match["trip/IMG_1.jpg"] == "B" && match["trip/IMG_2.jpg"] == "A")
+    #expect(first.apply().isEmpty)
+
+    let again = try await Importer(library: lib).scan(root)
+    #expect(again.moves.isEmpty)
+    let moved = Dictionary(uniqueKeysWithValues: again.rows.map { ($0.rel, $0.match) })
+    #expect(moved["Done/trip/IMG_1.jpg"] == "B" && moved["Done/trip/IMG_2.jpg"] == "A")
 }

@@ -146,7 +146,7 @@ Decided: import stays through Photos (drag or File → Import, for its duplicate
 - [ ] **Suggest the date for Check date files** — many carry it in the file name (`IMG_0008.2014-06-01_164455.JPG`, `20120916-191041-=-IMG_0290.JPG`) or folder name (`…, May 10, 1992`). Write it to the report.
 - [x] **Done/ is rechecked** — each run moves a photo in `Done/` that the library lacks back to `Import/`. The old `--plan` sent every copy to Done, even of photos never imported: ~9,000 such files in `OLD PHOTOS` (2026-11-02).
 - [ ] **`--skip` exports** — never moved by the tool. An export is a deletion record (keeps deleted photos' copies from showing as new).
-- [ ] **Tests for the Done logic** — `inLibrary`/`done` in `main.swift` have none; move them into Core next to `LibraryIndex`.
+- [x] **Tests for the Done logic** — the move plan is `ImportScan.plan` in Core, tested in `ImportTests.swift`.
 
 ## Export and Import in the app (2026-11-02)
 
@@ -158,4 +158,6 @@ Photos Takeout stalls on "Fetching assets" with 0 photos (likely no Photos acces
 - [ ] **A full export run** — only tests and a dry run so far: check iCloud downloads, Live Photo pairs and edits on the real library, and that a stopped run resumes.
 - [ ] **Parallel downloads** — one photo at a time; a few at once if iCloud-only originals make the first run too slow.
 - [ ] **Export: grid of photos to copy, size estimate** — the grid of what isn't exported yet, and "needs ~X GB" next to free space.
-- [ ] **Import in the app** — Transfer → Import: a list of checked folders (kept in Application Support) with counts per status, a grid of one folder's files filtered by status (QuickLook thumbnails), the Info panel showing the library match with Show in Photos. A "Library export" checkbox replaces `--skip`. Import in Photos… stages the new files and opens them with `open -a Photos`, so the app never writes photos to the library.
+- [x] **Import in the app** (`6d9e4b7`) — Transfer → Import: checked folders (kept in Application Support) with counts per status, Sort into Done and Import…, Open Import in Photos. Same `Importer` as `photos-import`, which is now a wrapper (same results as `2739ef3` on PhotosBackup and PhotoScans). No library exports in the app: one folder at a time.
+- [ ] **Import: a file grid** — one folder's files by status (QuickLook thumbnails), the Info panel showing the library match with Show in Photos.
+- [ ] **Import: Recently Deleted** — PhotoKit can't see it, so a photo deleted in Photos comes back as new; Photos then refuses it as "Already Imported" for 30 days. A Move to Done button for files the user decides against.

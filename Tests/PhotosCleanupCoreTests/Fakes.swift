@@ -61,7 +61,7 @@ final class FakeLibrary: PhotoLibrary {
         all.contains { $0.uuid == uuid } ? names.withLock { $0[uuid] } ?? uuid : nil
     }
 
-    /// Per uuid: the file names `fileNames` reports (the uuid if unset).
+    /// Per uuid: the file names `fileNames` reports (`<uuid>.jpg` if unset).
     let files = Mutex<[String: Set<String>]>([:])
     /// Per uuid: the pixel size `importIndex` reports (4032x3024 if unset).
     let sizes = Mutex<[String: (Int, Int)]>([:])
@@ -75,7 +75,7 @@ final class FakeLibrary: PhotoLibrary {
         }
     }
 
-    func fileNames(_ uuid: String) -> Set<String> { files.withLock { $0[uuid] } ?? [uuid.lowercased()] }
+    func fileNames(_ uuid: String) -> Set<String> { files.withLock { $0[uuid] } ?? [uuid.lowercased() + ".jpg"] }
     func pictureKey(_ uuid: String) -> [UInt8]? { nil }
 
     /// Writes `<stem>.jpg` holding the uuid.
