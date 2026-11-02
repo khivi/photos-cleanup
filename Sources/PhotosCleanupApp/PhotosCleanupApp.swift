@@ -1,4 +1,3 @@
-// Photos Cleanup: the native app. Phase 0 shell: Photos access, Cleanup.load(), the photo count.
 import AppKit
 import PhotosCleanupCore
 import SwiftUI
