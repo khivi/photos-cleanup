@@ -565,6 +565,28 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.inspectorInfo()?.albums == "In album: Trip" && m.inspectorInfo()?.kind == "Photo")
     }
 
+    @Test func accessibilityLabelReadsKindDateAndMark() async throws {
+        let photos = [
+            Photo(uuid: "a", date: Date(timeIntervalSince1970: 0), screenshot: true),
+            Photo(uuid: "v", isMovie: true, duration: 5), Photo(uuid: "d"),
+        ]
+        let (c, _) = try await makeCleanup(photos, verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c)
+        let en = Locale(identifier: "en_US")
+        let utc = TimeZone(identifier: "UTC")!
+        func label(_ id: String) -> String {
+            m.accessibilityLabel(m.photos.first { $0.id == id }!, locale: en, timeZone: utc)
+        }
+        await m.select(.pass("screenshots"))
+        #expect(label("a").hasPrefix("Screenshot, January 1, 1970") && label("a").hasSuffix(", marked Delete, junk: r"))
+        await m.select(.pass("videos"))
+        #expect(label("v") == "Video, 0:05, Unknown date, marked Keep")
+        await m.select(.all)
+        m.mark(["d"], .delete)
+        await m.commit()
+        #expect(label("d") == "Photo, Unknown date, in Delete Me")
+    }
+
     @Test func allStartsUnmarked() async throws {
         let (c, _) = try await makeCleanup(shots("a"), judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)

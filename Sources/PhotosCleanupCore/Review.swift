@@ -522,7 +522,6 @@ public final class ReviewModel {
                 ? deleted.first(where: { $0.id == id }).map({ PassPhoto(photo: $0) })
                 : photos.first(where: { $0.id == id })
         else { return nil }
-        let style = Date.FormatStyle(date: .long, time: .shortened, locale: locale, timeZone: timeZone)
         var target: String?
         if view == .all {
             if decisions[id] == .delete { target = Passes.allDeleteAlbum }
@@ -534,13 +533,28 @@ public final class ReviewModel {
             }
         }
         return Info(
-            id: id, date: p.photo.date.map { $0.formatted(style) } ?? "Unknown date",
-            kind: p.photo.isMovie ? "Video" : p.photo.screenshot ? "Screenshot" : "Photo",
+            id: id, date: Self.dateLabel(p.photo, locale: locale, timeZone: timeZone), kind: p.photo.kindLabel,
             verdict: p.verdict.map { "\($0.kind): \($0.reason)" }, score: scoreLine(id),
             albums: p.photo.albums.isEmpty
                 ? "In no album"
                 : "In \(p.photo.albums.count == 1 ? "album" : "albums"): \(p.photo.albums.sorted().joined(separator: ", "))",
             target: target.map { "→ \($0)" }, decision: canMark ? decisions[id] ?? .keep : nil)
+    }
+
+    static func dateLabel(_ p: Photo, locale: Locale, timeZone: TimeZone) -> String {
+        let style = Date.FormatStyle(date: .long, time: .shortened, locale: locale, timeZone: timeZone)
+        return p.date.map { $0.formatted(style) } ?? "Unknown date"
+    }
+
+    /// What VoiceOver reads for a grid cell: "Video, 0:05, May 3, 2014 at 9:00 AM, marked Delete, ★ best pick, junk: blurry".
+    public func accessibilityLabel(_ p: PassPhoto, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        let mark =
+            decision(p.id).map { "marked \($0 == .keep ? "Keep" : "Delete")" }
+            ?? (view == .deleted || deletedAlbum[p.id] != nil ? "in Delete Me" : nil)
+        return [
+            p.photo.kindLabel, p.photo.durationLabel, Self.dateLabel(p.photo, locale: locale, timeZone: timeZone), mark,
+            isBest(p.id) ? "★ best pick" : nil, p.verdict.map { "\($0.kind): \($0.reason)" },
+        ].compactMap { $0 }.joined(separator: ", ")
     }
 
     /// "Score -0.82 · Low Quality at -0.75 or below", "Score 0.41 · ★ of 6", "Score 0.12 · ★ scored 0.41".
@@ -662,6 +676,10 @@ public final class ReviewModel {
             status = "\(error)"
         }
     }
+}
+
+extension Photo {
+    var kindLabel: String { isMovie ? "Video" : screenshot ? "Screenshot" : "Photo" }
 }
 
 // MARK: Month sections in All

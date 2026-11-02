@@ -106,6 +106,7 @@ struct PhotoCell: View {
     let mark: Mark
     var selected = false
     var best = false
+    var label = ""
     let thumbnails: Thumbnails
     var onTap: (() -> Void)?
     @State private var image: NSImage?
@@ -141,6 +142,10 @@ struct PhotoCell: View {
             .clipShape(.rect(cornerRadius: 4))
             .contentShape(.rect)
             .onTapGesture { onTap?() }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction { onTap?() }
             .help(photo.verdict.map { "\($0.kind): \($0.reason)" } ?? "")
             .onAppear {
                 thumbnails.near(photo.id)

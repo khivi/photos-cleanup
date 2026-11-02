@@ -235,7 +235,7 @@ struct ReviewScreen: View {
             }
         return PhotoCell(
             photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id),
-            thumbnails: thumbnails,
+            label: model.accessibilityLabel(p), thumbnails: thumbnails,
             onTap: {
                 focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
                 let mods = NSEvent.modifierFlags
