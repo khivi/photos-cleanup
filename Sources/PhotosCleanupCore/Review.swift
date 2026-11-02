@@ -722,11 +722,12 @@ extension BurstGroup {
 // MARK: Export
 
 extension ReviewModel {
-    /// Rereads the library's photo list, then the export's status.
+    /// Rereads the library's photo list, then the export's status and the To be deleted count.
     public func refreshExport() async {
         guard let exporter else { return }
         do { try await exporter.refresh() } catch { self.error = "\(error)" }
         export = await exporter.status
+        deletedNotExported = await exporter.missing(deleted.map(\.id))
     }
 
     /// One poll tick while the export runs. A finished run rereads the list and the To be deleted count.
@@ -734,17 +735,13 @@ extension ReviewModel {
         guard let exporter else { return }
         let wasRunning = export.running
         export = await exporter.status
-        if wasRunning && !export.running {
-            await refreshExport()
-            deletedNotExported = await exporter.missing(deleted.map(\.id))
-        }
+        if wasRunning && !export.running { await refreshExport() }
     }
 
     public func setExportDestination(_ url: URL) async {
         guard let exporter else { return }
         await exporter.setDestination(url)
         await refreshExport()
-        deletedNotExported = await exporter.missing(deleted.map(\.id))
     }
 
     public func startExport() async {
@@ -757,16 +754,13 @@ extension ReviewModel {
     public func stopExport() async { await exporter?.stop() }
 
     public var canExport: Bool { export.destination != nil && export.connected && !export.running }
-    public var canChooseExportDestination: Bool { !export.running }
     public var exportButtonLabel: String { export.running ? "Stop" : "Export Now" }
 
     public var exportFraction: Double { export.total == 0 ? 0 : Double(export.done) / Double(export.total) }
 
     /// "~/Backups/Photos", or what to do when there is none.
     public var exportDestinationLabel: String {
-        guard let d = export.destination else { return "No destination. Choose a folder or disk." }
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return d.path.hasPrefix(home + "/") ? "~" + d.path.dropFirst(home.count) : d.path
+        export.destination.map(pathLabel) ?? "No destination. Choose a folder or disk."
     }
 
     /// "1.2 TB free", "Not connected", or nil with no destination.
@@ -861,7 +855,7 @@ extension ReviewModel {
     public var importChecking: Bool { importBusy != nil && importBusy == importFolder }
 
     /// "~/Pictures/Old Laptop".
-    public func importFolderLabel(_ url: URL) -> String {
+    public func pathLabel(_ url: URL) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return url.path.hasPrefix(home + "/") ? "~" + url.path.dropFirst(home.count) : url.path
     }

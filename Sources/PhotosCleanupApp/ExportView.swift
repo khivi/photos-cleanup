@@ -15,7 +15,7 @@ struct ExportView: View {
                     HStack {
                         Text(model.exportDestinationLabel).textSelection(.enabled)
                         Spacer()
-                        Button("Choose…", action: choose).disabled(!model.canChooseExportDestination)
+                        Button("Choose…", action: choose).disabled(model.export.running)
                     }
                 }
                 if let disk = model.exportDiskLabel { LabeledContent("Disk", value: disk) }

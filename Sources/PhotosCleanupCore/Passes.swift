@@ -139,22 +139,13 @@ public let settingsDir = FileManager.default.homeDirectoryForCurrentUser.appendi
 /// Albums whose membership doesn't protect a photo: the defaults, review albums, and any listed
 /// in albums_ignore or albums_ignore.local in `dir` (one per line, '#' comments).
 public func loadIgnoreAlbums(dir: URL = settingsDir) -> Set<String> {
-    var albums = defaultIgnoreAlbums.union(cleanupAlbumNames)
-    for name in ["albums_ignore", "albums_ignore.local"] {
-        guard let text = try? String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8) else {
-            continue
-        }
-        for line in text.split(whereSeparator: \.isNewline) {
-            let album = line.trimmingCharacters(in: .whitespaces)
-            if !album.isEmpty, !album.hasPrefix("#") { albums.insert(album) }
-        }
-    }
-    return albums
+    defaultIgnoreAlbums.union(cleanupAlbumNames).union(userIgnoreAlbums(dir: dir))
+        .union(userIgnoreAlbums(dir: dir, file: "albums_ignore.local"))
 }
 
 /// The names the user listed in `albums_ignore` (what the Settings window edits), in file order.
-public func userIgnoreAlbums(dir: URL = settingsDir) -> [String] {
-    guard let text = try? String(contentsOf: dir.appendingPathComponent("albums_ignore"), encoding: .utf8)
+public func userIgnoreAlbums(dir: URL = settingsDir, file: String = "albums_ignore") -> [String] {
+    guard let text = try? String(contentsOf: dir.appendingPathComponent(file), encoding: .utf8)
     else { return [] }
     return text.split(whereSeparator: \.isNewline)
         .map { $0.trimmingCharacters(in: .whitespaces) }

@@ -131,18 +131,10 @@ struct PhotoCell: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                if let d = photo.photo.durationLabel {
-                    Text(d).font(.caption2.monospacedDigit()).foregroundStyle(.white)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(.black.opacity(0.6), in: .rect(cornerRadius: 4)).padding(6)
-                }
+                if let d = photo.photo.durationLabel { pill(Text(d).font(.caption2.monospacedDigit())) }
             }
             .overlay(alignment: .bottomLeading) {
-                if case .decision = mark, let v = photo.verdict {
-                    Text(v.kind).font(.caption2).foregroundStyle(.white)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(.black.opacity(0.6), in: .rect(cornerRadius: 4)).padding(6)
-                }
+                if case .decision = mark, let v = photo.verdict { pill(Text(v.kind).font(.caption2)) }
             }
             .clipped()
             .overlay { if selected { Rectangle().strokeBorder(Color.accentColor, lineWidth: 4) } }
@@ -167,6 +159,11 @@ struct PhotoCell: View {
         case .decision(.delete): label("✗ Delete", .red)
         case .decision(.keep): EmptyView()  // most photos start as Keep: only the exceptions are marked
         }
+    }
+
+    private func pill(_ text: Text) -> some View {
+        text.foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 1)
+            .background(.black.opacity(0.6), in: .rect(cornerRadius: 4)).padding(6)
     }
 
     private func label(_ text: String, _ color: Color) -> some View {

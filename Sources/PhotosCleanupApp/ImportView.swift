@@ -19,7 +19,7 @@ struct ImportView: View {
                             Text(url.lastPathComponent)
                             Text(model.importFolderCounts(url)).font(.caption).foregroundStyle(.secondary)
                         }
-                        .help(model.importFolderLabel(url))
+                        .help(model.pathLabel(url))
                         .tag(url)
                     }
                 }
@@ -53,7 +53,7 @@ struct ImportView: View {
         if let url = model.importFolder {
             Form {
                 Section {
-                    LabeledContent("Folder") { Text(model.importFolderLabel(url)).textSelection(.enabled) }
+                    LabeledContent("Folder") { Text(model.pathLabel(url)).textSelection(.enabled) }
                 }
                 Section {
                     ForEach(model.importStatusCounts, id: \.status) { LabeledContent($0.status, value: "\($0.count)") }
