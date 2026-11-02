@@ -202,6 +202,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(
             ReviewModel.tabs.map(\.title) == [
                 "All", "Screenshots", "Paperwork", "Bursts", "Similar", "Low Quality", "Videos", "To be deleted",
+                "Export",
             ])
         await m.refreshCounts()
         await m.select(.all)
@@ -227,8 +228,8 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let (c, _) = try await makeCleanup(shots("a", "b"), verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c)
         let titles = m.sidebar.map { $0.items.map(\.title) }
-        #expect(m.sidebar.map(\.title) == ["Library", "Cleanup", "Review"])
-        #expect(titles == [["All"], Passes.all.map(\.title), ["To be deleted"]])
+        #expect(m.sidebar.map(\.title) == ["Library", "Cleanup", "Review", "Transfer"])
+        #expect(titles == [["All"], Passes.all.map(\.title), ["To be deleted"], ["Export"]])
         #expect(m.sidebar.flatMap(\.items).allSatisfy { $0.badge == nil && !$0.help.isEmpty })  // nothing counted yet
         await m.refreshCounts()
         var badges: [String: Int?] {
@@ -603,7 +604,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.photos.count == 3 && m.decisions.isEmpty)  // still in All, now badged via deletedAlbum
         #expect(m.deletedAlbum["a"] == album && m.deleted.map(\.id) == ["a"])
         #expect(m.status == "Moved 1 to “\(album)”.")
-        #expect(m.sidebar.last?.items.first?.badge == 1)
+        #expect(m.sidebar.first { $0.title == "Review" }?.items.first?.badge == 1)
     }
 
     @Test func keepAllIsDisabledInAll() async throws {

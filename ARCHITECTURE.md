@@ -32,7 +32,7 @@ The Swift package has no dependencies.
 | `PhotosCleanupCore` | No UI framework. The library access, the passes, the background jobs and the screen's model. The tests drive it with fakes. |
 | `PhotosCleanupApp` | The SwiftUI app. Views only: every decision and label comes from `ReviewModel`. |
 
-`PhotosCleanupCore` has five files:
+`PhotosCleanupCore` has these files:
 
 | File | Role |
 | --- | --- |
@@ -40,15 +40,17 @@ The Swift package has no dependencies.
 | `Verdicts.swift` | The `Judge` protocol and `FoundationModelsJudge`. It returns kind, keep/delete and a short summary for one photo. It needs macOS 27 and Apple Intelligence. |
 | `Passes.swift` | `Passes.all` (one key and title per pass), the tooltips, the thresholds, the candidate filter, time grouping and the similarity split. |
 | `Cleanup.swift` | The `Cleanup` actor. It holds the photo list, the Vision job, the verdict queue, commits and the caches. |
+| `Export.swift` | The `Exporter` actor and `ExportManifest`. Export copies originals, edits and Live Photo videos to `<destination>/YYYY/MM`. `.photos-export.tsv` there records what each run wrote, so the next run copies only new or changed photos. It never deletes from the destination. |
 | `Review.swift` | `ReviewModel` (`@Observable`, main actor). The sidebar and its counts, keep/delete marks with undo, the selection, the preview, what Move to Albums sends, Delete in Photos…, progress, the To be deleted list (read from the Delete Me albums), and every label the window shows. |
 
-`PhotosCleanupApp` has four files:
+`PhotosCleanupApp` has these files:
 
 | File | Role |
 | --- | --- |
 | `PhotosCleanupApp.swift` | The app, its window and the Settings window. It asks for Photos access, loads the library, then shows the review screen. |
 | `ReviewScreen.swift` | The sidebar, the toolbar, the grid, the Info panel (an `.inspector`, ⌘I) and the menu commands. Bursts and Similar show as one grid section per group. The grid takes the arrow keys and Space; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
 | `Thumbnails.swift` | One `PHCachingImageManager`: high-quality thumbnails, cached about 30 rows ahead of the visible ones, and the large preview. The settings come from the grid spike (`feea7cb`). |
+| `ExportView.swift` | The Export screen: destination, counts, progress and failures. |
 | `SettingsView.swift` | The Settings window: Keep photos in albums, and the ignored albums. |
 
 The tests fake `PhotoLibrary` and `Judge`, so they need no library and no Apple Intelligence.

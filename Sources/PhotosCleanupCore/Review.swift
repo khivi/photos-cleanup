@@ -5,6 +5,7 @@ public enum ReviewView: Hashable, Sendable {
     case all
     case pass(String)  // a key from `Passes.all`
     case deleted  // photos waiting in Delete Me albums
+    case export  // the backup to a folder or disk
 
     public var passKey: String? { if case .pass(let k) = self { k } else { nil } }
 }
@@ -40,6 +41,9 @@ public final class ReviewModel {
     /// The Delete Me album each photo in `deleted` is in.
     public var deletedAlbum: [String: String] { loadedAlbum.merging(committedAlbum) { _, new in new } }
     public private(set) var progress = JobProgress()
+    public private(set) var export = ExportStatus()
+    /// Photos in `deleted` the export doesn't hold: Delete in Photos would lose them.
+    public private(set) var deletedNotExported = 0
     public private(set) var counts: [String: Int?] = [:]
     public private(set) var loading = false
     public private(set) var committing = false
@@ -59,12 +63,14 @@ public final class ReviewModel {
     public let undoManager = UndoManager()
 
     private let cleanup: Cleanup
+    private let exporter: Exporter?
     private let dir: URL
     /// Months marked Done in All, by "2024-03" key, with the photo count when marked.
     public private(set) var reviewedMonths: [String: Int]
 
-    public init(cleanup: Cleanup, dir: URL = settingsDir) {
+    public init(cleanup: Cleanup, exporter: Exporter? = nil, dir: URL = settingsDir) {
         self.cleanup = cleanup
+        self.exporter = exporter
         self.dir = dir
         reviewedMonths = loadReviewedMonths(dir: dir)
     }
@@ -141,7 +147,13 @@ public final class ReviewModel {
             )
         ]
         + Passes.all.map { (.pass($0.key), $0.title, Passes.about[$0.key] ?? "") }
-        + [(.deleted, "To be deleted", "Photos waiting in a Delete Me album. Delete them there in Photos.")]
+        + [
+            (.deleted, "To be deleted", "Photos waiting in a Delete Me album. Delete them there in Photos."),
+            (
+                .export, "Export",
+                "Copies every photo and video to a folder or disk. Each run copies only what’s new or changed."
+            ),
+        ]
 
     // MARK: Sidebar
 
@@ -151,6 +163,8 @@ public final class ReviewModel {
         public let help: String
         /// The photo count; nil while unknown or at 0, so the row shows no badge.
         public let badge: Int?
+        /// A running job's fraction done, shown instead of the badge.
+        public var progress: Double?
         public var id: ReviewView { view }
     }
 
@@ -160,7 +174,7 @@ public final class ReviewModel {
         public var id: String { title }
     }
 
-    /// Library (All), Cleanup (the passes), Review (To be deleted), built from `tabs`.
+    /// Library (All), Cleanup (the passes), Review (To be deleted), Transfer (Export), built from `tabs`.
     public var sidebar: [SidebarSection] {
         func item(_ t: (view: ReviewView, title: String, help: String)) -> SidebarItem {
             let n: Int? =
@@ -168,14 +182,18 @@ public final class ReviewModel {
                 case .all: counts["all"] ?? nil
                 case .pass(let k): counts[k] ?? nil
                 case .deleted: deleted.count
+                case .export: export.destination == nil ? nil : export.pending
                 }
-            return SidebarItem(view: t.view, title: t.title, help: t.help, badge: n.flatMap { $0 > 0 ? $0 : nil })
+            return SidebarItem(
+                view: t.view, title: t.title, help: t.help, badge: n.flatMap { $0 > 0 ? $0 : nil },
+                progress: t.view == .export && export.running ? exportFraction : nil)
         }
         func items(_ keep: (ReviewView) -> Bool) -> [SidebarItem] { Self.tabs.filter { keep($0.view) }.map(item) }
         return [
             SidebarSection(title: "Library", items: items { $0 == .all }),
             SidebarSection(title: "Cleanup", items: items { $0.passKey != nil }),
             SidebarSection(title: "Review", items: items { $0 == .deleted }),
+            SidebarSection(title: "Transfer", items: items { $0 == .export }),
         ]
     }
 
@@ -184,6 +202,7 @@ public final class ReviewModel {
     /// "N candidates · M to delete", "N photos" or "N queued for deletion".
     public var summary: String {
         if view == .deleted { return "\(deleted.count) queued for deletion" }
+        if view == .export { return exportCountsLabel }
         if inPass {
             return "\(photos.count) \(photos.count == 1 ? "candidate" : "candidates") · \(doomed.count) to delete"
         }
@@ -209,8 +228,13 @@ public final class ReviewModel {
             .sorted { $0.key < $1.key }
             .map { "“\($0.key)” (\($0.value.count))" }
         guard !albums.isEmpty else { return "Nothing is waiting in a Delete Me album." }
+        let unexported =
+            deletedNotExported == 0
+            ? ""
+            : " \(deletedNotExported) of them \(deletedNotExported == 1 ? "isn’t" : "aren’t") in your export: run Export first to keep a copy."
         return
             "Nothing is deleted yet. Delete in Photos… deletes every photo in \(albums.joined(separator: ", ")) after macOS asks you to confirm. Photos keeps them in Recently Deleted for 30 days."
+            + unexported
     }
 
     public var showsEmptyState: Bool { (inPass || onlyDelete) && !loading && displayed.isEmpty }
@@ -255,6 +279,13 @@ public final class ReviewModel {
         status = nil
         previewing = false
         onlyDelete = false
+        if v == .export {
+            view = v
+            clearSelection()
+            undoManager.removeAllActions()
+            await refreshExport()
+            return
+        }
         if v == .deleted {
             await loadWaiting()
             view = v
@@ -342,6 +373,7 @@ public final class ReviewModel {
                 loadedAlbum[p.id] = a
             }
         }
+        deletedNotExported = await exporter?.missing(deleted.map(\.id)) ?? 0
     }
 
     // MARK: Deciding
@@ -568,6 +600,7 @@ public final class ReviewModel {
             }
             clearSelection()
             counts = await cleanup.counts()
+            deletedNotExported = await exporter?.missing(deleted.map(\.id)) ?? 0
             status =
                 "Deleted \(gone.count) \(gone.count == 1 ? "photo" : "photos"). Photos keeps them in Recently Deleted for 30 days."
         } catch {
@@ -663,4 +696,83 @@ extension BurstGroup {
         let style = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: locale, timeZone: timeZone)
         return "\(first.formatted(style)) · \(count)"
     }
+}
+
+// MARK: Export
+
+extension ReviewModel {
+    /// Rereads the library's photo list, then the export's status.
+    public func refreshExport() async {
+        guard let exporter else { return }
+        do { try await exporter.refresh() } catch { self.error = "\(error)" }
+        export = await exporter.status
+    }
+
+    /// One poll tick while the export runs. A finished run rereads the list and the To be deleted count.
+    public func pollExport() async {
+        guard let exporter else { return }
+        let wasRunning = export.running
+        export = await exporter.status
+        if wasRunning && !export.running {
+            await refreshExport()
+            deletedNotExported = await exporter.missing(deleted.map(\.id))
+        }
+    }
+
+    public func setExportDestination(_ url: URL) async {
+        guard let exporter else { return }
+        await exporter.setDestination(url)
+        await refreshExport()
+        deletedNotExported = await exporter.missing(deleted.map(\.id))
+    }
+
+    public func startExport() async {
+        guard canExport, let exporter else { return }
+        await exporter.start()
+        export = await exporter.status
+        export.running = true  // the run's task may not have started yet; the poll corrects it
+    }
+
+    public func stopExport() async { await exporter?.stop() }
+
+    public var canExport: Bool { export.destination != nil && export.connected && !export.running }
+    public var canChooseExportDestination: Bool { !export.running }
+    public var exportButtonLabel: String { export.running ? "Stop" : "Export Now" }
+
+    public var exportFraction: Double { export.total == 0 ? 0 : Double(export.done) / Double(export.total) }
+
+    /// "~/Backups/Photos", or what to do when there is none.
+    public var exportDestinationLabel: String {
+        guard let d = export.destination else { return "No destination. Choose a folder or disk." }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return d.path.hasPrefix(home + "/") ? "~" + d.path.dropFirst(home.count) : d.path
+    }
+
+    /// "1.2 TB free", "Not connected", or nil with no destination.
+    public var exportDiskLabel: String? {
+        guard export.destination != nil else { return nil }
+        guard export.connected else { return "Not connected. Plug in the disk to export." }
+        return export.freeBytes.map { "\($0.formatted(.byteCount(style: .file))) free" }
+    }
+
+    public func exportLastLabel(locale: Locale = .current, timeZone: TimeZone = .current) -> String? {
+        guard export.destination != nil, export.connected else { return nil }
+        let style = Date.FormatStyle(date: .long, time: .shortened, locale: locale, timeZone: timeZone)
+        return export.lastExport.map { "Last export \($0.formatted(style))" } ?? "Never exported"
+    }
+
+    /// "27,898 in export · 112 to copy".
+    public var exportCountsLabel: String {
+        guard export.destination != nil else { return "No destination" }
+        return "\(export.exported.formatted()) in export · \(export.pending.formatted()) to copy"
+    }
+
+    /// "92 of 112 · 2024/05/IMG_4410" while running.
+    public var exportProgressLabel: String? {
+        guard export.running else { return nil }
+        return "\(export.done.formatted()) of \(export.total.formatted())\(export.current.map { " · \($0)" } ?? "")"
+    }
+
+    /// The last run's failures, "2024/05/IMG_0001: reason", sorted; a rerun retries them.
+    public var exportFailures: [String] { export.failed.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" } }
 }

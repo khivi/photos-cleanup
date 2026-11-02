@@ -33,7 +33,14 @@ struct ReviewScreen: View {
                 ForEach(model.sidebar) { section in
                     Section(section.title) {
                         ForEach(section.items) { item in
-                            Text(item.title).badge(item.badge ?? 0).help(item.help).tag(item.view)
+                            HStack {
+                                Text(item.title)
+                                if let p = item.progress {
+                                    Spacer()
+                                    ProgressView(value: p).progressViewStyle(.circular).controlSize(.mini)
+                                }
+                            }
+                            .badge(item.progress == nil ? item.badge ?? 0 : 0).help(item.help).tag(item.view)
                         }
                     }
                 }
@@ -73,6 +80,13 @@ struct ReviewScreen: View {
                 await model.refresh()
             }
         }
+        .task(id: model.export.running) {
+            while model.export.running && !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                await model.pollExport()
+            }
+        }
+        .task { await model.refreshExport() }  // the Export badge; the photo list read takes a moment
         .task(id: countsKey) {
             guard !model.loading && !model.committing else { return }
             await model.refreshCounts()
@@ -149,7 +163,9 @@ struct ReviewScreen: View {
     }
 
     @ViewBuilder private var content: some View {
-        if model.showsEmptyState {
+        if model.view == .export {
+            ExportView(model: model)
+        } else if model.showsEmptyState {
             ContentUnavailableView(model.emptyStateLabel, systemImage: "checkmark.circle")
         } else {
             // One ScrollView for every list: a second one would leave keyboard focus on the old one.
@@ -207,6 +223,7 @@ struct ReviewScreen: View {
                 model.decision(p.id).map { .decision($0) } ?? (model.deletedAlbum[p.id] != nil ? .deleteMe : .none)
             case .deleted: .deleteMe
             case .pass: model.decision(p.id).map { .decision($0) } ?? .none
+            case .export: .none
             }
         return PhotoCell(
             photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id),

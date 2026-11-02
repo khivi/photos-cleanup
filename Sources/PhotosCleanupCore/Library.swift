@@ -15,6 +15,13 @@ public protocol PhotoLibrary: Sendable {
     /// Deletes the photos it finds; macOS asks the user first. Returns how many were deleted:
     /// 0 when the user cancels.
     func delete(uuids: [String]) throws -> Int
+    /// Every photo and video to back up, hidden ones and every burst frame included.
+    func exportable() throws -> [ExportItem]
+    /// The photo's original file name without extension, the stem its exported files share; nil if it's gone.
+    func exportName(_ uuid: String) -> String?
+    /// Writes the photo's files as `<stem>.<ext>` and `<stem>_edited.<ext>` under `dest`,
+    /// downloading iCloud originals.
+    func export(_ uuid: String, stem: String, to dest: URL) async throws
 }
 
 public enum LibraryError: Error, Equatable, CustomStringConvertible {
@@ -167,6 +174,66 @@ public struct PhotoKitLibrary: PhotoLibrary {
             throw LibraryError.failed(error.localizedDescription)
         }
         return found.count
+    }
+}
+
+extension PhotoKitLibrary {
+    static var everyAsset: PHFetchOptions {
+        let o = PHFetchOptions()
+        o.includeHiddenAssets = true
+        o.includeAllBurstAssets = true
+        return o
+    }
+
+    func resources(_ uuid: String) -> [PHAssetResource] {
+        guard
+            let a = PHAsset.fetchAssets(withLocalIdentifiers: [uuid + Self.idSuffix], options: Self.everyAsset)
+                .firstObject
+        else { return [] }
+        return PHAssetResource.assetResources(for: a)
+    }
+
+    public func exportable() throws -> [ExportItem] {
+        try requireAccess()
+        var out: [ExportItem] = []
+        PHAsset.fetchAssets(with: Self.everyAsset).enumerateObjects { a, _, _ in
+            out.append(
+                ExportItem(
+                    uuid: Self.uuid(a), modified: a.modificationDate?.timeIntervalSince1970 ?? 0, date: a.creationDate))
+        }
+        return out
+    }
+
+    public func exportName(_ uuid: String) -> String? {
+        let rs = resources(uuid)
+        return (rs.first { $0.type == .photo || $0.type == .video } ?? rs.first)
+            .map { ($0.originalFilename as NSString).deletingPathExtension }
+    }
+
+    public func export(_ uuid: String, stem: String, to dest: URL) async throws {
+        let fm = FileManager.default
+        try fm.createDirectory(
+            at: dest.appending(path: stem).deletingLastPathComponent(), withIntermediateDirectories: true)
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true  // Optimize Mac Storage keeps only previews here
+        var written: Set<String> = []
+        for r in resources(uuid) {
+            let ext = (r.originalFilename as NSString).pathExtension
+            let file: String
+            switch r.type {
+            case .photo, .video, .alternatePhoto, .pairedVideo: file = "\(stem).\(ext)"
+            case .fullSizePhoto, .fullSizeVideo, .fullSizePairedVideo: file = "\(stem)_edited.\(ext)"
+            default: continue  // adjustment data, render previews
+            }
+            guard written.insert(file.lowercased()).inserted else { continue }
+            let url = dest.appending(path: file)
+            let part = url.appendingPathExtension("part")
+            try? fm.removeItem(at: part)
+            // writeData refuses an existing file; .part keeps a stopped run from leaving a truncated one.
+            try await PHAssetResourceManager.default().writeData(for: r, toFile: part, options: options)
+            try? fm.removeItem(at: url)
+            try fm.moveItem(at: part, to: url)
+        }
     }
 }
 

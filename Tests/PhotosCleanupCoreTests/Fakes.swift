@@ -43,6 +43,32 @@ final class FakeLibrary: PhotoLibrary {
         deletes.withLock { $0.append(uuids) }
         return uuids.count
     }
+
+    /// Per uuid: the modification date `exportable()` reports (0 if unset).
+    let modified = Mutex<[String: Double]>([:])
+    /// Per uuid: the original file name `exportName` reports (the uuid if unset).
+    let names = Mutex<[String: String]>([:])
+    /// uuids whose `export` throws.
+    let exportFails = Mutex<Set<String>>([])
+    let exported = Mutex<[String]>([])
+
+    func exportable() throws -> [ExportItem] {
+        let m = modified.withLock { $0 }
+        return all.map { ExportItem(uuid: $0.uuid, modified: m[$0.uuid] ?? 0, date: $0.date) }
+    }
+
+    func exportName(_ uuid: String) -> String? {
+        all.contains { $0.uuid == uuid } ? names.withLock { $0[uuid] } ?? uuid : nil
+    }
+
+    /// Writes `<stem>.jpg` holding the uuid.
+    func export(_ uuid: String, stem: String, to dest: URL) async throws {
+        if exportFails.withLock({ $0.contains(uuid) }) { throw LibraryError.failed("offline") }
+        let url = dest.appending(path: stem + ".jpg")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(uuid.utf8).write(to: url)
+        exported.withLock { $0.append(uuid) }
+    }
 }
 
 /// A judge with fixed answers; nil means "couldn't judge".

@@ -69,7 +69,10 @@ struct ContentView: View {
         do { try await cleanup.load() } catch { return .failed("\(error)") }
         let photos = await cleanup.photos
         await cleanup.startVision(photos.filter { !$0.isMovie && !$0.screenshot })
-        let model = ReviewModel(cleanup: cleanup)
+        let exporter = Exporter(
+            library: library,
+            destination: UserDefaults.standard.string(forKey: exportDestinationKey).map { URL(filePath: $0) })
+        let model = ReviewModel(cleanup: cleanup, exporter: exporter)
         model.showsInspector = UserDefaults.standard.bool(forKey: inspectorKey)
         await model.select(.all)
         return .loaded(model, Thumbnails(library: library, uuids: photos.map(\.uuid)))
