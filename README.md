@@ -7,6 +7,11 @@ You review each cleanup pass as a thumbnail grid and mark photos keep or delete.
 The app files your choices into albums in Photos. It never deletes on its own.
 Everything runs on your Mac, with no network calls.
 
+It also does two jobs around the library:
+
+- **Export** backs up every photo and video to a folder or disk. Each run copies only what is new or changed.
+- **Import** checks folders of old photos against your library. It sorts the files you already have from the ones to bring into Photos.
+
 ![The Videos pass: candidate videos in a grid, longest first, with the pass list in the sidebar](docs/screenshot.jpg)
 
 ## Safety
@@ -20,6 +25,10 @@ You can also delete them yourself from that album in Photos.
 The app skips favorites and photos that are already in your own albums.
 Photos you edited in Photos start as keep in Bursts, Similar and Low Quality.
 
+Export and Import never delete files.
+Export only adds and updates files in its destination.
+Import only moves files inside the folder you give it. It never writes to your library.
+
 ## Privacy
 
 Everything runs on your Mac.
@@ -28,7 +37,9 @@ It finds bursts and low-quality photos with Apple's on-device Vision.
 Verdicts for screenshots and paperwork come from Apple's on-device Foundation Models.
 It caches analysis and verdicts in `~/Library/Caches/photos-cleanup`.
 Delete that folder to clear them.
-The app makes no network calls and sends no telemetry. When you preview a photo that is stored only in iCloud, Photos downloads it.
+Your Import folder list is in `~/Library/Application Support/photos-cleanup/import_folders`.
+The app makes no network calls and sends no telemetry.
+Photos downloads a photo that is stored only in iCloud when you preview it or export it.
 
 ## Requirements
 
@@ -64,6 +75,9 @@ The app needs one macOS permission: Photos access, with Full Access.
 To change this later, open System Settings > Privacy & Security > Photos.
 If access is off, the app shows an Open Privacy Settings button.
 
+Export and Import ask for folder access the first time they use a folder on another disk, or in Documents, Desktop or Downloads.
+Click Allow.
+
 Show in Photos (⌘R) needs a second, optional permission: Automation for Photos.
 The first time you use it, macOS asks if Photos Cleanup may control Photos. Click OK.
 To change this later, open System Settings > Privacy & Security > Automation.
@@ -73,7 +87,7 @@ To change this later, open System Settings > Privacy & Security > Automation.
 1. Open Photos Cleanup. It reads your library and shows every photo.
 2. Pick a cleanup pass in the sidebar: Screenshots, Paperwork (receipts, tickets, documents), Bursts (repeated shots of one scene), Similar (the same scene on one day, minutes apart or more), Low Quality (worst first) or Videos (longest first; clips under 2 seconds start as delete). Hover a pass to see what it finds.
 3. Review the grid. Each photo starts with a suggestion; only photos to delete are marked.
-4. Select photos and change the marks: K keeps, ⌫ deletes. Space shows the selected photo large. In Bursts, Similar and Low Quality, the Info panel (⌘I) and the large view show the photo's Vision score and why it was picked. A video plays in the large view, and video cells show their length.
+4. Select photos and change the marks: K keeps, ⌫ deletes. Space shows the selected photo large. Show in Photos (⌘R) switches to Photos with the photo selected. In Bursts, Similar and Low Quality, the Info panel (⌘I) and the large view show the photo's Vision score and why it was picked. A video plays in the large view, and video cells show their length.
 5. Click Move to Albums and confirm. Photos marked delete go into the pass's "Delete Me" album. Keepers go into its "Keep" album.
 6. You can also mark photos delete in All. They start unmarked, and Move to Albums sends the marked ones to "All - Delete Me". All has no Keep album. Every pass skips photos in that album. All groups photos by month; the Done switch on a month header remembers you reviewed it, until the month gains photos.
 7. Open To be deleted. It lists the photos in the Delete Me albums. Click Delete in Photos… and confirm in the macOS dialog. This deletes every photo in the list. If you cancel, nothing is deleted.
@@ -85,6 +99,7 @@ To change this later, open System Settings > Privacy & Security > Automation.
 | K / ⌫ | Mark the selection keep / delete; with one photo selected, move to the next |
 | Space, Esc | Show or close the large preview |
 | ⌘I | Show or hide the Info panel |
+| ⌘R | Show the selected photo in Photos |
 | ⌘Z / ⇧⌘Z | Undo / redo a mark |
 | ⌥⌘D | Show only photos marked delete (in All, also those in a Delete Me album) |
 | ⌥↓ / ⌥↑ | Next / previous month in All, or group in Bursts and Similar |
@@ -93,9 +108,98 @@ Photos keeps deleted items in Recently Deleted for 30 days.
 Restore a photo from there if you change your mind.
 Delete it from Recently Deleted to free space at once.
 
+With VoiceOver on, each photo in the grid reads its kind, date and mark, for example "Video, 0:05, May 3, 2014 at 9:00 AM, marked Delete".
+
+## Export: back up your library
+
+Export copies every photo and video in your library to a folder or disk.
+It includes hidden photos and every frame of a burst.
+
+1. Open Export in the sidebar, under Transfer.
+2. Click Choose… and pick a folder or disk.
+3. Click Export Now.
+
+The first run copies everything. Later runs copy only photos that are new or changed in Photos.
+The sidebar badge shows how many photos still need copying.
+Click Stop at any time. The next Export Now continues where it stopped.
+
+The export looks like this:
+
+```text
+<destination>/2014/05/IMG_0001.HEIC         the original
+<destination>/2014/05/IMG_0001_edited.JPG   your edit, if you edited it in Photos
+<destination>/2014/05/IMG_0001.MOV          the video of a Live Photo
+<destination>/undated/…                     photos with no date
+<destination>/.photos-export.tsv            what each run copied
+```
+
+Two photos with the same name in one month get `IMG_0001 (1)` and so on.
+A photo stays in the export after you delete it from Photos. Export never deletes.
+Photos that are stored only in iCloud download first, so a first run can take hours.
+Export runs 4 downloads at a time.
+If a photo fails, Export lists it. The next run tries it again.
+
+To be deleted warns you when photos in it are not in your export yet.
+Run Export before Delete in Photos… to keep a copy.
+
+## Import: bring old photos into Photos
+
+Import checks a folder of old photos (backups, old laptops, scans, downloads) against your library.
+It finds the files you already have, so you import only the rest.
+It never writes to your library: you import in Photos.
+
+1. Open Import in the sidebar, under Transfer.
+2. Click Add Folder… and pick a folder. Import checks it.
+3. Read the counts: how many files are new, already in your library, copies, and other files.
+4. Click Sort into Done and Import… and confirm. The files move inside the folder.
+5. Click Open Import in Photos. Photos shows its import window for the `Import` folder. Import the photos.
+6. In Photos, open Utilities > Duplicates and merge any duplicates. See Duplicates, below.
+7. In Photos Cleanup, click Check Again. Files you imported move from `Import` to `Done`.
+
+After the sort, the folder holds:
+
+| Folder | What is in it | What to do |
+| --- | --- | --- |
+| `Done` | Files already in your library, and copies of them | Nothing. Keep or delete them. |
+| `Import` | Files not in your library | Import them in Photos (step 5). |
+| `Check date` | New files with no camera date | Set the date in Photos after you import them. |
+| `Removed` | Files whose photo you later merged or deleted in Photos | Nothing. Import never offers them again. |
+
+Other files stay where they are.
+Inside each of these folders, the paths match the original folder.
+
+`Check date` is beside `Import`, so importing `Import` never takes these files by accident.
+Photos dates a file with no camera date by when the file was copied, not when the photo was taken.
+Import these on their own, then fix their dates in Photos with Image > Adjust Date and Time.
+Check Again then finds them by file name and size.
+
+How Import decides that a file is already in your library:
+
+- **Same picture:** same pixel size and capture time as a library photo.
+- **Time zones:** a capture time off by whole quarter hours, up to 14 hours, counts only with the same file name or the same picture.
+- **Re-encoded copies:** files with other bytes but the same size, time and picture all count, for example several copies in one export.
+- **Bursts:** frames taken in the same second are told apart by file name.
+- **Live Photos and edits:** a Live Photo's video and an edit's `.aae` file go with their photo.
+- **Exact copies** in the folder count as copies of the first one.
+- **Delete Me:** photos in a Delete Me album count as not in your library.
+
+`Done/manifest.tsv` records which library photo each file in `Done` stands for.
+Check Again keeps that decision while the photo is in your library, so files do not move back and forth.
+
+Import does not match a resized copy, for example a smaller export of a photo you have.
+It counts as new. After you import it, Photos finds it as a duplicate. Merge it there (step 6).
+
+Import cannot see Recently Deleted.
+A photo you deleted in Photos in the last 30 days counts as new, and Photos then shows it as "Already Imported".
+If you deleted it on purpose, delete the file.
+
+Import checks one folder at a time.
+The app remembers your folders, and checks a folder the first time you open it.
+
 ## Duplicates
 
-The app does not look for duplicate copies of a photo. The Photos app does this better: it can merge copies.
+The cleanup passes do not look for duplicate copies of a photo in your library. The Photos app does this better: it can merge copies.
+Import keeps most duplicates out of your library before you import (see Import). Photos merges the ones that get through, such as resized copies.
 
 1. In Photos, open Utilities > Duplicates in the sidebar. The album appears only after Photos finds duplicates.
 2. Click Merge on a set, or select all and merge them at once.
