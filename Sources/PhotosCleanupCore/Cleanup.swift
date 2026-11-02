@@ -4,6 +4,8 @@ import Foundation
 public struct PassResult: Sendable {
     public var photos: [PassPhoto] = []
     public var groups: [BurstGroup] = []
+    /// Vision aesthetics score of each analysed photo in the pass.
+    public var scores: [String: Double] = [:]
     public var progress = JobProgress()
 }
 
@@ -163,6 +165,8 @@ public actor Cleanup {
             return result
         }
         if kind != "screenshots" { (photos, result.progress) = analysed(kind, photos, threshold: threshold) }
+        for p in photos { if let s = (vision[p.uuid] ?? nil)?.score { result.scores[p.uuid] = s } }
+        if kind == "low-quality" { photos.sort { score($0) < score($1) } }  // surest deletes first
         if Passes.grouped.contains(kind) {
             result.groups = groups(kind, photos).reversed().map { g in  // newest group first
                 // An edited shot wins, then the highest score; first max wins ties: the earliest shot.

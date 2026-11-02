@@ -123,6 +123,32 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.photos[0].verdict == keepV)
     }
 
+    @Test func scoreLineExplainsLowQualityAndTheStar() async throws {
+        let ps = [Photo(uuid: "a"), Photo(uuid: "b"), Photo(uuid: "ok")]
+        let (c, _) = try await makeCleanup(ps, vision: ["a": vr(-0.8), "b": vr(-0.95), "ok": vr(0.3)])
+        let m = ReviewModel(cleanup: c)
+        await m.select(.pass("low-quality"))
+        #expect(m.photos.map(\.id) == ["b", "a"])  // worst first
+        m.click("a")
+        #expect(m.inspectorInfo()?.score == "Score -0.80 · Low Quality at -0.75 or below")
+        m.togglePreview()
+        #expect(m.preview?.reason == "Score -0.80 · Low Quality at -0.75 or below")
+
+        var burst = dated(["x": 0, "y": 1, "z": 2])
+        let (c2, _) = try await makeCleanup(burst, vision: ["x": vr(0.1), "y": vr(0.9), "z": vr(0.2)])
+        let m2 = ReviewModel(cleanup: c2)
+        await m2.select(.pass("bursts"))
+        #expect(m2.scoreLine("y") == "Score 0.90 · ★ of 3")
+        #expect(m2.scoreLine("x") == "Score 0.10 · ★ scored 0.90")
+
+        burst[2].edited = true
+        let (c3, _) = try await makeCleanup(burst, vision: ["x": vr(0.1), "y": vr(0.9), "z": vr(0.2)])
+        let m3 = ReviewModel(cleanup: c3)
+        await m3.select(.pass("bursts"))
+        #expect(m3.scoreLine("z") == "Score 0.20 · ★ of 3, edited")
+        #expect(m3.scoreLine("y") == "Score 0.90 · ★ is edited")
+    }
+
     @Test func refreshAppendsNewCandidates() async throws {
         let ps = [Photo(uuid: "a"), Photo(uuid: "b")]
         let lib = FakeLibrary(ps, vision: ["a": vr(-0.9), "b": vr(-0.8)])

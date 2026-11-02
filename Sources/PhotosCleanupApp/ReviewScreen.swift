@@ -338,6 +338,7 @@ struct InspectorView: View {
                     Text(info.date).font(.headline)
                     Text(info.kind).foregroundStyle(.secondary)
                     if let v = info.verdict { Text(v) }
+                    if let s = info.score { Text(s) }
                     Text(info.albums).foregroundStyle(.secondary)
                     if let t = info.target { Text(t) }
                     if let d = info.decision {

@@ -21,6 +21,8 @@ public final class ReviewModel {
     public private(set) var photos: [PassPhoto] = []
     /// Grouped passes: one row per group.
     public private(set) var groups: [BurstGroup] = []
+    /// Vision aesthetics scores from the pass, for `scoreLine`.
+    public private(set) var scores: [String: Double] = [:]
     public private(set) var decisions: [String: Decision] = [:]
     /// Decided explicitly by the user.
     public private(set) var touched: Set<String> = []
@@ -265,11 +267,12 @@ public final class ReviewModel {
         do {
             var items: [PassPhoto] = []
             var gs: [BurstGroup] = []
+            var sc: [String: Double] = [:]
             var prog = JobProgress()
             if let key = v.passKey {
                 let r = try await cleanup.pass(key)
-                (items, gs, prog) = (
-                    Passes.grouped.contains(key) ? Self.flat(r.groups) : r.photos, r.groups, r.progress
+                (items, gs, sc, prog) = (
+                    Passes.grouped.contains(key) ? Self.flat(r.groups) : r.photos, r.groups, r.scores, r.progress
                 )
             } else {
                 let all = await cleanup.photos
@@ -281,6 +284,7 @@ public final class ReviewModel {
             undoManager.removeAllActions()  // another list: the marks belong to the old one
             photos = items
             groups = gs
+            scores = sc
             progress = prog
             decisions = [:]
             touched = []
@@ -297,6 +301,7 @@ public final class ReviewModel {
     /// One poll tick while Vision or verdicts run: new candidates merge in, touched choices stay.
     public func refresh() async {
         guard let key = view.passKey, let r = try? await cleanup.pass(key), view.passKey == key else { return }
+        scores = r.scores
         if Passes.grouped.contains(key) {  // groups change as more photos are analysed: take them wholesale
             groups = r.groups
             photos = Self.flat(r.groups)
@@ -430,7 +435,7 @@ public final class ReviewModel {
         let verdict = photos.first { $0.id == id }?.verdict
         let badge: String? = view == .deleted ? "✗ Delete Me" : decision(id).map { $0 == .keep ? "✓ Keep" : "✗ Delete" }
         return Preview(
-            id: id, badge: badge, best: isBest(id), reason: verdict.map { "\($0.kind): \($0.reason)" },
+            id: id, badge: badge, best: isBest(id), reason: verdict.map { "\($0.kind): \($0.reason)" } ?? scoreLine(id),
             video: displayed.first { $0.id == id }?.isMovie ?? false)
     }
 
@@ -448,6 +453,8 @@ public final class ReviewModel {
         public let kind: String
         /// "kind: reason" of the verdict, if there is one.
         public let verdict: String?
+        /// Why Vision's score made it a candidate or the ★, from `scoreLine`.
+        public let score: String?
         public let albums: String
         /// "→ Screenshots - Delete Me": where Move to Albums puts it; nil when it stays put.
         public let target: String?
@@ -476,11 +483,25 @@ public final class ReviewModel {
         return Info(
             id: id, date: p.photo.date.map { $0.formatted(style) } ?? "Unknown date",
             kind: p.photo.isMovie ? "Video" : p.photo.screenshot ? "Screenshot" : "Photo",
-            verdict: p.verdict.map { "\($0.kind): \($0.reason)" },
+            verdict: p.verdict.map { "\($0.kind): \($0.reason)" }, score: scoreLine(id),
             albums: p.photo.albums.isEmpty
                 ? "In no album"
                 : "In \(p.photo.albums.count == 1 ? "album" : "albums"): \(p.photo.albums.sorted().joined(separator: ", "))",
             target: target.map { "→ \($0)" }, decision: canMark ? decisions[id] ?? .keep : nil)
+    }
+
+    /// "Score -0.82 · Low Quality at -0.75 or below", "Score 0.41 · ★ of 6", "Score 0.12 · ★ scored 0.41".
+    /// Nil outside Low Quality and the grouped passes.
+    public func scoreLine(_ id: String) -> String? {
+        guard let key = view.passKey, let s = scores[id] else { return nil }
+        let fmt = { (x: Double) in x.formatted(.number.precision(.fractionLength(2))) }
+        if key == "low-quality" { return "Score \(fmt(s)) · Low Quality at \(fmt(Passes.lowQualityMax)) or below" }
+        guard Passes.grouped.contains(key), let g = groups.first(where: { $0.photos.contains { $0.id == id } }),
+            let best = g.photos.first(where: { $0.id == g.best })
+        else { return nil }
+        if id == g.best { return "Score \(fmt(s)) · ★ of \(g.photos.count)\(best.edited ? ", edited" : "")" }
+        if best.edited { return "Score \(fmt(s)) · ★ is edited" }
+        return "Score \(fmt(s)) · ★ scored \(scores[g.best].map(fmt) ?? "?")"
     }
 
     /// The Info panel's text when it has no single photo.
