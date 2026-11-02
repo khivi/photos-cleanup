@@ -42,6 +42,9 @@ struct ImportView: View {
         // Both bounds given: the column's min size stops tracking the content, which otherwise feeds
         // NavigationSplitView a new min width per update and trips AppKit's constraint-pass limit.
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+        .task(id: model.importFolder) {  // checks aren't saved: check a folder the first time it's shown
+            if let url = model.importFolder, model.importScans[url] == nil { await model.checkImportFolder(url) }
+        }
         .confirmationDialog("Sort into Done and Import?", isPresented: $confirmingSort) {
             Button("Sort") { Task { await model.sortImportFolder() } }
         } message: {
