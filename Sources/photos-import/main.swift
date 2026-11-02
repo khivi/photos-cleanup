@@ -8,8 +8,9 @@ import UniformTypeIdentifiers
 
 // Never writes to the library. Sorts the folder into Done/ (in the library, or a copy of a
 // file that is) and Import/ (to drag into Photos), paths mirrored; a rerun moves what Import/
-// now has in the library to Done/. A --skip folder (a library export) is never moved, and
-// never new, nor are its photos' copies elsewhere: it still holds photos deleted from the library.
+// now has in the library to Done/, and what Done/ has that the library lacks back to Import/.
+// A --skip folder (a library export) is never moved, and never new, nor are its photos' copies
+// elsewhere: it still holds photos deleted from the library.
 
 let arguments = CommandLine.arguments.dropFirst()
 guard let rootArg = arguments.first else {
@@ -54,7 +55,7 @@ PHAsset.fetchAssets(with: fetch).enumerateObjects { a, _, _ in
 let index = LibraryIndex(library)
 log("library: \(library.count) photos and videos, \(waiting.count) in Delete Me left out")
 
-// File names Photos keeps per photo (a Live Photo has two), lowercased, without extension.
+// File names Photos keeps per photo (a Live Photo has two), lowercased.
 var namesMemo: [String: Set<String>] = [:]
 @MainActor func names(_ id: String) -> Set<String> {
     if let n = namesMemo[id] { return n }
@@ -63,7 +64,7 @@ var namesMemo: [String: Set<String>] = [:]
         n = Set(
             // originalFilename is declared non-optional but is nil for some resources.
             PHAssetResource.assetResources(for: a).compactMap { r in
-                (r.originalFilename as String?).map { ($0 as NSString).deletingPathExtension.lowercased() }
+                (r.originalFilename as String?)?.lowercased()
             })
     }
     namesMemo[id] = n
@@ -138,9 +139,9 @@ for case let url as URL in all.allObjects {
 func isSkipped(_ f: File) -> Bool { skip.contains { f.rel.hasPrefix($0 + "/") } }
 func isDone(_ f: File) -> Bool { f.rel.hasPrefix("Done/") }
 let checkDate = "Import/Check date/"
-// Skipped folders, then Done/, then Import/ first: their photos are the originals that copies elsewhere
-// point to, so a rerun never sends a second copy to Import/.
-func order(_ f: File) -> Int { isSkipped(f) ? 0 : isDone(f) ? 1 : f.rel.hasPrefix("Import/") ? 2 : 3 }
+// For copies: skipped folders, then Import/, then Done/ first, so their photos are the originals
+// that copies elsewhere point to, and a rerun never sends a second copy to Import/.
+func order(_ f: File) -> Int { isSkipped(f) ? 0 : f.rel.hasPrefix("Import/") ? 1 : isDone(f) ? 2 : 3 }
 files.sort { (order($0), $0.url.path) < (order($1), $1.url.path) }
 log("folder: \(files.count) files")
 
@@ -217,8 +218,42 @@ let imageStems = Set(files.filter(isImage).map(\.stem))
 // In the same folder: frames from one second, so new; a skipped photo is lost, an extra
 // import lands in Photos' Duplicates album.
 var newShots = LibraryIndex()
-var claimed: [String: Set<String>] = [:]  // library ids matched, per folder
+// Per folder, with Done/, Import/ and Import/Check date/ seen as the folder they mirror, so a
+// file's match doesn't change when it moves.
+func mirrored(_ rel: String) -> String {
+    let dir = (rel as NSString).deletingLastPathComponent
+    for p in [checkDate, "Import/", "Done/"] where (dir + "/").hasPrefix(p) {
+        return String((dir + "/").dropFirst(p.count))
+    }
+    return dir + "/"
+}
+var claimed: [String: Set<String>] = [:]  // library ids matched
+let siblings = Dictionary(grouping: files) { mirrored($0.rel) }.mapValues {
+    Set($0.map { $0.url.lastPathComponent.lowercased() })
+}
+func stem(_ name: String) -> String { (name as NSString).deletingPathExtension }
+/// Whether library photo `id` is this file's rather than a sibling's in its folder (burst frames of
+/// one second, or `IMG_1.JPG` and its rotated `IMG_1.jpeg`, match the same photo). Decided by
+/// names, never by which file comes first, so the answer doesn't change when a file moves.
+@MainActor func owns(_ f: File, _ id: String) -> Bool {
+    let full = f.url.lastPathComponent.lowercased()
+    let n = names(id)
+    let others = (siblings[mirrored(f.rel)] ?? []).subtracting([full])
+    if n.contains(full) { return true }
+    if !n.isDisjoint(with: others) { return false }
+    let stems = Set(n.map(stem))
+    guard stems.contains(stem(full)) else { return others.allSatisfy { !stems.contains(stem($0)) } }
+    return others.allSatisfy { !stems.contains(stem($0)) || full < $0 }
+}
 var rows: [(status: String, file: File, detail: String)] = []
+// Matching runs in mirrored order, skipped folders first: where two files tie for one library
+// photo (burst frames of one second, renamed exports), the first wins, and that must not depend on
+// whether a file sits in Done/ or Import/, or each run would swap them.
+files.sort {
+    let a = (isSkipped($0) ? 0 : 1, mirrored($0.rel) + $0.url.lastPathComponent, $0.rel)
+    let b = (isSkipped($1) ? 0 : 1, mirrored($1.rel) + $1.url.lastPathComponent, $1.rel)
+    return a < b
+}
 for (n, f) in files.enumerated() {
     if n % 5000 == 0 { log("\(n)/\(files.count)") }
     let row = { (status: String, detail: String) in rows.append((status, f, detail)) }
@@ -254,20 +289,36 @@ for (n, f) in files.enumerated() {
     }
     let dims = "\(info.width)x\(info.height)"
     let name = f.url.deletingPathExtension().lastPathComponent.lowercased()
-    // Its date was fixed by hand in Photos after import, so only name and size still match.
+    let stemmed = { (id: String) in names(id).map(stem) }
+    // QuickTime's zero date is 1904; a reset camera writes 1900.
+    let dated = info.date.map { info.trusted && Calendar.current.component(.year, from: $0) > 1904 && $0 < Date() }
+    // A Check date photo's date was fixed by hand in Photos after import, so only name and size
+    // still match. By its date, not its folder, so the answer holds once it moves to Done/.
     let byName =
-        f.rel.hasPrefix(checkDate)
-        ? bySize[[max(info.width, info.height), min(info.width, info.height)]]?.filter { names($0.id).contains(name) }
+        dated != true
+        ? bySize[[max(info.width, info.height), min(info.width, info.height)]]?.filter { stemmed($0.id).contains(name) }
         : nil
     if let byName, byName.count == 1 {
         row("in library by name", "\(dims)\t\(byName[0].id)")
     } else if let d = info.date {
         let dir = f.url.deletingLastPathComponent().path
-        if let id = index.match(
-            date: d, width: info.width, height: info.height, excluding: claimed[dir] ?? [],
-            confirm: { names($0).contains(name) || (isImage(f) && samePicture(libraryThumb($0), fileThumb(f.url))) }),
-            claimed[dir, default: []].insert(id).inserted
+        let confirm = { (id: String) in
+            stemmed(id).contains(name) || (isImage(f) && samePicture(libraryThumb(id), fileThumb(f.url)))
+        }
+        let here = mirrored(f.rel)
+        var excluding = claimed[here] ?? []
+        var found: String?
+        while let id = index.match(
+            date: d, width: info.width, height: info.height, excluding: excluding, confirm: confirm)
         {
+            if owns(f, id) {
+                found = id
+                break
+            }
+            excluding.insert(id)
+        }
+        if let id = found {
+            claimed[here, default: []].insert(id)
             row("in library", "\(dims)\t\(id)")
         } else if let orig = newShots.match(
             date: d, width: info.width, height: info.height,
@@ -277,9 +328,7 @@ for (n, f) in files.enumerated() {
             row("same shot", "\(dims)\t\(orig)")
         } else {
             newShots.add(id: f.rel, date: d, width: info.width, height: info.height)
-            // QuickTime's zero date is 1904; a reset camera writes 1900.
-            let year = Calendar.current.component(.year, from: d)
-            row(info.trusted && year > 1904 && d < Date() ? "new" : "new check date", dims)
+            row(dated == true ? "new" : "new check date", dims)
         }
     } else if let d = f.fileDate,
         // Photos sometimes dates an undated file a second before its file date.
@@ -372,20 +421,26 @@ func needsCheck(_ f: File) -> Bool {
 let fm = FileManager.default
 var moves: [(from: String, to: String)] = []
 for (u, d) in unitDone.sorted(by: { $0.key < $1.key }) {
-    guard !u.hasPrefix("Done/"), let r = byRel[u] ?? rows.first(where: { unit($0.file.rel) == u }), !isSkipped(r.file)
-    else { continue }
+    guard let r = byRel[u] ?? rows.first(where: { unit($0.file.rel) == u }), !isSkipped(r.file) else { continue }
     let inImport = u.hasPrefix("Import/")
-    let rel = String(u.dropFirst(u.hasPrefix(checkDate) ? checkDate.count : inImport ? "Import/".count : 0))
+    let inDone = u.hasPrefix("Done/")
+    let prefix = u.hasPrefix(checkDate) ? checkDate.count : inImport ? "Import/".count : inDone ? "Done/".count : 0
+    let rel = String(u.dropFirst(prefix))
     if d {
-        moves.append((u, "Done/" + rel))
+        if !inDone { moves.append((u, "Done/" + rel)) }
     } else if !inImport, u == r.file.rel, toImport(u) {
+        // From Done/ too: a photo there is not in the library (deleted since, or sorted by an older
+        // matcher), and its copies elsewhere wait on it.
         // A Live Photo's video goes next to its still, where Photos pairs them.
         let dest = needsCheck(r.file) ? checkDate : "Import/"
         moves.append((u, dest + rel.replacingOccurrences(of: "/Live Videos/", with: "/")))
     }
 }
 let toDone = moves.count { $0.to.hasPrefix("Done/") }
-log("\(dryRun ? "would move" : "moving"): \(toDone) to Done, \(moves.count - toDone) to Import")
+let fromDone = moves.count { $0.from.hasPrefix("Done/") }
+log(
+    "\(dryRun ? "would move" : "moving"): \(toDone) to Done, \(moves.count - toDone) to Import"
+        + " (\(fromDone) of them from Done/, not in the library)")
 if dryRun { exit(0) }
 var failed = 0
 for m in moves {
