@@ -15,13 +15,20 @@ public struct LibraryIndex {
         byKey[Self.key(s, width, height), default: []].append((s, id))
     }
 
-    /// EXIF times carry no time zone: a match may be off by whole quarter hours, up to 14 hours.
+    /// The same time wins. Without one, Photos may have placed the photo in the zone where it was
+    /// taken, a whole quarter-hour offset up to 14 hours: nearest first, and only if `confirm`
+    /// (same name or same picture) agrees. A busy day of one camera has a photo at the same second
+    /// of many offsets: unconfirmed, 55 of 124 offset matches in one folder were other photos.
     /// `excluding`: photos already matched, e.g. by an earlier frame of the same second.
-    public func match(date: Date, width: Int, height: Int, excluding: Set<String> = []) -> String? {
+    public func match(
+        date: Date, width: Int, height: Int, excluding: Set<String> = [], confirm: (String) -> Bool = { _ in false }
+    ) -> String? {
         let s = Self.seconds(date)
-        return byKey[Self.key(s, width, height)]?.first {
-            abs(s - $0.seconds) <= 14 * 3600 && (s - $0.seconds) % 900 == 0 && !excluding.contains($0.id)
-        }?.id
+        let candidates = (byKey[Self.key(s, width, height)] ?? []).filter { !excluding.contains($0.id) }
+        if let exact = candidates.first(where: { $0.seconds == s }) { return exact.id }
+        return candidates.filter { abs(s - $0.seconds) <= 14 * 3600 && (s - $0.seconds) % 900 == 0 }
+            .sorted { abs(s - $0.seconds) < abs(s - $1.seconds) }
+            .first { confirm($0.id) }?.id
     }
 
     static func seconds(_ d: Date) -> Int { Int(d.timeIntervalSince1970.rounded(.down)) }

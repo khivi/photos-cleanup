@@ -415,12 +415,28 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     let index = LibraryIndex([(id: "a", date: t, width: 4032, height: 3024)])
     #expect(index.match(date: t, width: 4032, height: 3024) == "a")
     #expect(index.match(date: t, width: 3024, height: 4032) == "a")
-    #expect(index.match(date: t + 5.5 * 3600, width: 4032, height: 3024) == "a")  // EXIF clock in India
-    #expect(index.match(date: t - 8 * 3600, width: 4032, height: 3024) == "a")
-    #expect(index.match(date: t + 7 * 60, width: 4032, height: 3024) == nil)
-    #expect(index.match(date: t + 1, width: 4032, height: 3024) == nil)
-    #expect(index.match(date: t + 15 * 3600, width: 4032, height: 3024) == nil)
+    let named = { (id: String) in id == "a" }
+    // EXIF clock in India
+    #expect(index.match(date: t + 5.5 * 3600, width: 4032, height: 3024, confirm: named) == "a")
+    #expect(index.match(date: t - 8 * 3600, width: 4032, height: 3024, confirm: named) == "a")
+    #expect(index.match(date: t + 7 * 60, width: 4032, height: 3024, confirm: named) == nil)
+    #expect(index.match(date: t + 1, width: 4032, height: 3024, confirm: named) == nil)
+    #expect(index.match(date: t + 15 * 3600, width: 4032, height: 3024, confirm: named) == nil)
     #expect(index.match(date: t, width: 4032, height: 3023) == nil)
+}
+
+@Test func libraryIndexTakesAnOffsetOnlyWhenConfirmed() {
+    let t = Date(timeIntervalSince1970: 1_400_000_000)
+    // A busy day: other shots of the same camera land on the new photo's second at some offset.
+    let index = LibraryIndex([
+        (id: "far", date: t - 9 * 3600, width: 4032, height: 3024),
+        (id: "near", date: t - 5.5 * 3600, width: 4032, height: 3024),
+        (id: "other", date: t - 3600, width: 4032, height: 3024),
+    ])
+    #expect(index.match(date: t, width: 4032, height: 3024) == nil)
+    #expect(index.match(date: t, width: 4032, height: 3024, confirm: { $0 != "other" }) == "near")
+    #expect(index.match(date: t, width: 4032, height: 3024, confirm: { $0 == "far" }) == "far")
+    #expect(index.match(date: t - 3600, width: 4032, height: 3024) == "other")
 }
 
 @Test func libraryIndexAddsAsItGoes() {
@@ -428,7 +444,8 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     var seen = LibraryIndex()
     #expect(seen.match(date: t, width: 640, height: 480) == nil)
     seen.add(id: "Export/a.jpg", date: t, width: 640, height: 480)
-    #expect(seen.match(date: t + 3600, width: 480, height: 640) == "Export/a.jpg")
+    #expect(seen.match(date: t, width: 480, height: 640) == "Export/a.jpg")
+    #expect(seen.match(date: t + 3600, width: 480, height: 640) == nil)
 }
 
 @Test func libraryIndexSkipsPhotosAlreadyMatched() {

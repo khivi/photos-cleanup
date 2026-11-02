@@ -6,23 +6,26 @@ import Photos
 import PhotosCleanupCore
 import UniformTypeIdentifiers
 
-// Reads only. A --skip folder (a library export) is never new, nor are its photos' copies
-// elsewhere: the export still holds photos deleted from the library.
+// Never writes to the library. Sorts the folder into Done/ (in the library, or a copy of a
+// file that is) and Import/ (to drag into Photos), paths mirrored; a rerun moves what Import/
+// now has in the library to Done/. A --skip folder (a library export) is never moved, and
+// never new, nor are its photos' copies elsewhere: it still holds photos deleted from the library.
 
 let arguments = CommandLine.arguments.dropFirst()
 guard let rootArg = arguments.first else {
-    print("usage: photos-import <dir> [--skip <subdir>]... [--stage <new dir> [--only <subdir>]] [--plan]")
+    print("usage: photos-import <dir> [--skip <subdir>]... [--dry-run]")
     exit(64)
 }
 let options = zip(arguments, arguments.dropFirst())
 let skip = options.filter { $0.0 == "--skip" }.map { $0.1 }
-let only = options.first { $0.0 == "--only" }.map { $0.1 + "/" } ?? ""
-let stage = options.first { $0.0 == "--stage" }.map { URL(filePath: ($0.1 as NSString).expandingTildeInPath) }
-if let stage, FileManager.default.fileExists(atPath: stage.path) {
-    print("\(stage.path) exists; --stage takes a new folder")
-    exit(64)
+let dryRun = arguments.contains("--dry-run")
+// realpath, not resolvingSymlinksInPath: the enumerator's paths keep /private (/tmp is /private/tmp).
+guard let real = realpath((rootArg as NSString).expandingTildeInPath, nil) else {
+    print("\(rootArg): no such folder")
+    exit(66)
 }
-let root = URL(filePath: (rootArg as NSString).expandingTildeInPath).standardizedFileURL
+let root = URL(filePath: String(cString: real))
+free(real)
 let report = URL(filePath: "/tmp/photos-import.tsv")
 
 func log(_ s: String) { FileHandle.standardError.write(Data((s + "\n").utf8)) }
@@ -33,15 +36,83 @@ guard access == "authorized" else {
     exit(1)
 }
 
+// A Delete Me photo is not in the library: after Delete in Photos… the file is the only copy.
+var waiting: Set<String> = []
+PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: nil).enumerateObjects { c, _, _ in
+    guard Passes.waitingAlbum(in: [c.localizedTitle ?? ""]) != nil else { return }
+    PHAsset.fetchAssets(in: c, options: nil).enumerateObjects { a, _, _ in waiting.insert(a.localIdentifier) }
+}
 var library: [(id: String, date: Date, width: Int, height: Int)] = []
 let fetch = PHFetchOptions()
 fetch.includeHiddenAssets = true
 fetch.includeAllBurstAssets = true
 PHAsset.fetchAssets(with: fetch).enumerateObjects { a, _, _ in
-    if let d = a.creationDate { library.append((a.localIdentifier, d, a.pixelWidth, a.pixelHeight)) }
+    if let d = a.creationDate, !waiting.contains(a.localIdentifier) {
+        library.append((a.localIdentifier, d, a.pixelWidth, a.pixelHeight))
+    }
 }
 let index = LibraryIndex(library)
-log("library: \(library.count) photos and videos")
+log("library: \(library.count) photos and videos, \(waiting.count) in Delete Me left out")
+
+// File names Photos keeps per photo (a Live Photo has two), lowercased, without extension.
+var namesMemo: [String: Set<String>] = [:]
+@MainActor func names(_ id: String) -> Set<String> {
+    if let n = namesMemo[id] { return n }
+    var n: Set<String> = []
+    if let a = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject {
+        n = Set(
+            // originalFilename is declared non-optional but is nil for some resources.
+            PHAssetResource.assetResources(for: a).compactMap { r in
+                (r.originalFilename as String?).map { ($0 as NSString).deletingPathExtension.lowercased() }
+            })
+    }
+    namesMemo[id] = n
+    return n
+}
+// 16×16 grayscale; under 8 mean levels apart is the same picture (a re-encode or a resize), and
+// in one folder's offset matches no other photo came within 25.
+func thumb(_ src: CGImageSource?) -> [UInt8]? {
+    let opts =
+        [
+            kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 256,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ] as CFDictionary
+    guard let src, let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts) else { return nil }
+    var px = [UInt8](repeating: 0, count: 256)
+    guard
+        let ctx = CGContext(
+            data: &px, width: 16, height: 16, bitsPerComponent: 8, bytesPerRow: 16,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: 0)
+    else { return nil }
+    ctx.interpolationQuality = .high
+    ctx.draw(cg, in: CGRect(x: 0, y: 0, width: 16, height: 16))
+    return px
+}
+func samePicture(_ a: [UInt8]?, _ b: [UInt8]?) -> Bool {
+    guard let a, let b else { return false }
+    return zip(a, b).map { abs(Int($0) - Int($1)) }.reduce(0, +) < 8 * a.count
+}
+var fileThumbs: [URL: [UInt8]?] = [:]
+@MainActor func fileThumb(_ url: URL) -> [UInt8]? {
+    if let t = fileThumbs[url] { return t }
+    let t = thumb(CGImageSourceCreateWithURL(url as CFURL, nil))
+    fileThumbs[url] = t
+    return t
+}
+// Only originals already on this Mac: an iCloud download per candidate would take hours.
+@MainActor func libraryThumb(_ id: String) -> [UInt8]? {
+    guard let a = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject, a.mediaType == .image
+    else { return nil }
+    let opts = PHImageRequestOptions()
+    opts.isSynchronous = true
+    opts.isNetworkAccessAllowed = false
+    var t: [UInt8]?
+    PHImageManager.default().requestImageDataAndOrientation(for: a, options: opts) { data, _, _, _ in
+        t = data.flatMap { thumb(CGImageSourceCreateWithData($0 as CFData, nil)) }
+    }
+    return t
+}
+let bySize = Dictionary(grouping: library) { [max($0.width, $0.height), min($0.width, $0.height)] }
 
 struct File {
     let url: URL
@@ -61,15 +132,16 @@ let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentTypeKey, 
 var files: [File] = []
 let all = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])!
 for case let url as URL in all.allObjects {
-    guard let v = try? url.resourceValues(forKeys: Set(keys)), v.isRegularFile == true,
-        !arguments.contains("--plan")
-            || !(url.path.hasPrefix(root.path + "/Done/") || url.path.hasPrefix(root.path + "/Keep/"))
-    else { continue }
+    guard let v = try? url.resourceValues(forKeys: Set(keys)), v.isRegularFile == true else { continue }
     files.append(File(url: url, size: v.fileSize ?? 0, type: v.contentType, fileDate: v.creationDate))
 }
 func isSkipped(_ f: File) -> Bool { skip.contains { f.rel.hasPrefix($0 + "/") } }
-// Skipped folders first, so their photos are the originals that copies elsewhere point to.
-files.sort { (isSkipped($0) ? 0 : 1, $0.url.path) < (isSkipped($1) ? 0 : 1, $1.url.path) }
+func isDone(_ f: File) -> Bool { f.rel.hasPrefix("Done/") }
+let checkDate = "Import/Check date/"
+// Skipped folders, then Done/, then Import/ first: their photos are the originals that copies elsewhere
+// point to, so a rerun never sends a second copy to Import/.
+func order(_ f: File) -> Int { isSkipped(f) ? 0 : isDone(f) ? 1 : f.rel.hasPrefix("Import/") ? 2 : 3 }
+files.sort { (order($0), $0.url.path) < (order($1), $1.url.path) }
 log("folder: \(files.count) files")
 
 func isImage(_ f: File) -> Bool { f.type?.conforms(to: .image) == true }
@@ -93,15 +165,20 @@ where group.count > 1 {
 }
 log("copies within the folder: \(copyOf.count)")
 
-let exifDate = {
+// Photos reads an EXIF time without OffsetTimeOriginal in the Mac's time zone, as here; with GPS it
+// may place the photo in the zone where it was taken, which LibraryIndex's offsets cover.
+func exifFormatter(_ format: String) -> DateFormatter {
     let f = DateFormatter()
     f.locale = Locale(identifier: "en_US_POSIX")
-    f.timeZone = TimeZone(identifier: "UTC")
-    f.dateFormat = "yyyy:MM:dd HH:mm:ss"
+    f.dateFormat = format
     return f
-}()
+}
+let exifDate = exifFormatter("yyyy:MM:dd HH:mm:ss")
+let exifDateWithOffset = exifFormatter("yyyy:MM:dd HH:mm:ssxxx")
 
-func imageInfo(_ url: URL) -> (date: Date?, width: Int, height: Int)? {
+/// `trusted`: a camera's capture time (EXIF DateTimeOriginal or DateTimeDigitized). Without one,
+/// Photos falls back to the file's creation date: when the backup was copied, not the photo taken.
+func imageInfo(_ url: URL) -> (date: Date?, trusted: Bool, width: Int, height: Int)? {
     guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
         let p = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
         let w = p[kCGImagePropertyPixelWidth] as? Int, let h = p[kCGImagePropertyPixelHeight] as? Int
@@ -113,19 +190,24 @@ func imageInfo(_ url: URL) -> (date: Date?, width: Int, height: Int)? {
     let xmp = CGImageSourceCopyMetadataAtIndex(src, 0, nil)
         .flatMap { CGImageMetadataCopyStringValueWithPath($0, nil, "xmp:CreateDate" as CFString) as String? }
         .map { String($0.prefix(19)).replacingOccurrences(of: "-", with: ":").replacingOccurrences(of: "T", with: " ") }
-    let s =
+    let camera =
         (exif?[kCGImagePropertyExifDateTimeOriginal] ?? exif?[kCGImagePropertyExifDateTimeDigitized]) as? String
-        ?? xmp ?? tiff?[kCGImagePropertyTIFFDateTime] as? String
-    return (s.flatMap(exifDate.date(from:)), w, h)
+    if let camera, let offset = exif?[kCGImagePropertyExifOffsetTimeOriginal] as? String,
+        let d = exifDateWithOffset.date(from: camera + offset)
+    {
+        return (d, true, w, h)
+    }
+    let s = camera ?? xmp ?? tiff?[kCGImagePropertyTIFFDateTime] as? String
+    return (s.flatMap(exifDate.date(from:)), camera.flatMap(exifDate.date(from:)) != nil, w, h)
 }
 
-func movieInfo(_ url: URL) async -> (date: Date?, width: Int, height: Int)? {
+func movieInfo(_ url: URL) async -> (date: Date?, trusted: Bool, width: Int, height: Int)? {
     let asset = AVURLAsset(url: url)
     guard let track = try? await asset.loadTracks(withMediaType: .video).first,
         let size = try? await track.load(.naturalSize)
     else { return nil }
     let date = try? await asset.load(.creationDate)?.load(.dateValue)
-    return (date, Int(abs(size.width)), Int(abs(size.height)))
+    return (date, date != nil, Int(abs(size.width)), Int(abs(size.height)))
 }
 
 // A Live Photo's video has its still's name; the library holds the two as one.
@@ -171,19 +253,33 @@ for (n, f) in files.enumerated() {
         continue
     }
     let dims = "\(info.width)x\(info.height)"
-    if let d = info.date {
+    let name = f.url.deletingPathExtension().lastPathComponent.lowercased()
+    // Its date was fixed by hand in Photos after import, so only name and size still match.
+    let byName =
+        f.rel.hasPrefix(checkDate)
+        ? bySize[[max(info.width, info.height), min(info.width, info.height)]]?.filter { names($0.id).contains(name) }
+        : nil
+    if let byName, byName.count == 1 {
+        row("in library by name", "\(dims)\t\(byName[0].id)")
+    } else if let d = info.date {
         let dir = f.url.deletingLastPathComponent().path
-        if let id = index.match(date: d, width: info.width, height: info.height, excluding: claimed[dir] ?? []),
+        if let id = index.match(
+            date: d, width: info.width, height: info.height, excluding: claimed[dir] ?? [],
+            confirm: { names($0).contains(name) || (isImage(f) && samePicture(libraryThumb($0), fileThumb(f.url))) }),
             claimed[dir, default: []].insert(id).inserted
         {
             row("in library", "\(dims)\t\(id)")
-        } else if let orig = newShots.match(date: d, width: info.width, height: info.height),
+        } else if let orig = newShots.match(
+            date: d, width: info.width, height: info.height,
+            confirm: { isImage(f) && samePicture(fileThumb(root.appending(path: $0)), fileThumb(f.url)) }),
             !orig.hasPrefix(String(dir.dropFirst(root.path.count + 1)) + "/")
         {
             row("same shot", "\(dims)\t\(orig)")
         } else {
             newShots.add(id: f.rel, date: d, width: info.width, height: info.height)
-            row("new", dims)
+            // QuickTime's zero date is 1904; a reset camera writes 1900.
+            let year = Calendar.current.component(.year, from: d)
+            row(info.trusted && year > 1904 && d < Date() ? "new" : "new check date", dims)
         }
     } else if let d = f.fileDate,
         // Photos sometimes dates an undated file a second before its file date.
@@ -199,7 +295,8 @@ try rows.map { "\($0.status)\t\($0.file.rel)\t\($0.detail)" }.joined(separator: 
     .write(to: report, atomically: true, encoding: .utf8)
 
 let statuses = [
-    "in library", "in library by file date", "copy", "same shot", "live video", "new", "new undated", "unreadable",
+    "in library", "in library by file date", "in library by name", "copy", "same shot", "live video", "new",
+    "new check date", "new undated", "unreadable",
     "library cache", "skipped", "other",
 ]
 let folder = { (f: File) in f.rel.split(separator: "/").dropLast().prefix(2).joined(separator: "/") }
@@ -212,99 +309,105 @@ for (name, rs) in byFolder.sorted(by: { $0.key < $1.key }) + [("TOTAL", rows)] {
 }
 log("report: \(report.path)")
 
-// A Live Photo's video goes next to its still, where Photos pairs them.
-if let stage {
-    let movies = Dictionary(grouping: files.filter(isMovie), by: \.stem)
-    var linked = 0
-    for r in rows where r.status.hasPrefix("new") && r.file.rel.hasPrefix(only) {
-        for f in [r.file] + (isImage(r.file) ? movies[r.file.stem] ?? [] : []) {
-            let dest = stage.appending(path: f.rel.replacingOccurrences(of: "/Live Videos/", with: "/"))
-            try FileManager.default.createDirectory(
-                at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try FileManager.default.linkItem(at: f.url, to: dest)
-            linked += 1
-        }
+let byRel = Dictionary(rows.map { ($0.file.rel, $0) }, uniquingKeysWith: { a, _ in a })
+let stills = Dictionary(grouping: rows.filter { isImage($0.file) }, by: \.file.stem)
+let byStem = Dictionary(grouping: rows.filter { isImage($0.file) || isMovie($0.file) }, by: \.file.stem)
+var memo: [String: Bool] = [:]
+func origin(_ r: (status: String, file: File, detail: String)) -> String {
+    String(r.detail.split(separator: "\t").last ?? "")
+}
+@MainActor func inLibrary(_ rel: String) -> Bool {
+    if let d = memo[rel] { return d }
+    guard let r = byRel[rel] else { return false }
+    let d: Bool
+    switch r.status {
+    case "in library", "in library by file date", "in library by name": d = true
+    case "copy", "same shot": d = inLibrary(origin(r))
+    // A Live Photo's video may exist only here: it needs its photo in the library, not just a copy.
+    case "live video", "other":
+        d = stills[r.file.stem]?.contains { $0.file.rel != rel && inLibrary($0.file.rel) } ?? false
+    default: d = false
     }
-    log("staged: \(linked) files in \(stage.path)")
+    memo[rel] = d
+    return d
+}
+// A copy is done once its original is in the library; until then it stays put, so Done/ never
+// holds the only copy of a photo to import. A --skip folder stays whole.
+@MainActor func done(_ rel: String) -> Bool {
+    guard let f = byRel[rel]?.file, !isSkipped(f) else { return false }
+    let status = byRel[rel]?.status
+    // A sidecar goes with its photo or video; Apple names an edit's original-adjustments `<name>O.aae`.
+    if status == "other",
+        let media = byStem[f.stem] ?? (f.stem.hasSuffix("o") ? byStem[String(f.stem.dropLast())] : nil)
+    {
+        return media.contains { $0.file.rel != rel && done($0.file.rel) }
+    }
+    return status == "library cache" || inLibrary(rel)
+}
+// A Photos library package moves whole, to Done/ only if every file in it is done; else it stays.
+@MainActor func unit(_ rel: String) -> String {
+    guard let r = rel.range(of: ".photoslibrary/") else { return rel }
+    return String(rel[..<r.lowerBound]) + ".photoslibrary"
+}
+var unitDone: [String: Bool] = [:]
+for r in rows {
+    unitDone[unit(r.file.rel), default: true] = unitDone[unit(r.file.rel), default: true] && done(r.file.rel)
+}
+// Not done: a photo or video Photos can read goes to Import/, a sidecar with it; the rest stays.
+@MainActor func toImport(_ rel: String) -> Bool {
+    guard let r = byRel[rel], !isSkipped(r.file) else { return false }
+    if r.status == "other",
+        let media = byStem[r.file.stem] ?? (r.file.stem.hasSuffix("o") ? byStem[String(r.file.stem.dropLast())] : nil)
+    {
+        return media.contains { $0.file.rel != rel && toImport($0.file.rel) }
+    }
+    return ["new", "new check date", "new undated", "live video"].contains(r.status)
+}
+// A photo whose date Photos would get wrong goes to Import/Check date/, its video and sidecar with it.
+let checkStems = Set(rows.filter { ["new check date", "new undated"].contains($0.status) }.map(\.file.stem))
+func needsCheck(_ f: File) -> Bool {
+    checkStems.contains(f.stem) || (f.stem.hasSuffix("o") && checkStems.contains(String(f.stem.dropLast())))
 }
 
-// Done: in the library, or a copy of a file that is; Keep: everything else. Writes a
-// script of moves into Done/ and Keep/ under the root, paths mirrored; moving is the user's call.
-if arguments.contains("--plan") {
-    let byRel = Dictionary(rows.map { ($0.file.rel, $0) }, uniquingKeysWith: { a, _ in a })
-    let stills = Dictionary(grouping: rows.filter { isImage($0.file) }, by: \.file.stem)
-    let byStem = Dictionary(grouping: rows.filter { isImage($0.file) || isMovie($0.file) }, by: \.file.stem)
-    var memo: [String: Bool] = [:]
-    func origin(_ r: (status: String, file: File, detail: String)) -> String {
-        String(r.detail.split(separator: "\t").last ?? "")
+let fm = FileManager.default
+var moves: [(from: String, to: String)] = []
+for (u, d) in unitDone.sorted(by: { $0.key < $1.key }) {
+    guard !u.hasPrefix("Done/"), let r = byRel[u] ?? rows.first(where: { unit($0.file.rel) == u }), !isSkipped(r.file)
+    else { continue }
+    let inImport = u.hasPrefix("Import/")
+    let rel = String(u.dropFirst(u.hasPrefix(checkDate) ? checkDate.count : inImport ? "Import/".count : 0))
+    if d {
+        moves.append((u, "Done/" + rel))
+    } else if !inImport, u == r.file.rel, toImport(u) {
+        // A Live Photo's video goes next to its still, where Photos pairs them.
+        let dest = needsCheck(r.file) ? checkDate : "Import/"
+        moves.append((u, dest + rel.replacingOccurrences(of: "/Live Videos/", with: "/")))
     }
-    func inLibrary(_ rel: String) -> Bool {
-        if let d = memo[rel] { return d }
-        guard let r = byRel[rel] else { return false }
-        let d: Bool
-        switch r.status {
-        case "in library", "in library by file date": d = true
-        case "copy", "same shot": d = inLibrary(origin(r))
-        // A Live Photo's video may exist only here: it needs its photo in the library, not just a copy.
-        case "live video", "other":
-            d = stills[r.file.stem]?.contains { $0.file.rel != rel && inLibrary($0.file.rel) } ?? false
-        default: d = false
-        }
-        memo[rel] = d
-        return d
-    }
-    // A copy is redundant wherever its original goes: the library, or Keep. A --skip folder stays whole.
-    func done(_ rel: String) -> Bool {
-        guard let f = byRel[rel]?.file, !isSkipped(f) else { return false }
-        let status = byRel[rel]?.status
-        // A sidecar goes with its photo or video; Apple names an edit's original-adjustments `<name>O.aae`.
-        if status == "other",
-            let media = byStem[f.stem] ?? (f.stem.hasSuffix("o") ? byStem[String(f.stem.dropLast())] : nil)
-        {
-            return media.contains { $0.file.rel != rel && done($0.file.rel) }
-        }
-        return status == "copy" || status == "same shot" || status == "library cache" || inLibrary(rel)
-    }
-    // A Photos library package moves whole: Keep unless every file in it is done.
-    func unit(_ rel: String) -> String {
-        guard let r = rel.range(of: ".photoslibrary/") else { return rel }
-        return String(rel[..<r.lowerBound]) + ".photoslibrary"
-    }
-    var unitDone: [String: Bool] = [:]
-    for r in rows {
-        unitDone[unit(r.file.rel), default: true] = unitDone[unit(r.file.rel), default: true] && done(r.file.rel)
-    }
-    // Per folder, the sides its units go to; a folder going one way moves in one line.
-    var sides: [String: Set<Bool>] = [:]
-    for (u, d) in unitDone {
-        var dir = (u as NSString).deletingLastPathComponent
-        while !dir.isEmpty {
-            sides[dir, default: []].insert(d)
-            dir = (dir as NSString).deletingLastPathComponent
-        }
-    }
-    func q(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
-    var lines = ["#!/bin/sh", "set -eu", "cd \(q(root.path))"]
-    // Keep moves out first, by the largest folders holding only Keep; what remains is all Done.
-    var moved: Set<String> = []
-    for (u, d) in unitDone.sorted(by: { $0.key < $1.key }) where !d {
-        var top = u
-        var dir = (u as NSString).deletingLastPathComponent
-        while !dir.isEmpty, sides[dir] == [false] {
-            top = dir
-            dir = (dir as NSString).deletingLastPathComponent
-        }
-        guard moved.insert(top).inserted else { continue }
-        lines.append("mkdir -p \(q("Keep/" + (top as NSString).deletingLastPathComponent))")
-        lines.append("mv -n \(q(top)) \(q("Keep/" + top))")
-    }
-    lines.append("mkdir -p Done")
-    lines.append("for e in *; do case \"$e\" in Done|Keep) ;; *) mv -n \"$e\" Done/ ;; esac; done")
-    // Folders emptied by Keep moves land in Done; drop them there.
-    lines.append("find Done -name .DS_Store -delete")
-    lines.append("find Done -depth -type d -empty -delete")
-    let plan = URL(filePath: "/tmp/sort-old-photos.sh")
-    try (lines.joined(separator: "\n") + "\n").write(to: plan, atomically: true, encoding: .utf8)
-    let doneCount = rows.count { unitDone[unit($0.file.rel)]! }
-    log("plan: \(doneCount) files to Done, \(rows.count - doneCount) to Keep, \(moved.count + 1) moves: \(plan.path)")
 }
+let toDone = moves.count { $0.to.hasPrefix("Done/") }
+log("\(dryRun ? "would move" : "moving"): \(toDone) to Done, \(moves.count - toDone) to Import")
+if dryRun { exit(0) }
+var failed = 0
+for m in moves {
+    let dest = root.appending(path: m.to)
+    do {
+        try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fm.moveItem(at: root.appending(path: m.from), to: dest)
+    } catch {
+        log("not moved: \(m.from): \(error.localizedDescription)")
+        failed += 1
+    }
+}
+// Drop folders the moves emptied; Done/, Import/ and --skip folders stay.
+let dirs = (fm.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey])?.allObjects as? [URL] ?? [])
+    .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+    .map { String($0.path.dropFirst(root.path.count + 1)) }
+    .filter { d in !["Done", "Import"].contains(d) && !skip.contains { d == $0 || d.hasPrefix($0 + "/") } }
+    .filter { !$0.contains(".photoslibrary") }
+for d in dirs.sorted(by: { $0.count > $1.count }) {
+    let url = root.appending(path: d)
+    guard let entries = try? fm.contentsOfDirectory(atPath: url.path), entries.allSatisfy({ $0 == ".DS_Store" })
+    else { continue }
+    try? fm.removeItem(at: url)
+}
+log("moved: \(moves.count - failed); not moved: \(failed)")
