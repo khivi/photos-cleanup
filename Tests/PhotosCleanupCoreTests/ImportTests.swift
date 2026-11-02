@@ -37,6 +37,7 @@ private func moves(_ rows: [ImportRow], skip: [String] = []) -> [String: String]
             row(.removed, "Done/r.jpg", match: "R"),  // its photo merged or deleted since
             row(.liveVideo, "Done/r.mov"),  // goes with it
             row(.removed, "Removed/s.jpg"),  // stays
+            row(.copy, "Done/t.jpg", match: "Removed/s.jpg"),  // a removed photo's copy follows it
             row(.inLibraryByName, "Check date/k.jpg", match: "K"),  // imported and its date fixed
             row(.new, "Done/h.jpg"),  // deleted from the library since
             row(.skipped, "Export/i.jpg"),
@@ -48,7 +49,7 @@ private func moves(_ rows: [ImportRow], skip: [String] = []) -> [String: String]
             "copies/a.jpg": "Done/copies/a.jpg",
             "2012/c.jpg": "Check date/2012/c.jpg", "2012/d.jpg": "Check date/2012/d.jpg",
             "Import/g.jpg": "Done/g.jpg", "Done/h.jpg": "Import/h.jpg", "Check date/k.jpg": "Done/k.jpg",
-            "Done/r.jpg": "Removed/r.jpg", "Done/r.mov": "Removed/r.mov",
+            "Done/r.jpg": "Removed/r.jpg", "Done/r.mov": "Removed/r.mov", "Done/t.jpg": "Removed/t.jpg",
         ])
 }
 
@@ -219,6 +220,15 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     let settled = try await Importer(library: later).scan(root)
     #expect(settled.moves.isEmpty)
     #expect(settled.rows.first { $0.rel == "Removed/trip/IMG_1.jpg" }?.status == .removed)
+
+    // A byte copy of it left in Done/ follows it, rather than going back to Import/.
+    try FileManager.default.createDirectory(at: root.appending(path: "Done/again"), withIntermediateDirectories: true)
+    try FileManager.default.copyItem(
+        at: root.appending(path: "Removed/trip/IMG_1.jpg"), to: root.appending(path: "Done/again/IMG_1.jpg"))
+    #expect(
+        try await Importer(library: later).scan(root).moves == [
+            ImportMove(from: "Done/again/IMG_1.jpg", to: "Removed/again/IMG_1.jpg")
+        ])
 }
 
 @Test func importTakesEveryReencodeOfAPhotoButNotABurstSiblings() async throws {

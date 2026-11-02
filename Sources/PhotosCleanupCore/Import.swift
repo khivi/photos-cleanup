@@ -186,12 +186,13 @@ public struct ImportScan: Sendable {
         func needsCheck(_ r: ImportRow) -> Bool {
             checkStems.contains(r.stem) || (r.stem.hasSuffix("o") && checkStems.contains(String(r.stem.dropLast())))
         }
-        // A removed photo's video and sidecar go with it.
+        // A removed photo's video, sidecar and copies go with it.
         let removedStems = Set(rows.filter { $0.status == .removed }.map(\.stem))
         func wasRemoved(_ r: ImportRow) -> Bool {
-            r.rel.hasPrefix("Done/")
-                && (removedStems.contains(r.stem)
-                    || (r.stem.hasSuffix("o") && removedStems.contains(String(r.stem.dropLast()))))
+            guard r.rel.hasPrefix("Done/") else { return false }
+            if r.status == .copy || r.status == .sameShot { return r.match.flatMap { byRel[$0] }?.status == .removed }
+            return removedStems.contains(r.stem)
+                || (r.stem.hasSuffix("o") && removedStems.contains(String(r.stem.dropLast())))
         }
         var unitDone: [String: Bool] = [:]
         for r in rows { unitDone[unit(r.rel), default: true] = unitDone[unit(r.rel), default: true] && done(r.rel) }
@@ -337,10 +338,13 @@ public actor Importer {
                     url: url, rel: rel, size: v.fileSize ?? 0,
                     type: v.contentType, fileDate: v.creationDate))
         }
-        // For copies: skipped folders, then Import/ and Check date/, then Done/ first, so their photos are the originals
-        // that copies elsewhere point to, and a rerun never sends a second copy to Import/.
+        // For copies: skipped folders, then Removed/, Import/ and Check date/, then Done/ first, so their
+        // photos are the originals that copies elsewhere point to: a rerun never sends a second copy to
+        // Import/, and a removed photo's copy left in Done/ follows it.
         func order(_ f: File) -> Int {
-            ImportScan.isSkipped(f.rel, skip) ? 0 : ImportScan.isWaiting(f.rel) ? 1 : f.rel.hasPrefix("Done/") ? 2 : 3
+            if ImportScan.isSkipped(f.rel, skip) { return 0 }
+            if f.rel.hasPrefix(ImportScan.removed) { return 1 }
+            return ImportScan.isWaiting(f.rel) ? 2 : f.rel.hasPrefix("Done/") ? 3 : 4
         }
         files.sort { (order($0), $0.url.path) < (order($1), $1.url.path) }
         (done, total) = (0, files.count)
@@ -415,6 +419,10 @@ public actor Importer {
                 continue
             }
             if f.rel.hasPrefix(ImportScan.removed) || recorded[f.rel] != nil {
+                // Its re-encodes elsewhere are same shots of it.
+                if f.isImage, let info = imageInfo(f.url), let d = info.date {
+                    newShots.add(id: f.rel, date: d, width: info.width, height: info.height)
+                }
                 row(.removed, recorded[f.rel], nil)
                 continue
             }
