@@ -95,31 +95,37 @@ To change this later, open System Settings > Privacy & Security > Automation.
 
 ## Usage
 
-1. Open Photos Cleanup. It reads your library and shows every photo.
-2. Pick a cleanup pass in the sidebar: Screenshots, Paperwork (receipts, tickets, documents), Bursts (repeated shots of one scene), Similar (the same scene on one day, minutes apart or more), Low Quality (worst first) or Videos (longest first; clips under 2 seconds start as delete). Hover a pass to see what it finds.
-3. Review the grid. Each photo starts with a suggestion; only photos to delete are marked.
-4. Select photos and change the marks: K keeps, ⌫ deletes. Space shows the selected photo large. Show in Photos (⌘R) switches to Photos with the photo selected. In Bursts, Similar and Low Quality, the Info panel (⌘I) and the large view show the photo's Vision score and why it was picked. A video plays in the large view, and video cells show their length.
-5. Click Move to Albums and confirm. Photos marked delete go into the pass's "Delete Me" album. Keepers go into its "Keep" album.
-6. You can also mark photos delete in All. They start unmarked, and Move to Albums sends the marked ones to "All - Delete Me". All has no Keep album. Every pass skips photos in that album. All groups photos by month; the Done switch on a month header remembers you reviewed it, until the month gains photos.
-7. Open To be deleted. It lists the photos in the Delete Me albums. Click Delete in Photos… and confirm in the macOS dialog. This deletes every photo in the list. If you cancel, nothing is deleted.
+1. Pick a pass in the sidebar.
+2. Check the suggestions. Only photos to delete are marked.
+3. Fix any mark: K keeps, ⌫ deletes.
+4. Click Move to Albums. Marked photos go to the pass's "Delete Me" album, the rest to its "Keep" album.
+5. Open To be deleted and click Delete in Photos…. macOS asks you to confirm.
+
+| Pass | Finds | Starts as delete |
+| --- | --- | --- |
+| Screenshots | Screenshots | The ones the on-device model calls junk |
+| Paperwork | Receipts, tickets, documents, labels | The ones the model calls junk |
+| Bursts | Repeated shots of one scene, within a minute | All but the best of each group |
+| Similar | The same scene on one day | All but the best of each group |
+| Low Quality | Blurry, dark or accidental shots, worst first | All |
+| Videos | Videos, longest first | Clips under 2 seconds |
+
+All shows every photo by month. Mark any photo delete there; it goes to "All - Delete Me".
+Switch a month to Done to remember you reviewed it.
 
 | Key | Action |
 | --- | --- |
 | Click, ⇧-click, ⌘-click, ⌘A | Select |
 | Arrow keys | Move the selection |
-| K / ⌫ | Mark the selection keep / delete; with one photo selected, move to the next |
-| Space, Esc | Show or close the large preview |
-| ⌘I | Show or hide the Info panel |
-| ⌘R | Show the selected photo in Photos |
+| K / ⌫ | Mark keep / delete; with one photo selected, move to the next |
+| Space, Esc | Show or close the large preview (videos play) |
+| ⌘I | Show the Info panel: date, albums, and why the photo was picked |
+| ⌘R | Show the photo in Photos |
 | ⌘Z / ⇧⌘Z | Undo / redo a mark |
-| ⌥⌘D | Show only photos marked delete (in All, also those in a Delete Me album) |
-| ⌥↓ / ⌥↑ | Next / previous month in All, or group in Bursts and Similar |
+| ⌥⌘D | Show only photos marked delete |
+| ⌥↓ / ⌥↑ | Next / previous month or group |
 
-Photos keeps deleted items in Recently Deleted for 30 days.
-Restore a photo from there if you change your mind.
-Delete it from Recently Deleted to free space at once.
-
-With VoiceOver on, each photo in the grid reads its kind, date and mark, for example "Video, 0:05, May 3, 2014 at 9:00 AM, marked Delete".
+With VoiceOver on, each photo reads its kind, date and mark.
 
 ## Export: back up your library
 
