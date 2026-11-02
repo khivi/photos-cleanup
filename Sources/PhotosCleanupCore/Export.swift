@@ -78,8 +78,7 @@ public struct ExportStatus: Sendable, Equatable {
 }
 
 /// Copies the library's originals, edits and Live Photo videos into `<dest>/YYYY/MM`. A rerun
-/// copies only photos new or changed since. Never deletes: a photo gone from the library stays,
-/// so the export is a deletion record for photos-import's `--skip`.
+/// copies only photos new or changed since. Never deletes: a backup keeps photos deleted from the library.
 public actor Exporter {
     public static let manifestName = ".photos-export.tsv"
 

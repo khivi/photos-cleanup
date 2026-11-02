@@ -145,17 +145,17 @@ Decided: import stays through Photos (drag or File → Import, for its duplicate
 - [x] **Wrong dates after import** — of 20,931 photos imported 2026-10-31, ~2,140 had no camera date and Photos took the file creation date (when the backup was copied); ~23 had junk EXIF years (1900, 17, 1719). These now go to `Import/Check date/`; after fixing the date in Photos, a rerun matches them by file name and size.
 - [ ] **Suggest the date for Check date files** — many carry it in the file name (`IMG_0008.2014-06-01_164455.JPG`, `20120916-191041-=-IMG_0290.JPG`) or folder name (`…, May 10, 1992`). Write it to the report.
 - [ ] **Done/ is never rechecked** — a file whose library photo was later deleted, or put in Delete Me, stays in `Done/`. Recheck `Done/` each run and move such files back to `Import/`.
-- [ ] **`--skip` exports** — never moved by the tool. An export is a deletion record (keeps deleted photos' copies from showing as new) and a stale backup; delete it once a current backup exists (Export, or Time Machine).
+- [ ] **`--skip` exports** — never moved by the tool. An export is a deletion record (keeps deleted photos' copies from showing as new).
 - [ ] **Tests for the Done logic** — `inLibrary`/`done` in `main.swift` have none; move them into Core next to `LibraryIndex`.
 
 ## Export and Import in the app (2026-11-02)
 
-Photos Takeout stalls on "Fetching assets" with 0 photos (likely no Photos access) and isn't wanted. A current incremental backup is also what lets old `--skip` exports be deleted.
+Photos Takeout stalls on "Fetching assets" with 0 photos (likely no Photos access) and isn't wanted.
 
 - [x] ~~Try osxphotos first~~ — dropped: Export in the app does the same incremental backup with the app's own Photos access.
-- [x] **A `photos-export` target** (`989f9bc`). `PHAssetResourceManager.writeData` per resource; a manifest of photo uuid → modification date so a rerun copies only new or changed photos. Hard parts: iCloud "Optimize Storage" downloads (slow, network), Live Photo pairs, edits plus originals, name collisions, and what to do with photos deleted from the library (keep, so the export stays a deletion record for `--skip`).
+- [x] **A `photos-export` target** (`989f9bc`). `PHAssetResourceManager.writeData` per resource; a manifest of photo uuid → modification date so a rerun copies only new or changed photos. Hard parts: iCloud "Optimize Storage" downloads (slow, network), Live Photo pairs, edits plus originals, name collisions, and photos deleted from the library (kept: a backup doesn't lose files).
 - [x] **Export in the app** (`4f4c60b`) — Transfer → Export in the sidebar: destination, free space, last export, counts, progress, Stop, failures. The badge counts photos to copy; To be deleted warns about photos not in the export. `photos-export` wraps the same `Exporter`.
 - [ ] **A full export run** — only tests and a dry run so far: check iCloud downloads, Live Photo pairs and edits on the real library, and that a stopped run resumes.
 - [ ] **Parallel downloads** — one photo at a time; a few at once if iCloud-only originals make the first run too slow.
 - [ ] **Export: grid of photos to copy, size estimate** — the grid of what isn't exported yet, and "needs ~X GB" next to free space.
-- [ ] **Import in the app** — Transfer → Import: a list of checked folders (kept in Application Support) with counts per status, a grid of one folder's files filtered by status (QuickLook thumbnails), the Info panel showing the library match with Show in Photos. A "Library export" checkbox replaces `--skip`; the Export destination gets it automatically. Import in Photos… stages the new files and opens them with `open -a Photos`, so the app never writes photos to the library.
+- [ ] **Import in the app** — Transfer → Import: a list of checked folders (kept in Application Support) with counts per status, a grid of one folder's files filtered by status (QuickLook thumbnails), the Info panel showing the library match with Show in Photos. A "Library export" checkbox replaces `--skip`. Import in Photos… stages the new files and opens them with `open -a Photos`, so the app never writes photos to the library.
