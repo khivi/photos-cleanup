@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Photos
+import UniformTypeIdentifiers
 import Vision
 
 /// The Photos library. PhotoKitLibrary is the real one; tests substitute a fake.
@@ -216,11 +217,7 @@ extension PhotoKitLibrary {
     }
 
     public func fileNames(_ uuid: String) -> Set<String> {
-        // originalFilename is declared non-optional but is nil for some resources.
-        Set(
-            resources(uuid).compactMap { r in
-                (r.originalFilename as String?)?.lowercased()
-            })
+        Set(resources(uuid).compactMap { $0.fileName?.lowercased() })
     }
 
     /// Only originals already on this Mac: an iCloud download per candidate would take hours.
@@ -250,7 +247,7 @@ extension PhotoKitLibrary {
     public func exportName(_ uuid: String) -> String? {
         let rs = resources(uuid)
         return (rs.first { $0.type == .photo || $0.type == .video } ?? rs.first)
-            .map { ($0.originalFilename as NSString).deletingPathExtension }
+            .map { r in r.fileName.map { ($0 as NSString).deletingPathExtension } ?? uuid }
     }
 
     public func export(_ uuid: String, stem: String, to dest: URL) async throws {
@@ -261,13 +258,16 @@ extension PhotoKitLibrary {
         options.isNetworkAccessAllowed = true  // Optimize Mac Storage keeps only previews here
         var written: Set<String> = []
         for r in resources(uuid) {
-            let ext = (r.originalFilename as NSString).pathExtension
-            let file: String
+            let suffix: String
             switch r.type {
-            case .photo, .video, .alternatePhoto, .pairedVideo: file = "\(stem).\(ext)"
-            case .fullSizePhoto, .fullSizeVideo, .fullSizePairedVideo: file = "\(stem)_edited.\(ext)"
+            case .photo, .video, .alternatePhoto, .pairedVideo: suffix = ""
+            case .fullSizePhoto, .fullSizeVideo, .fullSizePairedVideo: suffix = "_edited"
             default: continue  // adjustment data, render previews
             }
+            let ext =
+                r.fileName.map { ($0 as NSString).pathExtension }.flatMap { $0.isEmpty ? nil : $0 }
+                ?? UTType(r.uniformTypeIdentifier)?.preferredFilenameExtension ?? ""
+            let file = "\(stem)\(suffix).\(ext)"
             guard written.insert(file.lowercased()).inserted else { continue }
             let url = dest.appending(path: file)
             let part = url.appendingPathExtension("part")
@@ -304,4 +304,10 @@ public func offload<T: Sendable>(_ work: @escaping @Sendable () throws -> T) asy
     try await withCheckedThrowingContinuation { cont in
         DispatchQueue.global(qos: .userInitiated).async { cont.resume(with: Result(catching: work)) }
     }
+}
+
+extension PHAssetResource {
+    /// originalFilename is declared non-optional but is nil for some resources (type 17 on 315 photos
+    /// here): bridged to NSString it traps, and as String? the optimizer drops the nil check. KVC sees it.
+    var fileName: String? { (value(forKey: "originalFilename") as? String).flatMap { $0.isEmpty ? nil : $0 } }
 }
