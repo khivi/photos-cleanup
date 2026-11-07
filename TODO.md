@@ -160,6 +160,19 @@ PicSift: Find Your Best Photos 1.0.1, iPad and Mac, free with a one-time unlock.
 - **Already here:** Delete Tray (Delete Me albums and Delete in Photos…, 30 days in Recently Deleted); duplicates keep the best (Bursts, Similar); keyboard marks and undo, bulk too; per-photo ratings (⌘I); background scoring with progress (sidebar rings).
 - **Not taking:** the six-quality Priorities chart, sliders and presets (ranking for posting, not clearing out); the swipe deck (the grid with K/⌫ to next covers it); Visual Search, People, Places, Smart Albums (Photos has them); Straighten (editing); a reset key.
 
+### Visibility for users (2026-11-07)
+
+Homebrew reaches only developers who already know the app. Users search the App Store, Google and Reddit for a "photo cleaner".
+
+- [x] **README leads with what sets it apart:** free with no delete limit, on-device, never deletes on its own; Homebrew and the zip download at the top.
+- [x] **GitHub:** description and topics (`photo-cleaner`, `duplicate-photos`, `privacy`, `on-device-ai`, …); v0.9.0 notes for users; CONTRIBUTING release step 6 for later releases.
+- [ ] **Social preview:** `docs/social-preview.png` (1280×640). Upload it in Settings > General > Social preview; GitHub has no API for it.
+- [ ] **Landing page:** one GitHub Pages page (headline, screenshots or a GIF, Download button to the latest release, requirements), set as the repo homepage.
+- [ ] **Listings:** posts on r/macapps and r/apple; Show HN (lead with the on-device Vision and Foundation Models work); pull requests to `serhii-londar/open-source-mac-os-apps` and `jaywcjlove/awesome-mac`; AlternativeTo (beside Gemini Photos, PhotoSweeper, CleanMy Phone) and MacUpdate; Product Hunt once the landing page is up. Claude drafts; the user posts.
+- [ ] **Official Homebrew cask** (`brew install --cask photos-cleanup` without the tap). Homebrew turns down repos that aren't yet well known, about 75 stars.
+- [ ] **Mac App Store**, if the above gets traction. Needs the App Sandbox: Photos access works in it; Import and Export need security-scoped bookmarks for their folders.
+- Say on every page: macOS 15 or later; Screenshots and Paperwork verdicts need macOS 27 with Apple Intelligence.
+
 ### Future (not next up)
 
 - ~~**Space freed per pass**~~: dropped 2026-11-02, needs an undocumented PhotoKit key; photo counts suffice. Notes kept: "Bursts · 66 · 1.2 GB" in the sidebar and the move dialog, like the old tool's savings report. PhotoKit has no public file size; `PHAssetResource`'s `fileSize` is an undocumented key. Only if the number matters. Not now (2026-10-30). If built: guard with `responds(to: Selector(("fileSize")))`, since a dropped key raises an Objective-C exception Swift can't catch; sum all of a photo's resources; the figure is iCloud storage, freed once deleted in Photos and Recently Deleted empties. Measure the per-asset cost on the real library first.
