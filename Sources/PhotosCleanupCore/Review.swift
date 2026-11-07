@@ -126,6 +126,7 @@ public final class ReviewModel {
             if let v = p.verdict, !v.keep { return .delete }
             return .keep
         case .pass("videos"): return p.photo.duration < Passes.accidentalVideoMax ? .delete : .keep
+        case .pass("live-photos"), .pass("selfies"): return .keep  // neither kind is junk by itself
         case .pass: return p.photo.edited ? .keep : .delete  // Low Quality: edits are kept
         default: return .keep
         }
@@ -722,7 +723,14 @@ public final class ReviewModel {
 }
 
 extension Photo {
-    var kindLabel: String { isMovie ? "Video" : screenshot ? "Screenshot" : "Photo" }
+    var kindLabel: String {
+        isMovie
+            ? (screenRecording ? "Screen recording" : "Video")
+            : screenshot ? "Screenshot" : live ? "Live Photo" : "Photo"
+    }
+
+    /// The tile's pill for a kind the thumbnail doesn't show: "Live" or "Screen recording".
+    public var kindTag: String? { screenRecording ? "Screen recording" : live ? "Live" : nil }
 }
 
 // MARK: Month sections in All

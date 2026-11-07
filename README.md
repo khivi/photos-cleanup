@@ -109,6 +109,10 @@ To change this later, open System Settings > Privacy & Security > Automation.
 | Similar | The same scene on one day | All but the best of each group |
 | Low Quality | Blurry, dark or accidental shots, worst first | All |
 | Videos | Videos, longest first | Clips under 2 seconds |
+| Live Photos | Live Photos, newest first | None. Deleting one deletes its photo and its video |
+| Selfies | Photos from the front camera, newest first | None |
+
+A tile marks a Live Photo "Live" and a screen recording "Screen recording".
 
 All shows every photo by month. Mark any photo delete there; it goes to "All - Delete Me".
 Switch a month to Done to remember you reviewed it.

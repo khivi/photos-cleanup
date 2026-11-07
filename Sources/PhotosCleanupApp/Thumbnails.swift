@@ -135,7 +135,11 @@ struct PhotoCell: View {
                 if let d = photo.photo.durationLabel { pill(Text(d).font(.caption2.monospacedDigit())) }
             }
             .overlay(alignment: .bottomLeading) {
-                if case .decision = mark, let v = photo.verdict { pill(Text(v.kind).font(.caption2)) }
+                if case .decision = mark, let v = photo.verdict {
+                    pill(Text(v.kind).font(.caption2))
+                } else if let t = photo.photo.kindTag {
+                    pill(Text(t).font(.caption2))
+                }
             }
             .clipped()
             .overlay { if selected { Rectangle().strokeBorder(Color.accentColor, lineWidth: 4) } }

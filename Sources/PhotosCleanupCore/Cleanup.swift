@@ -132,6 +132,10 @@ public actor Cleanup {
                 photos, ignoring: ignoreAlbums, kind: .screenshot, keepAlbumPhotos: keepAlbumPhotos)
         case "videos":
             found = candidatePhotos(photos, ignoring: ignoreAlbums, kind: .video, keepAlbumPhotos: keepAlbumPhotos)
+        case "live-photos":
+            found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos).filter(\.live)
+        case "selfies":
+            found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos).filter(\.selfie)
         case "paperwork", "low-quality":
             found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos)
         case "bursts", "similar":
@@ -183,8 +187,9 @@ public actor Cleanup {
     public func pass(_ kind: String, threshold: Double = Passes.lowQualityMax) throws -> PassResult {
         var photos = try candidates(kind)
         var result = PassResult()
-        if kind == "videos" {  // no Vision, no verdicts
-            result.photos = photos.sorted { $0.duration > $1.duration }.map { PassPhoto(photo: $0) }
+        if Passes.plain.contains(kind) {  // no Vision, no verdicts; newest first, Videos longest first
+            if kind == "videos" { photos.sort { $0.duration > $1.duration } }
+            result.photos = photos.map { PassPhoto(photo: $0) }
             return result
         }
         if kind != "screenshots" { (photos, result.progress) = analysed(kind, photos, threshold: threshold) }
@@ -219,7 +224,7 @@ public actor Cleanup {
         var out: [String: Int?] = ["all": photos.count]
         for (kind, _) in Passes.all {
             guard let found = try? candidates(kind) else { continue }
-            if kind == "screenshots" || kind == "videos" {
+            if kind == "screenshots" || Passes.plain.contains(kind) {
                 out[kind] = found.count
                 continue
             }

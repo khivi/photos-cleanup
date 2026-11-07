@@ -201,8 +201,8 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c)
         #expect(
             ReviewModel.tabs.map(\.title) == [
-                "All", "Screenshots", "Paperwork", "Bursts", "Similar", "Low Quality", "Videos", "To be deleted",
-                "Export", "Import",
+                "All", "Screenshots", "Paperwork", "Bursts", "Similar", "Low Quality", "Videos", "Live Photos",
+                "Selfies", "To be deleted", "Export", "Import",
             ])
         await m.refreshCounts()
         await m.select(.all)
@@ -806,4 +806,27 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
     #expect(
         row("Screenshots")?.progress == nil
             && row("Screenshots")?.help == ReviewModel.tabs.first { $0.title == "Screenshots" }?.help)
+}
+
+@MainActor @Test func livePhotosAndSelfiesStartAsKeepNewestFirst() async throws {
+    let photos = [
+        Photo(uuid: "old", date: t0, live: true), Photo(uuid: "new", date: t0 + 60, live: true),
+        Photo(uuid: "me", date: t0 + 30, selfie: true), Photo(uuid: "plain", date: t0 + 90),
+        Photo(uuid: "fav", date: t0 + 120, favorite: true, live: true),  // favourites are never candidates
+        Photo(uuid: "rec", date: t0, isMovie: true, duration: 30, screenRecording: true),
+    ]
+    let (c, _) = try await makeCleanup(photos)
+    let m = ReviewModel(cleanup: c, dir: tempDir())
+    await m.select(.pass("live-photos"))
+    #expect(m.photos.map(\.id) == ["new", "old"])
+    #expect(m.photos.allSatisfy { m.decision($0.id) == .keep })
+    await m.select(.pass("selfies"))
+    #expect(m.photos.map(\.id) == ["me"] && m.decision("me") == .keep)
+    let counts = await c.counts()  // known at load: no Vision, no verdicts
+    #expect(counts["live-photos"] == 2 && counts["selfies"] == 1)
+
+    // The tile's pill and the Inspector's kind say what the thumbnail can't.
+    #expect(photos.map(\.kindTag) == ["Live", "Live", nil, nil, "Live", "Screen recording"])
+    #expect(
+        photos.map(\.kindLabel) == ["Live Photo", "Live Photo", "Photo", "Photo", "Live Photo", "Screen recording"])
 }
