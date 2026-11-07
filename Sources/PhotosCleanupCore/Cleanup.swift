@@ -114,10 +114,9 @@ public actor Cleanup {
         let ((read, lines), verdicts) = try await caches
         photos = all.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
         byUUID = Dictionary(photos.map { ($0.uuid, $0) }, uniquingKeysWith: { a, _ in a })
-        // ponytail: every print is in RAM until paired, a peak of the old steady state; read a day at a time if that bites.
-        let shots = Self.shots(photos, read)
-        near = try await offload { nearPairs(shots) }
-        (vision, visionLines, self.verdicts) = (read.mapValues { $0.map(\.withoutPrint) }, lines, verdicts)
+        let photos = photos
+        near = try await offload { Self.pairAll(photos, read, lines, visionURL) }
+        (vision, visionLines, self.verdicts) = (read, lines, verdicts)
         generation += 1
     }
 
@@ -283,7 +282,7 @@ public actor Cleanup {
             done += batch.count
         }
         print(
-            "Vision: \(done) photos in \((ContinuousClock.now - start).formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 1)))), memory \(footprintMB().map { "\($0) MB" } ?? "unknown")"
+            "Vision: \(done) photos in \((ContinuousClock.now - start).formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 1)))), \(memoryLabel())"
         )
         fflush(stdout)
     }
@@ -490,19 +489,22 @@ public actor Cleanup {
         ])
     }
 
-    /// Each photo's analysis (nil: none possible) and the byte range of its line; a later line wins.
+    /// Each photo's analysis without its print (nil: none possible) and the byte range of its line;
+    /// a later line wins. Prints stay on disk: `readPrints` reads them back.
     static func readVision(_ url: URL) -> (results: [String: VisionResult?], lines: [String: Range<Int>]) {
         var out: [String: VisionResult?] = [:]
         var lines: [String: Range<Int>] = [:]
-        guard let data = try? Data(contentsOf: url) else { return (out, lines) }
+        guard let data = try? Data(contentsOf: url, options: .alwaysMapped) else { return (out, lines) }
         var start = data.startIndex
         while start < data.endIndex {
             let end = data[start...].firstIndex(of: UInt8(ascii: "\n")) ?? data.endIndex
-            if let row = (try? JSONSerialization.jsonObject(with: data[start..<end])) as? [String: Any],
-                let uuid = row["uuid"] as? String
-            {
-                out[uuid] = .some(visionRow(row))
-                lines[uuid] = start..<end
+            autoreleasepool {  // JSONSerialization's objects otherwise pile up until the read ends
+                if let row = (try? JSONSerialization.jsonObject(with: data[start..<end])) as? [String: Any],
+                    let uuid = row["uuid"] as? String
+                {
+                    out[uuid] = .some(visionRow(row, print: false))
+                    lines[uuid] = start..<end
+                }
             }
             start = end + 1
         }
@@ -515,22 +517,55 @@ public actor Cleanup {
         defer { try? h.close() }
         var out: [String: [Float]] = [:]
         for (uuid, range) in lines {
-            guard (try? h.seek(toOffset: UInt64(range.lowerBound))) != nil,
-                let data = try? h.read(upToCount: range.count),
-                let row = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-                let v = visionRow(row)
-            else { continue }
-            out[uuid] = v.print
+            autoreleasepool {
+                guard (try? h.seek(toOffset: UInt64(range.lowerBound))) != nil,
+                    let data = try? h.read(upToCount: range.count),
+                    let row = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                    let v = visionRow(row)
+                else { return }
+                out[uuid] = v.print
+            }
         }
         return out
     }
 
-    static func visionRow(_ row: [String: Any]) -> VisionResult? {
-        guard row["error"] == nil, let b64 = row["print"] as? String, let data = Data(base64Encoded: b64),
+    /// Pairs every analysed photo a run of days at a time, so only those days' prints are in RAM:
+    /// all at once peaked at 544 MB for 38k photos. A run breaks where `nearPairs` never compares
+    /// across: a new day more than `burstWindow` after the last photo.
+    static func pairAll(_ photos: [Photo], _ vision: [String: VisionResult?], _ lines: [String: Range<Int>], _ url: URL)
+        -> [String: Set<String>]
+    {
+        let analysed = photos.filter { p in
+            p.date != nil && lines[p.uuid] != nil && (vision[p.uuid] ?? nil).map { !$0.utility } == true
+        }.sorted { $0.date! < $1.date! }
+        var near: [String: Set<String>] = [:]
+        var run: [Photo] = []
+        func pairRun() {
+            let prints = readPrints(url, run.map { ($0.uuid, lines[$0.uuid]!) })
+            near.merge(nearPairs(run.compactMap { p in prints[p.uuid].map { (p, $0) } })) { $0.union($1) }
+            run.removeAll(keepingCapacity: true)
+        }
+        for p in analysed {
+            if let last = run.last?.date, !Calendar.current.isDate(last, inSameDayAs: p.date!),
+                p.date!.timeIntervalSince(last) > Passes.burstWindow
+            {
+                pairRun()
+            }
+            run.append(p)
+        }
+        pairRun()
+        return near
+    }
+
+    /// One cache line's analysis; `print: false` skips decoding the print, leaving it empty.
+    static func visionRow(_ row: [String: Any], print: Bool = true) -> VisionResult? {
+        guard row["error"] == nil, let b64 = row["print"] as? String,
             let utility = row["utility"] as? Bool, let score = row["score"] as? Double
         else { return nil }
-        let print = floats(data, elementType: (row["ptype"] as? Int) == 2 ? .double : .float)
-        return VisionResult(print: print, utility: utility, score: score)
+        guard print else { return VisionResult(print: [], utility: utility, score: score) }
+        guard let data = Data(base64Encoded: b64) else { return nil }
+        let floats = floats(data, elementType: (row["ptype"] as? Int) == 2 ? .double : .float)
+        return VisionResult(print: floats, utility: utility, score: score)
     }
 
     static func verdictLine(_ uuid: String, _ v: Verdict) -> String {

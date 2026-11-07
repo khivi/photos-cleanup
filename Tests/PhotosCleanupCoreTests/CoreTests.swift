@@ -338,7 +338,10 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     let before = try #require(footprintMB())
     let block = [UInt8](repeating: 1, count: 64 << 20)  // written, so resident
     let after = try #require(footprintMB())
-    withExtendedLifetime(block) { #expect(after - before >= 48) }
+    withExtendedLifetime(block) {
+        #expect(after.now - before.now >= 48)
+        #expect(after.peak >= after.now)
+    }
 }
 
 @Test func visionCacheRoundTrips() {
@@ -346,7 +349,7 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     let url = tempDir().appendingPathComponent("v.jsonl")
     try? (line + "\n" + Cleanup.visionLine("gone", nil) + "\n").write(to: url, atomically: true, encoding: .utf8)
     let (read, lines) = Cleanup.readVision(url)
-    #expect(read["u"] == vr(-0.25, utility: true, [0.5, -1]))
+    #expect(read["u"] == vr(-0.25, utility: true, []))  // the print stays on disk
     #expect(read["gone"] == .some(nil))
     #expect(lines["u"] == 0..<line.utf8.count)
     #expect(Cleanup.readPrints(url, [("u", lines["u"]!)]) == ["u": [0.5, -1]])

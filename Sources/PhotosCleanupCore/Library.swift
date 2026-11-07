@@ -314,8 +314,9 @@ public func offload<T: Sendable>(_ work: @escaping @Sendable () throws -> T) asy
     }
 }
 
-/// This process's memory in MB, the figure Activity Monitor's Memory column shows; nil if unreadable.
-public func footprintMB() -> Int? {
+/// This process's memory in MB, the figure Activity Monitor's Memory column shows, and its peak since
+/// launch; nil if unreadable.
+public func footprintMB() -> (now: Int, peak: Int)? {
     var info = task_vm_info_data_t()
     var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
     let kr = withUnsafeMutablePointer(to: &info) {
@@ -323,7 +324,13 @@ public func footprintMB() -> Int? {
             task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
         }
     }
-    return kr == KERN_SUCCESS ? Int(info.phys_footprint / 1_048_576) : nil
+    guard kr == KERN_SUCCESS else { return nil }
+    return (Int(info.phys_footprint >> 20), Int(info.ledger_phys_footprint_peak >> 20))
+}
+
+/// "memory 38 MB, peak 270 MB", for the log.
+public func memoryLabel() -> String {
+    footprintMB().map { "memory \($0.now) MB, peak \($0.peak) MB" } ?? "memory unknown"
 }
 
 extension PHAssetResource {
