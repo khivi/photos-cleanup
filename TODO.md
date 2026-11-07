@@ -97,6 +97,12 @@ Homebrew is the only install path: the cask in `khivi/homebrew-photos-cleanup` i
 
 ## App
 
+- [ ] **Live Photos and Selfies passes, largest first** (planned 2026-11-07, from the Shredly review; a size sort elsewhere was declined). This library: 1,501 Live Photos, 1,137 selfies.
+  - Two passes in `Passes.all`: `live-photos` / "Live Photos" and `selfies` / "Selfies"; albums derived as usual. Nothing starts as Delete: neither kind is junk by itself. Deleting a Live Photo deletes the photo and its video; PhotoKit can't strip the video alone.
+  - `Photo` gains `live` (`mediaSubtypes.photoLive`) and `selfie` (in the Selfies smart album, `smartAlbumSelfPortraits`, read in `photos()`).
+  - A size job beside Vision: `PHAssetResource` `fileSize` (KVC; ~460 photos/s measured) for the two passes' candidates only, cached in `sizes-<hash>.jsonl`, with the sidebar ring and tooltip ("Reading file sizes: N of M"). Until a photo's size is known it sorts last.
+  - The pass header adds the total ("1,501 candidates · 9.8 GB"); the Inspector shows a photo's size.
+  - Tests: candidates per pass, largest first, no Delete marks, the size cache across a restart, the ring; `everyPassHasOneName` covers the names. Docs: README pass table, ARCHITECTURE caches.
 - [x] **Job progress in the sidebar, not the toolbar** (done 2026-11-07). Every pass row shows a filling ring while its count is unknown, then its count, 0 included: a ring or a number. Exception: Paperwork before it is opened, whose count waits on verdicts that only start in the pass, stays blank.
   - Paperwork, Bursts, Similar, Low Quality: the Vision ring (already in `1dd75da`), tooltip "Analysing photos on this Mac: N of M".
   - Screenshots, Paperwork: the verdict ring once Vision is done for the pass, tooltip "Checking photos with Apple Intelligence: N of M"; only on a pass with photos in the queue (screenshots → Screenshots, the rest → Paperwork). One ring per row.
