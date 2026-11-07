@@ -25,6 +25,8 @@ public final class ReviewModel {
     public private(set) var groups: [BurstGroup] = []
     /// Vision aesthetics scores from the pass, for `scoreLine`.
     public private(set) var scores: [String: Double] = [:]
+    /// Worst-face qualities, in groups whose ★ faces helped pick, for `scoreLine`.
+    public private(set) var faces: [String: Double] = [:]
     public private(set) var decisions: [String: Decision] = [:]
     /// Decided explicitly by the user.
     public private(set) var touched: Set<String> = []
@@ -339,11 +341,13 @@ public final class ReviewModel {
             var items: [PassPhoto] = []
             var gs: [BurstGroup] = []
             var sc: [String: Double] = [:]
+            var fc: [String: Double] = [:]
             var prog = JobProgress()
             if let key = v.passKey {
                 let r = try await cleanup.pass(key)
-                (items, gs, sc, prog) = (
-                    Passes.grouped.contains(key) ? Self.flat(r.groups) : r.photos, r.groups, r.scores, r.progress
+                (items, gs, sc, fc, prog) = (
+                    Passes.grouped.contains(key) ? Self.flat(r.groups) : r.photos, r.groups, r.scores, r.faces,
+                    r.progress
                 )
             } else {
                 let all = await cleanup.photos
@@ -356,6 +360,7 @@ public final class ReviewModel {
             photos = items
             groups = gs
             scores = sc
+            faces = fc
             progress = prog
             decisions = [:]
             touched = []
@@ -373,6 +378,7 @@ public final class ReviewModel {
     public func refresh() async {
         guard let key = view.passKey, let r = try? await cleanup.pass(key), view.passKey == key else { return }
         scores = r.scores
+        faces = r.faces
         if Passes.grouped.contains(key) {  // groups change as more photos are analysed: take them wholesale
             groups = r.groups
             photos = Self.flat(r.groups)
@@ -601,8 +607,8 @@ public final class ReviewModel {
         ].compactMap { $0 }.joined(separator: ", ")
     }
 
-    /// "Score -0.82 · Low Quality at -0.75 or below", "Score 0.41 · ★ of 6", "Score 0.12 · ★ scored 0.41".
-    /// Nil outside Low Quality and the grouped passes.
+    /// "Score -0.82 · Low Quality at -0.75 or below", "Score 0.41 · ★ of 6", "Score 0.12 · ★ scored 0.41";
+    /// where faces helped pick, "Score 0.12 · face 0.3 · ★ face 0.8". Nil outside Low Quality and the grouped passes.
     public func scoreLine(_ id: String) -> String? {
         guard let key = view.passKey, let s = scores[id] else { return nil }
         let fmt = { (x: Double) in x.formatted(.number.precision(.fractionLength(2))) }
@@ -610,9 +616,11 @@ public final class ReviewModel {
         guard Passes.grouped.contains(key), let g = groups.first(where: { $0.photos.contains { $0.id == id } }),
             let best = g.photos.first(where: { $0.id == g.best })
         else { return nil }
-        if id == g.best { return "Score \(fmt(s)) · ★ of \(g.photos.count)\(best.edited ? ", edited" : "")" }
-        if best.edited { return "Score \(fmt(s)) · ★ is edited" }
-        return "Score \(fmt(s)) · ★ scored \(scores[g.best].map(fmt) ?? "?")"
+        let line = "Score \(fmt(s))" + (faces[id].map { " · face \(fmt($0))" } ?? "")
+        if id == g.best { return "\(line) · ★ of \(g.photos.count)\(best.edited ? ", edited" : "")" }
+        if best.edited { return "\(line) · ★ is edited" }
+        if let f = faces[g.best] { return "\(line) · ★ face \(fmt(f))" }
+        return "\(line) · ★ scored \(scores[g.best].map(fmt) ?? "?")"
     }
 
     /// The Info panel's text when it has no single photo.

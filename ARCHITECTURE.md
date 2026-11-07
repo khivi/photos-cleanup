@@ -36,7 +36,7 @@ The Swift package has no dependencies.
 
 | File | Role |
 | --- | --- |
-| `Library.swift` | The `PhotoLibrary` protocol and `PhotoKitLibrary`. It authorizes, lists photos, looks up assets, runs Vision (feature print, `isUtility`, aesthetics score) and adds photos to albums. |
+| `Library.swift` | The `PhotoLibrary` protocol and `PhotoKitLibrary`. It authorizes, lists photos, looks up assets, runs Vision (feature print, `isUtility`, aesthetics score, face capture quality) and adds photos to albums. |
 | `Verdicts.swift` | The `Judge` protocol and `FoundationModelsJudge`. It returns kind, keep/delete and a short summary for one photo. It needs macOS 27 and Apple Intelligence. |
 | `Passes.swift` | `Passes.all` (one key and title per pass), the tooltips, the thresholds, the candidate filter, time grouping and the similarity split. |
 | `Cleanup.swift` | The `Cleanup` actor. It holds the photo list, the Vision job, the verdict queue, commits and the caches. |
@@ -67,7 +67,7 @@ Albums are always `<Title> - Delete Me` and `<Title> - Keep`.
 | --- | --- | --- | --- |
 | Screenshots | Screenshots | Foundation Models verdict | The verdict |
 | Paperwork | Non-screenshot photos that Vision marks `isUtility` | Foundation Models verdict | The verdict. A "screenshot" verdict is always keep. |
-| Bursts | Photos taken within 60 s of each other | Vision feature-print distance below 0.45. `isUtility` images never group. | Best aesthetics score: keep. Others: delete. An edited shot is the best, and every edited shot is keep. |
+| Bursts | Photos taken within 60 s of each other | Vision feature-print distance below 0.45. `isUtility` images never group. | Best shot: keep. Others: delete. An edited shot is the best, and every edited shot is keep. Then, in a group with faces, the best worst face (`VNDetectFaceCaptureQualityRequest`, to 0.1). Then the highest aesthetics score. |
 | Similar | Photos of one calendar day, not in a Bursts group | Feature-print distance below 0.45 to the group's first photo. `isUtility` images never group. | As Bursts. |
 | Low Quality | All other candidates | Vision aesthetics score at or below −0.75 | Delete. Edited photos: keep. |
 | Videos | Videos | Duration, longest first. No Vision, no verdicts. | Under 2 s: delete. Others: keep. |
@@ -120,7 +120,7 @@ All caches are in `~/Library/Caches/photos-cleanup/`. Delete the folder to reset
 
 | File | Contents | Reset when |
 | --- | --- | --- |
-| `vision-38db2b8a.jsonl` | Feature print, `isUtility` and score per photo | You change `Cleanup.visionCache` |
+| `vision-38db2b8a.jsonl` | Feature print, `isUtility`, score and face quality per photo. A row without a face quality is analysed again when its photo is in a Bursts or Similar group | You change `Cleanup.visionCache` |
 | `verdicts-66bf2472.jsonl` | Foundation Models verdict per photo | You change `Cleanup.verdictCache` |
 | `decisions.jsonl` | Your keep/delete against each verdict | Never |
 

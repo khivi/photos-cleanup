@@ -126,8 +126,8 @@ final class Gate: Sendable {
     func wait() { while closed.withLock({ $0 }) { usleep(2000) } }
 }
 
-func vr(_ score: Double = 0.5, utility: Bool = false, _ vec: [Float] = [0]) -> VisionResult {
-    VisionResult(print: vec, utility: utility, score: score)
+func vr(_ score: Double = 0.5, utility: Bool = false, _ vec: [Float] = [0], face: Double = 0) -> VisionResult {
+    VisionResult(print: vec, utility: utility, score: score, face: face)
 }
 
 let t0 = Date(timeIntervalSince1970: 1_704_067_200)  // 2024-01-01

@@ -24,7 +24,6 @@ Not pursuing:
 - **Dry run** (the old tool's `--dry-run`). Nothing moves until Move to Albums is confirmed.
 - **Date range** (the old tool's `--since`, `--last`, `--until`). Each pass's Keep album hides reviewed photos, so a rerun shows only new ones; All by month covers browsing by date.
 - **Album name override** (the old tool's `--album-name`). A pass's albums are always derived from its title (`everyPassHasOneName`).
-- **Face-based best pick** (decided 2026-10-30). `VNDetectFaceCaptureQualityRequest` would rank people shots by their worst face; the aesthetics ★ is rarely wrong in practice.
 - **Side-by-side compare in a group** (decided 2026-10-30), as in PhotoSweeper's Face-to-Face. The ★ is rarely wrong, and ←/→ in the preview already flips between frames.
 - **Screen Recordings pass** (decided 2026-10-30). The library has 4; they show in Videos.
 - **Streaks, widgets, reminders, video compression, Live Photo → still** (swipe apps, CleanMy Phone). Phone retention features; compression and conversion re-import through PhotoKit and lose metadata.
@@ -152,6 +151,18 @@ Shredly: Photo Cleaner 1.0.1, iPhone/iPad, free with 30 deletions a day. Decisio
 - **Taken and done (2026-11-07, `afcf2ae`): screen recordings singled out in Videos.** `PHAssetMediaSubtype.videoScreenRecording` (macOS 10.15+) gives `Photo.screenRecording`; the tile and Inspector say "Screen recording". Marks unchanged (clips under 2 s still start as Delete).
 - **Taken and done (2026-11-07, `afcf2ae`): a Live Photo is marked "Live"** on its tile and in the Inspector (from `Photo.live`, the Live Photos pass's flag). Its motion doesn't play: the still is enough to decide.
 - **Open, not decided:** space freed by To be deleted (needs file sizes, so likely out with the size decision).
+
+### PicSift review (2026-11-07)
+
+PicSift: Find Your Best Photos 1.0.1, iPad and Mac, free with a one-time unlock. Decisions:
+
+- **Taken and done (2026-11-07): face-aware best shot in Bursts and Similar.** Reverses the 2026-10-30 decline ("the aesthetics ★ is rarely wrong"), which was a judgment, not a measurement: the aesthetics score doesn't look at faces, so a blink can take the ★ and the good frame starts as Delete.
+  - `analyse()` adds `VNDetectFaceCaptureQualityRequest`; `VisionResult.face` is the worst face at least 5% of the frame high, 0 with none. About +4 ms on 6 ms of Vision per photo, warmed up; image loading dominates, so analysis is ~20% slower.
+  - Rows cached before faces have none; a grouped pass analyses its members again, once, on the Vision ring. Nothing outside a group is redone.
+  - Pick: edited, then the face rounded to 0.1 (closer faces tie), then the aesthetics score. Only when every shot in the pool is checked and one has a face. Info panel: "Score 0.12 · face 0.30 · ★ face 0.80".
+  - The log says how many groups faces changed ("bursts: faces changed the best shot in N of M groups"): the evidence for keeping it.
+- **Already here:** Delete Tray (Delete Me albums and Delete in Photos…, 30 days in Recently Deleted); duplicates keep the best (Bursts, Similar); keyboard marks and undo, bulk too; per-photo ratings (⌘I); background scoring with progress (sidebar rings).
+- **Not taking:** the six-quality Priorities chart, sliders and presets (ranking for posting, not clearing out); the swipe deck (the grid with K/⌫ to next covers it); Visual Search, People, Places, Smart Albums (Photos has them); Straighten (editing); a reset key.
 
 ### Future (not next up)
 

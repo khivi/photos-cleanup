@@ -291,12 +291,19 @@ extension PhotoKitLibrary {
 func analyse(_ img: CGImage) -> VisionResult? {
     let printReq = VNGenerateImageFeaturePrintRequest()
     let aesthetics = VNCalculateImageAestheticsScoresRequest()
-    guard (try? VNImageRequestHandler(cgImage: img).perform([printReq, aesthetics])) != nil,
+    let faces = VNDetectFaceCaptureQualityRequest()
+    guard (try? VNImageRequestHandler(cgImage: img).perform([printReq, aesthetics, faces])) != nil,
         let fp = printReq.results?.first, let ae = aesthetics.results?.first
     else { return nil }
     return VisionResult(
         print: floats(fp.data, elementType: fp.elementType), utility: ae.isUtility,
-        score: Double(ae.overallScore))
+        score: Double(ae.overallScore), face: worstFace(faces.results ?? []))
+}
+
+/// The lowest capture quality among faces at least 5% of the frame high, 0 with none: a group
+/// shot is as good as its worst face. Smaller faces are strangers in the background.
+func worstFace(_ faces: [VNFaceObservation]) -> Double {
+    faces.filter { $0.boundingBox.height >= 0.05 }.compactMap(\.faceCaptureQuality).min().map(Double.init) ?? 0
 }
 
 func floats(_ data: Data, elementType: VNElementType) -> [Float] {

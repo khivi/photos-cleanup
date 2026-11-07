@@ -37,6 +37,8 @@ public struct VisionResult: Sendable, Equatable {
     public var print: [Float]
     public var utility: Bool
     public var score: Double
+    /// Capture quality of the photo's worst face, 0 with none; nil: not checked (cached before faces were).
+    public var face: Double? = nil
 }
 
 /// A Foundation Models keep/delete call. kind "picture": Vision says it isn't a utility image.

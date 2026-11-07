@@ -6,6 +6,8 @@ public struct PassResult: Sendable {
     public var groups: [BurstGroup] = []
     /// Vision aesthetics score of each analysed photo in the pass.
     public var scores: [String: Double] = [:]
+    /// Worst-face capture quality, in groups whose best shot faces took part in picking.
+    public var faces: [String: Double] = [:]
     public var progress = JobProgress()
 }
 
@@ -77,6 +79,8 @@ public actor Cleanup {
     /// Bursts and Similar regroup only then: Similar takes ~0.5 s at 200k photos.
     var generation = 0
     var groupCache: [String: (generation: Int, groups: [[Photo]])] = [:]
+    /// The generation each grouped pass last logged how often faces changed its picks.
+    var facePicksLogged: [String: Int] = [:]
     var visionQueue: [String] = []
     var visionProgress = JobProgress()
     var visionRunning = false
@@ -182,6 +186,17 @@ public actor Cleanup {
     }
 
     func score(_ p: Photo) -> Double { (vision[p.uuid] ?? nil)?.score ?? -2 }  // unanalysed sort last
+    func face(_ p: Photo) -> Double? { (vision[p.uuid] ?? nil)?.face }
+
+    /// An edited shot wins; then, where the group has faces, the best worst face; then the highest
+    /// score. First max wins ties: the earliest shot. `faced`: faces took part.
+    func bestShot(_ g: [Photo], faces: Bool = true) -> (best: String, faced: Bool) {
+        let pool = g.contains(where: \.edited) ? g.filter(\.edited) : g
+        let faced = faces && pool.allSatisfy { face($0) != nil } && pool.contains { face($0)! > 0 }
+        // ponytail: faces within 0.1 tie, so the score decides; tune by eye if picks look wrong.
+        func rank(_ p: Photo) -> (Double, Double) { (faced ? (face(p)! * 10).rounded() : 0, score(p)) }
+        return (pool.reduce(pool[0]) { rank($1) > rank($0) ? $1 : $0 }.uuid, faced)
+    }
 
     public func pass(_ kind: String, threshold: Double = Passes.lowQualityMax) throws -> PassResult {
         var photos = try candidates(kind)
@@ -195,10 +210,25 @@ public actor Cleanup {
         for p in photos { if let s = (vision[p.uuid] ?? nil)?.score { result.scores[p.uuid] = s } }
         if kind == "low-quality" { photos.sort { score($0) < score($1) } }  // surest deletes first
         if Passes.grouped.contains(kind) {
-            result.groups = groups(kind, photos).reversed().map { g in  // newest group first
-                // An edited shot wins, then the highest score; first max wins ties: the earliest shot.
-                let pool = g.contains(where: \.edited) ? g.filter(\.edited) : g
-                return BurstGroup(photos: g, best: pool.reduce(pool[0]) { score($1) > score($0) ? $1 : $0 }.uuid)
+            let found = groups(kind, photos)
+            // Photos analysed before faces were: analysed again, once, to pick by face.
+            let unchecked = found.joined().filter { (vision[$0.uuid] ?? nil).map { $0.face == nil } ?? false }
+            if !unchecked.isEmpty, result.progress.pending == 0 {
+                result.progress = startVision(unchecked, again: true)
+            }
+            var byFace = 0
+            result.groups = found.reversed().map { g in  // newest group first
+                let (best, faced) = bestShot(g)
+                if faced {
+                    byFace += best == bestShot(g, faces: false).best ? 0 : 1
+                    for p in g { if let f = face(p) { result.faces[p.uuid] = f } }
+                }
+                return BurstGroup(photos: g, best: best)
+            }
+            if result.progress.pending == 0, facePicksLogged[kind] != generation {
+                facePicksLogged[kind] = generation
+                print("\(kind): faces changed the best shot in \(byFace) of \(found.count) groups")
+                fflush(stdout)
             }
             return result
         }
@@ -256,9 +286,9 @@ public actor Cleanup {
 
     /// Queue photos not yet analysed; returns the analysis progress.
     @discardableResult
-    public func startVision(_ photos: [Photo]) -> JobProgress {
+    public func startVision(_ photos: [Photo], again: Bool = false) -> JobProgress {
         let queued = Set(visionQueue)
-        let todo = photos.map(\.uuid).filter { !vision.keys.contains($0) && !queued.contains($0) }
+        let todo = photos.map(\.uuid).filter { (again || !vision.keys.contains($0)) && !queued.contains($0) }
         if !todo.isEmpty {
             let total = todo.count + (visionQueue.isEmpty ? 0 : visionProgress.total)
             visionQueue += todo
@@ -302,6 +332,11 @@ public actor Cleanup {
     }
 
     func record(_ results: [String: VisionResult?], count: Int) {
+        // A photo analysed again for faces whose image has since left this Mac keeps its old
+        // analysis, checked for faces this run only: it is retried next launch.
+        let lost = results.filter { $0.value == nil && (vision[$0.key] ?? nil) != nil }.keys
+        for uuid in lost { vision[uuid]??.face = 0 }
+        let results = results.filter { !lost.contains($0.key) }
         let lines = results.map { ($0.key, Self.visionLine($0.key, $0.value)) }
         if var at = appendLines(Self.visionCache, lines.map(\.1)) {
             for (uuid, line) in lines {
@@ -483,10 +518,11 @@ public actor Cleanup {
     static func visionLine(_ uuid: String, _ v: VisionResult?) -> String {
         guard let v else { return jsonLine(["uuid": uuid, "error": "no local image"]) }
         let data = v.print.withUnsafeBufferPointer { Data(buffer: $0) }
-        return jsonLine([
-            "uuid": uuid, "print": data.base64EncodedString(), "ptype": 1,
-            "utility": v.utility, "score": v.score,
-        ])
+        var row: [String: Any] = [
+            "uuid": uuid, "print": data.base64EncodedString(), "ptype": 1, "utility": v.utility, "score": v.score,
+        ]
+        row["face"] = v.face
+        return jsonLine(row)
     }
 
     /// Each photo's analysis without its print (nil: none possible) and the byte range of its line;
@@ -562,10 +598,11 @@ public actor Cleanup {
         guard row["error"] == nil, let b64 = row["print"] as? String,
             let utility = row["utility"] as? Bool, let score = row["score"] as? Double
         else { return nil }
-        guard print else { return VisionResult(print: [], utility: utility, score: score) }
+        let face = row["face"] as? Double
+        guard print else { return VisionResult(print: [], utility: utility, score: score, face: face) }
         guard let data = Data(base64Encoded: b64) else { return nil }
         let floats = floats(data, elementType: (row["ptype"] as? Int) == 2 ? .double : .float)
-        return VisionResult(print: floats, utility: utility, score: score)
+        return VisionResult(print: floats, utility: utility, score: score, face: face)
     }
 
     static func verdictLine(_ uuid: String, _ v: Verdict) -> String {
@@ -584,7 +621,7 @@ public actor Cleanup {
 }
 
 extension VisionResult {
-    var withoutPrint: VisionResult { VisionResult(print: [], utility: utility, score: score) }
+    var withoutPrint: VisionResult { VisionResult(print: [], utility: utility, score: score, face: face) }
 }
 
 func jsonLine(_ obj: [String: Any]) -> String {

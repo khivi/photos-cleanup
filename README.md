@@ -112,6 +112,8 @@ To change this later, open System Settings > Privacy & Security > Automation.
 | Live Photos | Live Photos, newest first | None. Deleting one deletes its photo and its video |
 | Selfies | Photos from the front camera, newest first | None |
 
+In Bursts and Similar, the best shot is the one whose worst face Vision rates best: sharp, well lit, facing the camera. Without faces, it's the one Vision scores highest.
+
 A tile marks a Live Photo "Live" and a screen recording "Screen recording".
 
 All shows every photo by month. Mark any photo delete there; it goes to "All - Delete Me".
