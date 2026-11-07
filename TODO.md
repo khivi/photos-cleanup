@@ -97,12 +97,10 @@ Homebrew is the only install path: the cask in `khivi/homebrew-photos-cleanup` i
 
 ## App
 
-- [ ] **Live Photos and Selfies passes, largest first** (planned 2026-11-07, from the Shredly review; a size sort elsewhere was declined). This library: 1,501 Live Photos, 1,137 selfies.
-  - Two passes in `Passes.all`: `live-photos` / "Live Photos" and `selfies` / "Selfies"; albums derived as usual. Nothing starts as Delete: neither kind is junk by itself. Deleting a Live Photo deletes the photo and its video; PhotoKit can't strip the video alone.
-  - `Photo` gains `live` (`mediaSubtypes.photoLive`) and `selfie` (in the Selfies smart album, `smartAlbumSelfPortraits`, read in `photos()`).
-  - A size job beside Vision: `PHAssetResource` `fileSize` (KVC; ~460 photos/s measured) for the two passes' candidates only, cached in `sizes-<hash>.jsonl`, with the sidebar ring and tooltip ("Reading file sizes: N of M"). Until a photo's size is known it sorts last.
-  - The pass header adds the total ("1,501 candidates · 9.8 GB"); the Inspector shows a photo's size.
-  - Tests: candidates per pass, largest first, no Delete marks, the size cache across a restart, the ring; `everyPassHasOneName` covers the names. Docs: README pass table, ARCHITECTURE caches.
+- [ ] **Live Photos and Selfies passes** (planned 2026-11-07, from the Shredly review below). This library: 1,501 Live Photos, 1,137 selfies.
+  - Two passes in `Passes.all`: `live-photos` / "Live Photos" and `selfies` / "Selfies"; albums derived as usual. Newest first, like the other passes; no size sort. Nothing starts as Delete: neither kind is junk by itself. Deleting a Live Photo deletes the photo and its video; PhotoKit can't strip the video alone.
+  - `Photo` gains `live` (`mediaSubtypes.photoLive`) and `selfie` (in the Selfies smart album, `smartAlbumSelfPortraits`, read in `photos()`). No Vision, no verdicts: counts are known at load.
+  - Tests: candidates per pass, no Delete marks; `everyPassHasOneName` covers the names. Docs: README pass table.
 - [x] **Job progress in the sidebar, not the toolbar** (done 2026-11-07). Every pass row shows a filling ring while its count is unknown, then its count, 0 included: a ring or a number. Exception: Paperwork before it is opened, whose count waits on verdicts that only start in the pass, stays blank.
   - Paperwork, Bursts, Similar, Low Quality: the Vision ring (already in `1dd75da`), tooltip "Analysing photos on this Mac: N of M".
   - Screenshots, Paperwork: the verdict ring once Vision is done for the pass, tooltip "Checking photos with Apple Intelligence: N of M"; only on a pass with photos in the queue (screenshots → Screenshots, the rest → Paperwork). One ring per row.
@@ -136,6 +134,16 @@ Compared against CleanMy Phone, Gemini 2, PhotoSweeper, PowerPhotos, Slidebox/Sw
 - [x] **Videos pass** — every video (not favorites, not in the user's albums), longest first by `PHAsset.duration`, the duration on each cell. Videos under ~2 s (accidental record taps; a `Passes` constant set by eye) start Delete, the rest Keep. Albums "Videos - Delete Me" / "Videos - Keep". Sort by size instead if Space freed lands.
 - [x] **By-hand check of the merge (2026-10-30)** — Delete in Photos… and Cancel (deletes nothing) on a throwaway photo; All's month headers and Done; video playback with the app's keys.
 - ~~**Saved Images: measure first**~~: dropped 2026-11-02, measured: 0 of 29,413 photos named like WhatsApp (`-WA#`) or Telegram saves; the 16,091 without location are old camera files and scans. Was: Photos (macOS 27) has its own Recently Saved and Captured by Me albums, which PhotoKit doesn't expose; check Recently Saved's size in Photos first. WhatsApp/Telegram saves, memes, forwards. Count `PHAssetResource.originalFilename` matching `-WA\d+` and photos with no location. A few dozen: drop it. Thousands: design a pass that starts Keep and preselects Delete only where Vision finds no people (photos family send look the same by filename).
+
+### Shredly review (2026-11-07)
+
+Shredly: Photo Cleaner 1.0.1, iPhone/iPad, free with 30 deletions a day. Decisions:
+
+- **Taken:** Live Photos and Selfies categories (the item above).
+- **Declined: anything sorted by size** (large videos, smart categories by size, a size sort option). No file sizes are read.
+- **Already here:** undo; nothing deleted until confirmed, then 30 days in Recently Deleted; bursts and screenshots (with on-device verdicts); month by month (All, month Done); video playback in the preview.
+- **Not taking:** the shredder, paper-ball mode, themes, haptics, the month celebration, one-photo-at-a-time swiping (a grid is faster for thousands).
+- **Open, not decided:** space freed by To be deleted (needs file sizes, so likely out with the size decision); a "% reviewed" line in All; screen recordings singled out in Videos (`mediaSubtypes` has no screen-recording flag on macOS: needs checking); a Live Photo's motion in the preview (only the still shows today).
 
 ### Future (not next up)
 
