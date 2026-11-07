@@ -4,6 +4,11 @@ import SwiftUI
 
 @main
 struct PhotosCleanupApp: App {
+    init() {
+        // AppKit's tooltip delay, in ms (macOS waits ~1.5 s by default): the pass explanations are worth showing sooner.
+        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 400])
+    }
+
     var body: some Scene {
         WindowGroup { ContentView() }
             .commands { ReviewCommands() }
