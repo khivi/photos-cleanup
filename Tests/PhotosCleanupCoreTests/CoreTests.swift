@@ -334,6 +334,13 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
             == ["screenshots a false delete", "screenshots b false keep"])
 }
 
+@Test func footprintCountsMemoryInUse() throws {
+    let before = try #require(footprintMB())
+    let block = [UInt8](repeating: 1, count: 64 << 20)  // written, so resident
+    let after = try #require(footprintMB())
+    withExtendedLifetime(block) { #expect(after - before >= 48) }
+}
+
 @Test func visionCacheRoundTrips() {
     let line = Cleanup.visionLine("u", vr(-0.25, utility: true, [0.5, -1]))
     let url = tempDir().appendingPathComponent("v.jsonl")

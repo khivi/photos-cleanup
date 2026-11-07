@@ -306,6 +306,18 @@ public func offload<T: Sendable>(_ work: @escaping @Sendable () throws -> T) asy
     }
 }
 
+/// This process's memory in MB, the figure Activity Monitor's Memory column shows; nil if unreadable.
+public func footprintMB() -> Int? {
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+    let kr = withUnsafeMutablePointer(to: &info) {
+        $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+            task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+        }
+    }
+    return kr == KERN_SUCCESS ? Int(info.phys_footprint / 1_048_576) : nil
+}
+
 extension PHAssetResource {
     /// originalFilename is declared non-optional but is nil for some resources (type 17 on 315 photos
     /// here): bridged to NSString it traps, and as String? the optimizer drops the nil check. KVC sees it.

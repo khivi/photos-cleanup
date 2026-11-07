@@ -67,6 +67,8 @@ struct ContentView: View {
             verdictsOff: verdictsOff)
         do { try await cleanup.load() } catch { return .failed("\(error)") }
         let photos = await cleanup.photos
+        print("Loaded: \(photos.count) photos, memory \(footprintMB().map { "\($0) MB" } ?? "unknown")")
+        fflush(stdout)
         await cleanup.startVision(photos.filter { !$0.isMovie && !$0.screenshot })
         let exporter = Exporter(
             library: library,

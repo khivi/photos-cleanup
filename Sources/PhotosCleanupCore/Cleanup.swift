@@ -278,7 +278,7 @@ public actor Cleanup {
             done += batch.count
         }
         print(
-            "Vision: \(done) photos in \((ContinuousClock.now - start).formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 1))))"
+            "Vision: \(done) photos in \((ContinuousClock.now - start).formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 1)))), memory \(footprintMB().map { "\($0) MB" } ?? "unknown")"
         )
         fflush(stdout)
     }
