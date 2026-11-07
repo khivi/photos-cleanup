@@ -789,9 +789,9 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
     await m.select(.pass("screenshots"))  // queues s for a verdict
     await m.refreshPassCounts()
     #expect(m.jobsRunning)
-    #expect(row("Paperwork")?.help == "Analysing photos on this Mac: 0 of 1")
+    #expect(row("Paperwork")?.help == m.passNote("paperwork") + "\nAnalysing photos on this Mac: 0 of 1")
     #expect(row("Screenshots")?.progress == 0)
-    #expect(row("Screenshots")?.help == "Checking photos with Apple Intelligence: 0 of 1")
+    #expect(row("Screenshots")?.help == m.passNote("screenshots") + "\nChecking photos with Apple Intelligence: 0 of 1")
 
     lib.gate.open()  // Vision done; only Screenshots has photos in the verdict queue
     for _ in 0..<500 where await c.visionRunning { try? await Task.sleep(for: .milliseconds(10)) }
@@ -805,7 +805,7 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
     #expect(!m.jobsRunning)
     #expect(
         row("Screenshots")?.progress == nil
-            && row("Screenshots")?.help == ReviewModel.tabs.first { $0.title == "Screenshots" }?.help)
+            && row("Screenshots")?.help == m.passNote("screenshots"))
 }
 
 @Test func tilesSayLivePhotoAndScreenRecording() {
@@ -815,4 +815,19 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
     ]
     #expect(photos.map(\.kindTag) == ["Live", nil, "Screen recording"])
     #expect(photos.map(\.kindLabel) == ["Live Photo", "Photo", "Screen recording"])
+}
+
+@MainActor @Test func passesExplainTheirMarksInPlainWords() async throws {
+    let (c, _) = try await makeCleanup([], keepAlbumPhotos: false)
+    let m = ReviewModel(cleanup: c, dir: tempDir())
+    #expect(m.passCaption == nil)  // All has no caption
+    await m.select(.pass("videos"))
+    #expect(
+        m.passCaption
+            == "Your videos, longest first. Clips under 2 seconds are marked to delete: they are usually accidental. Favorites are never suggested."
+    )
+    let (c2, _) = try await makeCleanup([])
+    let m2 = ReviewModel(cleanup: c2, dir: tempDir())
+    #expect(m2.passNote("bursts").hasSuffix("Favorites and photos in your albums are never suggested."))
+    #expect(m2.sidebar.flatMap(\.items).first { $0.title == "Bursts" }?.help == m2.passNote("bursts"))
 }

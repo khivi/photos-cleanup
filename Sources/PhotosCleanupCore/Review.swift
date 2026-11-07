@@ -188,7 +188,7 @@ public final class ReviewModel {
         public let help: String
         /// The photo count: nil while unknown. A pass or All shows 0; the other rows show no badge at 0.
         public let badge: Int?
-        /// A running job's fraction done, shown instead of the badge; `help` then says which job.
+        /// A running job's fraction done, shown instead of the badge; `help` then also says which job.
         public var progress: Double?
         public var id: ReviewView { view }
     }
@@ -217,7 +217,9 @@ public final class ReviewModel {
             }
             let showsZero = t.view == .all || t.view.passKey != nil
             return SidebarItem(
-                view: t.view, title: t.title, help: job.map(Self.jobLabel) ?? t.help,
+                view: t.view, title: t.title,
+                help: [t.view.passKey.map(passNote) ?? t.help, job.map(Self.jobLabel)].compactMap { $0 }.joined(
+                    separator: "\n"),
                 badge: n.flatMap { $0 > 0 || showsZero ? $0 : nil },
                 progress: t.view == .export && export.running ? exportFraction : job?.fraction)
         }
@@ -246,6 +248,15 @@ public final class ReviewModel {
 
     /// Passes whose photos depend on the Vision analysis.
     static let visionPasses: Set<String> = ["paperwork", "bursts", "similar", "low-quality"]
+
+    /// A pass's explanation, then which photos it never suggests.
+    public func passNote(_ key: String) -> String {
+        let spared = cleanup.keepAlbumPhotos ? "Favorites and photos in your albums are" : "Favorites are"
+        return "\(Passes.about[key] ?? "") \(spared) never suggested."
+    }
+
+    /// The line above a pass's grid.
+    public var passCaption: String? { view.passKey.map(passNote) }
 
     /// A sidebar ring's tooltip: which job, and how far.
     static func jobLabel(_ j: JobProgress) -> String {

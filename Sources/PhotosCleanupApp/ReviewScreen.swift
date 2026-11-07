@@ -41,9 +41,12 @@ struct ReviewScreen: View {
                                         .tint(.accentColor)  // a selected row draws it grey, near-invisible early on
                                 }
                             }
+                            // The tooltip goes on the row's own content, full width: after .badge it never showed.
+                            .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                            .help(item.help)
                             // A Text badge: .badge(Int) hides 0, and a pass's 0 says it found nothing.
                             .badge(item.progress == nil ? item.badge.map { Text($0.formatted()) } : nil)
-                            .help(item.help).tag(item.view)
+                            .tag(item.view)
                         }
                     }
                 }
@@ -173,6 +176,11 @@ struct ReviewScreen: View {
         } else {
             // One ScrollView for every list: a second one would leave keyboard focus on the old one.
             ScrollView {
+                if let caption = model.passCaption {
+                    Text(caption).font(.callout).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, gridPadding).padding(.top, 8)
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize, maximum: cellMax), spacing: 4)], spacing: 4) {
                     if model.view == .all || model.view.passKey.map(Passes.grouped.contains) == true {
                         ForEach(model.shownGroups, id: \.best) { group in

@@ -95,17 +95,21 @@ public enum Passes {
     }
 
     /// What each pass finds and how its photos start; the tab's tooltip.
+    /// What each pass finds and which photos start marked Delete, in plain words: the sidebar
+    /// tooltip and the line above the grid.
     public static let about: [String: String] = [
-        "screenshots": "Screenshots. The on-device model preselects the ones not worth keeping.",
+        "screenshots":
+            "Your screenshots. Apple Intelligence marks the ones that look no longer needed, like old codes, maps and confirmations.",
         "paperwork":
-            "Receipts, tickets, tracking, promos, documents, notes and labels. The on-device model preselects the ones not worth keeping.",
+            "Photos of receipts, tickets, labels and documents. Apple Intelligence marks the ones that look no longer needed.",
         "bursts":
-            "Near-identical shots taken within a minute. The best of each group starts as Keep, the rest as Delete.",
+            "Several shots taken within a minute. The best one is kept: the sharpest, with the best faces. The rest are marked to delete. Photos you edited are kept.",
         "similar":
-            "The same scene shot minutes or days apart, grouped by day. The best of each group starts as Keep, the rest as Delete.",
-        "low-quality": "Blurry, dark or accidental shots, by Vision's aesthetics score. All start as Delete.",
+            "Shots of the same scene on the same day. The best one is kept: the sharpest, with the best faces. The rest are marked to delete. Photos you edited are kept.",
+        "low-quality":
+            "Shots that look blurry, dark or taken by accident. All are marked to delete, except photos you edited.",
         "videos":
-            "Videos, longest first. Those under \(Int(accidentalVideoMax)) seconds start as Delete, the rest as Keep.",
+            "Your videos, longest first. Clips under \(Int(accidentalVideoMax)) seconds are marked to delete: they are usually accidental.",
     ]
 
     /// Earlier names of a pass's album: photos in them still count as filed.
