@@ -34,7 +34,7 @@ struct ReviewScreen: View {
                     Section(section.title) {
                         ForEach(section.items) { item in
                             HStack {
-                                Text(item.title)
+                                Label(item.title, systemImage: item.icon)
                                 if let p = item.progress {
                                     Spacer()
                                     ProgressView(value: p).progressViewStyle(.circular).controlSize(.mini)

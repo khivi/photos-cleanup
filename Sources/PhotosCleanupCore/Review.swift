@@ -182,10 +182,21 @@ public final class ReviewModel {
 
     // MARK: Sidebar
 
+    /// Each sidebar row's SF Symbol; Photos' own where it has the same row.
+    static let icons: [ReviewView: String] = [
+        .all: "photo.on.rectangle.angled", .pass("screenshots"): "camera.viewfinder",
+        .pass("paperwork"): "doc.text", .pass("bursts"): "square.stack.3d.down.right",
+        .pass("similar"): "square.on.square", .pass("low-quality"): "camera.metering.unknown",
+        .pass("videos"): "video", .deleted: "trash", .export: "square.and.arrow.up",
+        .importFolders: "square.and.arrow.down",
+    ]
+
     public struct SidebarItem: Identifiable, Sendable {
         public let view: ReviewView
         public let title: String
         public let help: String
+        /// The SF Symbol before the title, as Photos' own sidebar has.
+        public let icon: String
         /// The photo count: nil while unknown. A pass or All shows 0; the other rows show no badge at 0.
         public let badge: Int?
         /// A running job's fraction done, shown instead of the badge; `help` then also says which job.
@@ -220,6 +231,7 @@ public final class ReviewModel {
                 view: t.view, title: t.title,
                 help: [t.view.passKey.map(passNote) ?? t.help, job.map(Self.jobLabel)].compactMap { $0 }.joined(
                     separator: "\n"),
+                icon: Self.icons[t.view] ?? "photo",
                 badge: n.flatMap { $0 > 0 || showsZero ? $0 : nil },
                 progress: t.view == .export && export.running ? exportFraction : job?.fraction)
         }
