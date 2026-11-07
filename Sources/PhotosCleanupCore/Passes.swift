@@ -1,3 +1,4 @@
+import Accelerate
 import Foundation
 
 /// One photo or video in the user's own library (iCloud Shared Album photos are left out).
@@ -45,6 +46,11 @@ public struct JobProgress: Sendable, Equatable {
     public var pending = 0
     public var total = 0
     public var error: String? = nil
+    /// The model judging photos, not the Vision analysis.
+    public var verdicts = false
+
+    /// Done so far, from 0 to 1.
+    public var fraction: Double { total == 0 ? 0 : Double(total - pending) / Double(total) }
 }
 
 /// One name per pass: the key is the UI view and the decisions.jsonl kind; the title is the
@@ -266,10 +272,12 @@ public func groupSimilar(_ photos: [Photo], vision: [String: VisionResult?], cal
     return groups.sorted { $0[0].date! < $1[0].date! }
 }
 
+/// Similar's hot path: a day's photos each against every group so far (vDSP: ~10x the loop).
 func distance(_ a: [Float], _ b: [Float]) -> Float {
-    var sum: Float = 0
-    for (x, y) in zip(a, b) { sum += (x - y) * (x - y) }
-    return sum.squareRoot()
+    guard a.count == b.count else {
+        return zip(a, b).reduce(Float(0)) { $0 + ($1.0 - $1.1) * ($1.0 - $1.1) }.squareRoot()
+    }
+    return vDSP.distanceSquared(a, b).squareRoot()
 }
 
 /// The verdict as a pass should use it. Real screenshots have their own pass, so in Paperwork

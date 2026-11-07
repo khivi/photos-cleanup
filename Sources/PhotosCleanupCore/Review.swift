@@ -56,6 +56,8 @@ public final class ReviewModel {
     /// The last sort's moves that failed, "from: why".
     public private(set) var importFailures: [String] = []
     public private(set) var counts: [String: Int?] = [:]
+    /// The background Vision analysis, refreshed with `counts`.
+    public private(set) var vision = JobProgress()
     public private(set) var loading = false
     public private(set) var committing = false
     public private(set) var deleting = false
@@ -204,9 +206,12 @@ public final class ReviewModel {
                 case .export: export.destination == nil ? nil : export.pending
                 case .importFolders: importScans.values.map(\.newCount).reduce(0, +)
                 }
+            // A pass that needs the Vision analysis has no count until it finishes: show how far it is.
+            let analysing =
+                t.view.passKey.map { Self.visionPasses.contains($0) && n == nil && vision.pending > 0 } ?? false
             return SidebarItem(
                 view: t.view, title: t.title, help: t.help, badge: n.flatMap { $0 > 0 ? $0 : nil },
-                progress: t.view == .export && export.running ? exportFraction : nil)
+                progress: t.view == .export && export.running ? exportFraction : analysing ? vision.fraction : nil)
         }
         func items(_ keep: (ReviewView) -> Bool) -> [SidebarItem] { Self.tabs.filter { keep($0.view) }.map(item) }
         return [
@@ -229,6 +234,15 @@ public final class ReviewModel {
         }
         let n = "\(photos.count.formatted()) \(photos.count == 1 ? "photo" : "photos")"
         return doomed.isEmpty ? n : "\(n) · \(doomed.count) to delete"
+    }
+
+    /// Passes whose photos depend on the Vision analysis.
+    static let visionPasses: Set<String> = ["paperwork", "bursts", "similar", "low-quality"]
+
+    /// The toolbar bar's tooltip: which job, and how far.
+    public var progressLabel: String {
+        let what = progress.verdicts ? "Checking photos with Apple Intelligence" : "Analysing photos on this Mac"
+        return "\(what): \(progressDone.formatted()) of \(progressTotal.formatted())"
     }
 
     /// Progress text and fraction while Vision or verdicts run in a pass.
@@ -371,6 +385,7 @@ public final class ReviewModel {
 
     public func refreshCounts() async {
         counts = await cleanup.counts()
+        vision = await cleanup.visionStatus()
         await loadWaiting()
     }
 
@@ -381,7 +396,10 @@ public final class ReviewModel {
     }
 
     /// The pass counts alone, cheap enough to poll while Vision runs.
-    public func refreshPassCounts() async { counts = await cleanup.counts() }
+    public func refreshPassCounts() async {
+        counts = await cleanup.counts()
+        vision = await cleanup.visionStatus()
+    }
 
     /// Read once per launch; photos deleted in Photos since then drop out on the next launch.
     private func loadWaiting() async {

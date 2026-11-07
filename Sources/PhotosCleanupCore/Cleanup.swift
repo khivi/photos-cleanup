@@ -68,6 +68,10 @@ public actor Cleanup {
     var filedDelete: Set<String> = []
 
     var vision: [String: VisionResult?] = [:]  // nil: no local image
+    /// Bumped whenever a grouped pass's inputs change (photo list, commits, Vision results), so
+    /// Bursts and Similar regroup only then: Similar takes ~0.5 s at 200k photos.
+    var generation = 0
+    var groupCache: [String: (generation: Int, groups: [[Photo]])] = [:]
     var visionQueue: [String] = []
     var visionProgress = JobProgress()
     var visionRunning = false
@@ -91,16 +95,21 @@ public actor Cleanup {
         self.ignoreAlbums = ignoreAlbums
         self.keepAlbumPhotos = keepAlbumPhotos
         self.verdictsOff = verdictsOff
-        vision = Self.readVision(cacheDir.appendingPathComponent(Self.visionCache))
-        verdicts = Self.readVerdicts(cacheDir.appendingPathComponent(Self.verdictCache))
     }
 
-    /// Reads the photo list. Call once at startup.
+    /// Reads the photo list and the disk caches. Call once at startup. Off the actor, side by side:
+    /// the Vision cache alone takes ~3.6 s for 38k photos, and in init it froze the window.
     public func load() async throws {
         let library = library
+        let (visionURL, verdictURL) = (
+            cacheDir.appendingPathComponent(Self.visionCache), cacheDir.appendingPathComponent(Self.verdictCache)
+        )
+        async let caches = offload { (Self.readVision(visionURL), Self.readVerdicts(verdictURL)) }
         let all = try await offload { try library.photos() }
+        (vision, verdicts) = try await caches
         photos = all.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
         byUUID = Dictionary(photos.map { ($0.uuid, $0) }, uniquingKeysWith: { a, _ in a })
+        generation += 1
     }
 
     // MARK: Passes
@@ -148,12 +157,17 @@ public actor Cleanup {
 
     /// Same-scene groups across a day, leaving out photos already in a Bursts group.
     func similar(_ photos: [Photo]) -> [[Photo]] {
-        let inBursts = Set(bursts((try? candidates("bursts")) ?? []).joined().map(\.uuid))
+        let inBursts = Set(groups("bursts", (try? candidates("bursts")) ?? []).joined().map(\.uuid))
         return groupSimilar(photos.filter { !inBursts.contains($0.uuid) }, vision: vision)
     }
 
-    /// The groups of a grouped pass, oldest first.
-    func groups(_ kind: String, _ photos: [Photo]) -> [[Photo]] { kind == "bursts" ? bursts(photos) : similar(photos) }
+    /// The groups of a grouped pass, oldest first. `photos` is always the pass's candidates.
+    func groups(_ kind: String, _ photos: [Photo]) -> [[Photo]] {
+        if let c = groupCache[kind], c.generation == generation { return c.groups }
+        let g = kind == "bursts" ? bursts(photos) : similar(photos)
+        groupCache[kind] = (generation, g)
+        return g
+    }
 
     func score(_ p: Photo) -> Double { (vision[p.uuid] ?? nil)?.score ?? -2 }  // unanalysed sort last
 
@@ -218,6 +232,9 @@ public actor Cleanup {
 
     // MARK: Vision analysis
 
+    /// The Vision analysis, whichever pass started it: the sidebar shows it until counts are known.
+    public func visionStatus() -> JobProgress { visionProgress }
+
     /// Queue photos not yet analysed; returns the analysis progress.
     @discardableResult
     public func startVision(_ photos: [Photo]) -> JobProgress {
@@ -268,6 +285,7 @@ public actor Cleanup {
     func record(_ results: [String: VisionResult?], count: Int) {
         appendLines(Self.visionCache, results.map { Self.visionLine($0.key, $0.value) })
         vision.merge(results) { $1 }
+        generation += 1
         visionQueue.removeFirst(min(count, visionQueue.count))
         visionProgress.pending = visionQueue.count
     }
@@ -287,7 +305,7 @@ public actor Cleanup {
         let total = todo.count + (inflight.isEmpty ? 0 : classify.total)
         verdictQueue += todo
         inflight.formUnion(todo.map(\.uuid))
-        classify = JobProgress(pending: inflight.count, total: total)
+        classify = JobProgress(pending: inflight.count, total: total, verdicts: true)
         if !classifierRunning {
             classifierRunning = true
             Task.detached { await self.drainClassifier() }
@@ -348,6 +366,7 @@ public actor Cleanup {
         }
         committed.formUnion(doomed + kept)
         filedDelete.formUnion(doomed)
+        generation += 1
         if Passes.verdictKinds.contains(kind) {
             logDecisions(kind, doomed.map { ($0, "delete") } + kept.map { ($0, "keep") })
         }
@@ -368,6 +387,7 @@ public actor Cleanup {
         for u in gone { byUUID[u] = nil }
         filedDelete.subtract(gone)
         committed.subtract(gone)
+        generation += 1
         return doomed
     }
 

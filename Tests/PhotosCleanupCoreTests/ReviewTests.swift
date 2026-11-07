@@ -751,3 +751,42 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
 private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
     m.sidebar.flatMap(\.items).first { $0.view == v }?.badge
 }
+
+@MainActor @Test func sidebarShowsTheVisionRunOnPassesWaitingForIt() async throws {
+    let photos = [Photo(uuid: "a", date: t0), Photo(uuid: "b", date: t0 + 5), Photo(uuid: "s", screenshot: true)]
+    let lib = FakeLibrary(photos, vision: ["a": vr(0.5, [0]), "b": vr(0.5, [0])])
+    lib.gate.close()
+    let (c, _) = try await makeCleanup(photos, library: lib)
+    await c.startVision(photos.filter { !$0.screenshot })
+    let m = ReviewModel(cleanup: c, dir: tempDir())
+    await m.refreshCounts()
+    func row(_ title: String) -> ReviewModel.SidebarItem? {
+        m.sidebar.flatMap(\.items).first { $0.title == title }
+    }
+    for pass in ["Paperwork", "Bursts", "Similar", "Low Quality"] { #expect(row(pass)?.progress == 0, "\(pass)") }
+    #expect(row("Screenshots")?.progress == nil)  // needs no Vision: its badge shows
+    #expect(row("Screenshots")?.badge == 1)
+
+    lib.gate.open()
+    await settle(c)
+    await m.refreshPassCounts()
+    #expect(row("Bursts")?.progress == nil)
+    #expect(row("Bursts")?.badge == 2)
+}
+
+@MainActor @Test func toolbarProgressNamesTheJob() async throws {
+    let photos = [Photo(uuid: "p", date: t0), Photo(uuid: "s", screenshot: true)]
+    let lib = FakeLibrary(photos, vision: ["p": vr(0.5, utility: true, [0])])
+    lib.gate.close()
+    let judge = FakeJudge(["s": Verdict(keep: false, kind: "notes", reason: "")])
+    judge.gate.close()
+    let (c, _) = try await makeCleanup(photos, judge: judge, library: lib)
+    let m = ReviewModel(cleanup: c, dir: tempDir())
+    await m.select(.pass("paperwork"))
+    #expect(m.progressLabel == "Analysing photos on this Mac: 0 of 1")
+    await m.select(.pass("screenshots"))
+    #expect(m.progressLabel == "Checking photos with Apple Intelligence: 0 of 1")
+    lib.gate.open()
+    judge.gate.open()
+    await settle(c)
+}

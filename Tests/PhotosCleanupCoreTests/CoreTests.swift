@@ -152,6 +152,23 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     #expect(r.groups[0].best == "b")
 }
 
+@Test func groupsRecomputeWhenAMoveOrAVisionResultChangesThem() async throws {
+    let photos = atHours(["a": 1, "b": 3, "c": 5])
+    // a and b analysed in an earlier run; c's analysis is held until the gate opens.
+    let lib = FakeLibrary(photos, vision: ["a": vr(0.5, [0]), "b": vr(0.5, [0]), "c": vr(0.5, [0])])
+    lib.gate.close()
+    let (c, _) = try await makeCleanup(
+        photos, vision: ["a": vr(0.5, [0]), "b": vr(0.5, [0])], library: lib)
+    func similar() async throws -> [[String]] { try await c.pass("similar").groups.map { $0.photos.map(\.uuid) } }
+    #expect(try await similar() == [["a", "b"]])
+    #expect(try await similar() == [["a", "b"]])  // unchanged: the cached groups
+    _ = try await c.commit("similar", delete: ["b"], keep: [])
+    #expect(try await similar().isEmpty)  // a alone is no group
+    lib.gate.open()
+    await settle(c)
+    #expect(try await similar() == [["a", "c"]])
+}
+
 @Test func similarLeavesOutBurstMembers() async throws {
     // a, b are a burst (10 s apart); c, d are hours later and look the same as them.
     let midnight = Calendar.current.startOfDay(for: t0)
@@ -235,6 +252,7 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     #expect(vision["b"] == .some(nil))  // no local image: recorded, not retried
     // A restart reads the disk cache: nothing analysed again.
     let restarted = Cleanup(library: lib, judge: FakeJudge(), cacheDir: dir, ignoreAlbums: [])
+    try await restarted.load()
     #expect(await restarted.startVision(lib.all).pending == 0)
 }
 
@@ -250,7 +268,7 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     await c.startClassifier(shots)  // Screenshots tab
     await c.startClassifier([Photo(uuid: "u1")])  // Paperwork tab, mid-run
     await c.startClassifier(shots)  // Screenshots reopened: already in flight, not re-queued
-    #expect(await c.classify == JobProgress(pending: 3, total: 3))
+    #expect(await c.classify == JobProgress(pending: 3, total: 3, verdicts: true))
     judge.gate.open()
     await settle(c)
     #expect(judge.judged.withLock { $0 } == ["s1", "s2", "u1"])

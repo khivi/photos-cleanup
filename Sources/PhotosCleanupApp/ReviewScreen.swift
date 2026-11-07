@@ -108,9 +108,7 @@ struct ReviewScreen: View {
             ToolbarItem {
                 ProgressView(value: Double(model.progressDone), total: Double(max(model.progressTotal, 1)))
                     .frame(width: 100)
-                    .help(
-                        "Analysing photos on this Mac: \(model.progressDone.formatted()) of \(model.progressTotal.formatted())"
-                    )
+                    .help(model.progressLabel)
             }
         }
         ToolbarItem {
