@@ -12,7 +12,7 @@ struct ReviewScreen: View {
     @FocusState private var focused: Bool
 
     /// The adaptive grid fits as many columns as the width allows.
-    private var columns: Int { max(1, Int((width - 2 * gridPadding + 4) / (cellSize + 4))) }
+    private var columns: Int { max(1, Int((width - 2 * gridPadding + 4) / (model.cellSize + 4))) }
     private let gridPadding: CGFloat = 12
 
     private var pollKey: String { "\(model.view.passKey ?? "")\(model.progress.pending > 0)" }
@@ -79,6 +79,11 @@ struct ReviewScreen: View {
             }
         }
         .onChange(of: model.showsInspector) { UserDefaults.standard.set(model.showsInspector, forKey: inspectorKey) }
+        .onChange(of: model.zoom) {
+            UserDefaults.standard.set(model.zoom, forKey: zoomKey)
+            thumbnails.setCell(model.cellSize)
+        }
+        .onChange(of: model.aspectFit) { UserDefaults.standard.set(model.aspectFit, forKey: aspectFitKey) }
         .task(id: pollKey) {
             while model.inPass && model.progress.pending > 0 {
                 try? await Task.sleep(for: .seconds(2))
@@ -111,6 +116,17 @@ struct ReviewScreen: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        if showsGrid {
+            ToolbarItemGroup {
+                Button("Zoom Out", systemImage: "minus") { model.zoomOut() }.disabled(!model.canZoomOut)
+                Button("Zoom In", systemImage: "plus") { model.zoomIn() }.disabled(!model.canZoomIn)
+            }
+            ToolbarItem {
+                @Bindable var model = model
+                Toggle(model.aspectToggleLabel, systemImage: "aspectratio", isOn: $model.aspectFit)
+                    .help(model.aspectToggleLabel)
+            }
+        }
         ToolbarItem {
             Button(model.inspectorToggleLabel, systemImage: "info.circle") { model.showsInspector.toggle() }
         }
@@ -166,6 +182,9 @@ struct ReviewScreen: View {
         }
     }
 
+    /// The window shows a photo grid: not Export, Import or an empty state.
+    private var showsGrid: Bool { model.view != .export && model.view != .importFolders && !model.showsEmptyState }
+
     @ViewBuilder private var content: some View {
         if model.view == .export {
             ExportView(model: model)
@@ -181,7 +200,11 @@ struct ReviewScreen: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, gridPadding).padding(.top, 8)
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: cellSize, maximum: cellMax), spacing: 4)], spacing: 4) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
+                    ], spacing: 4
+                ) {
                     if model.view == .all || model.view.passKey.map(Passes.grouped.contains) == true {
                         ForEach(model.shownGroups, id: \.best) { group in
                             Section {
@@ -238,7 +261,7 @@ struct ReviewScreen: View {
             }
         return PhotoCell(
             photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id),
-            label: model.accessibilityLabel(p), thumbnails: thumbnails,
+            label: model.accessibilityLabel(p), thumbnails: thumbnails, aspectFit: model.aspectFit,
             onTap: {
                 focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
                 let mods = NSEvent.modifierFlags
@@ -323,6 +346,13 @@ struct ReviewCommands: Commands {
         }
         CommandGroup(after: .toolbar) {
             Divider()
+            Button("Zoom In") { model?.zoomIn() }
+                .keyboardShortcut("+").disabled(model?.canZoomIn != true)
+            Button("Zoom Out") { model?.zoomOut() }
+                .keyboardShortcut("-").disabled(model?.canZoomOut != true)
+            Button(model?.aspectToggleLabel ?? "Show Whole Photos") { model?.aspectFit.toggle() }
+                .disabled(model == nil)
+            Divider()
             Button(ReviewModel.onlyDeleteLabel) { model?.onlyDelete.toggle() }
                 .keyboardShortcut("d", modifiers: [.command, .option])
                 .disabled(model?.canFilter != true)
@@ -348,6 +378,8 @@ struct ReviewCommands: Commands {
 }
 
 let inspectorKey = "showsInspector"
+let zoomKey = "gridZoom"
+let aspectFitKey = "gridAspectFit"
 
 private struct ScriptError: LocalizedError {
     let errorDescription: String?

@@ -80,7 +80,9 @@ struct ContentView: View {
             destination: UserDefaults.standard.string(forKey: exportDestinationKey).map { URL(filePath: $0) })
         let model = ReviewModel(cleanup: cleanup, exporter: exporter, importer: Importer(library: library))
         model.showsInspector = UserDefaults.standard.bool(forKey: inspectorKey)
+        model.zoom = UserDefaults.standard.object(forKey: zoomKey) as? Int ?? model.zoom
+        model.aspectFit = UserDefaults.standard.bool(forKey: aspectFitKey)
         await model.select(.all)
-        return .loaded(model, Thumbnails(library: library, uuids: photos.map(\.uuid)))
+        return .loaded(model, Thumbnails(library: library, uuids: photos.map(\.uuid), cell: model.cellSize))
     }
 }

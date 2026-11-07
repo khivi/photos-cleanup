@@ -4,9 +4,8 @@ import Photos
 import PhotosCleanupCore
 import SwiftUI
 
-let cellSize: CGFloat = 120
-/// Adaptive cells grow up to this to fill a row; thumbnails are requested at this size.
-let cellMax: CGFloat = 150
+/// Adaptive cells grow up to this many times the zoom size to fill a row.
+let cellGrowth: CGFloat = 1.25
 
 /// Thumbnails for the grid, from one PHCachingImageManager (settings measured in the grid spike, `feea7cb`).
 @MainActor
@@ -14,18 +13,27 @@ final class Thumbnails {
     private let manager = PHCachingImageManager()
     private let uuids: [String]  // grid order, newest first
     private let assets: [String: PHAsset]
-    private let size = CGSize(
-        width: cellMax * (NSScreen.main?.backingScaleFactor ?? 2),
-        height: cellMax * (NSScreen.main?.backingScaleFactor ?? 2))
+    private var size = CGSize.zero
     // Rows are ~8 cells wide: cache ~30 rows ahead of the lowest visible cell, ~15 behind.
     private let ahead = 240, behind = 120
     private var cached = 0..<0
     private let index: [String: Int]
 
-    init(library: PhotoKitLibrary, uuids: [String]) {
+    init(library: PhotoKitLibrary, uuids: [String], cell: CGFloat) {
         self.uuids = uuids
         assets = library.assets(uuids)
         index = Dictionary(uuids.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        setCell(cell)
+    }
+
+    /// Requests and caches thumbnails for cells up to `cell` × `cellGrowth` points wide. A new size
+    /// drops the cache: its images are the old size.
+    func setCell(_ cell: CGFloat) {
+        let side = cell * cellGrowth * (NSScreen.main?.backingScaleFactor ?? 2)
+        guard side != size.width else { return }
+        manager.stopCachingImagesForAllAssets()
+        cached = 0..<0
+        size = CGSize(width: side, height: side)
     }
 
     // Must match requestImage's size and options, or the cache never hits.
@@ -108,6 +116,8 @@ struct PhotoCell: View {
     var best = false
     var label = ""
     let thumbnails: Thumbnails
+    /// The whole photo, fitted in the square cell, instead of a square crop.
+    var aspectFit = false
     var onTap: (() -> Void)?
     @State private var image: NSImage?
     @State private var requestID: PHImageRequestID?
@@ -120,10 +130,16 @@ struct PhotoCell: View {
     }
 
     var body: some View {
-        Color.gray.opacity(0.15)
+        Color.gray.opacity(aspectFit && image != nil ? 0 : 0.15)
             .aspectRatio(1, contentMode: .fit)
             .frame(maxWidth: .infinity)
-            .overlay { if let image { Image(nsImage: image).resizable().scaledToFill().opacity(dim ? 0.5 : 1) } }
+            .overlay {
+                if let image {
+                    // A square aspect-fill request holds the whole photo, so one cache serves both modes.
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: aspectFit ? .fit : .fill)
+                        .opacity(dim ? 0.5 : 1)
+                }
+            }
             .overlay(alignment: .topLeading) { badge.padding(6) }
             .overlay(alignment: .topTrailing) {
                 if best {

@@ -136,6 +136,7 @@ Switch a month to Done to remember you reviewed it.
 | ⌘R | Show the photo in Photos |
 | ⌘Z / ⇧⌘Z | Undo / redo a mark |
 | ⌥⌘D | Show only photos marked delete |
+| ⌘+ / ⌘− | Larger / smaller thumbnails |
 | ⌥↓ / ⌥↑ | Next / previous month or group |
 
 With VoiceOver on, each photo reads its kind, date and mark.

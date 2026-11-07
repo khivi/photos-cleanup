@@ -551,6 +551,23 @@ public final class ReviewModel {
     /// The Info side panel is open. The app persists it.
     public var showsInspector = false
 
+    // MARK: Grid
+
+    /// Thumbnail widths the grid steps through, in points, smallest first.
+    public static let zoomSizes: [Double] = [80, 120, 180, 260]
+    /// An index into `zoomSizes`; the app persists it, so a stale saved value is clamped on use.
+    public var zoom = 1
+    private var level: Int { min(max(zoom, 0), Self.zoomSizes.count - 1) }
+    public var cellSize: Double { Self.zoomSizes[level] }
+    public var canZoomIn: Bool { level < Self.zoomSizes.count - 1 }
+    public var canZoomOut: Bool { level > 0 }
+    public func zoomIn() { zoom = min(level + 1, Self.zoomSizes.count - 1) }
+    public func zoomOut() { zoom = max(level - 1, 0) }
+
+    /// Thumbnails show the whole photo instead of a square crop; the app persists it.
+    public var aspectFit = false
+    public var aspectToggleLabel: String { aspectFit ? "Show Square Photos" : "Show Whole Photos" }
+
     public static let showInPhotosLabel = "Show in Photos"
 
     public var canShowInPhotos: Bool { inspectorInfo() != nil }

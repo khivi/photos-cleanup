@@ -832,6 +832,24 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
     #expect(m2.sidebar.flatMap(\.items).first { $0.title == "Bursts" }?.help == m2.passNote("bursts"))
 }
 
+@MainActor @Test func zoomStepsThroughTheSizesAndStopsAtBothEnds() async throws {
+    let (c, _) = try await makeCleanup([])
+    let m = ReviewModel(cleanup: c, dir: tempDir())
+    #expect(m.cellSize == 120 && m.canZoomIn && m.canZoomOut)
+    m.zoomOut()
+    #expect(m.cellSize == 80 && !m.canZoomOut)
+    m.zoomOut()
+    #expect(m.cellSize == 80)
+    for _ in 0..<5 { m.zoomIn() }
+    #expect(m.cellSize == 260 && !m.canZoomIn)
+    m.zoom = 99  // a stale saved value
+    #expect(m.cellSize == 260)
+
+    #expect(m.aspectToggleLabel == "Show Whole Photos")
+    m.aspectFit = true
+    #expect(m.aspectToggleLabel == "Show Square Photos")
+}
+
 @MainActor @Test func subtitleCountsHaveThousandsSeparators() async throws {
     let clips = (0..<1200).map {
         Photo(uuid: "v\($0)", date: t0 + Double($0), isMovie: true, duration: $0 < 1001 ? 1 : 30)
