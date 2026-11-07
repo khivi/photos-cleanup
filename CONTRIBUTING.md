@@ -47,5 +47,6 @@ The commit hook runs the linters and builds the Swift package.
 3. It signs the app with Developer ID and the hardened runtime, notarizes it and staples the ticket. It fails if Apple does not accept it. The certificate and API key secrets are listed in `release.yml`.
 4. It creates the GitHub Release `v<version>` with `Photos-Cleanup-<version>.zip` attached.
 5. It writes `Casks/photos-cleanup.rb` in `khivi/homebrew-photos-cleanup` and removes the old formula. The cask exists only in `release.yml`; don't edit it in the tap.
+6. Replace the generated notes with notes for users: what changed for them, then how to upgrade. Run `gh release edit v<version> --notes-file <file>`.
 
 The hardened runtime denies Photos access without the `com.apple.security.personal-information.photos-library` entitlement, even when System Settings allows the app. `scripts/app.sh` always signs with it.

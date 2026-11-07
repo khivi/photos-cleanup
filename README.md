@@ -2,10 +2,18 @@
 
 ![Photos Cleanup icon](Sources/PhotosCleanupApp/AppIcon.svg)
 
-Photos Cleanup is a Mac app. It clears screenshots, bursts and blurry shots out of your Photos library.
-You review each cleanup pass as a thumbnail grid and mark photos keep or delete.
-The app files your choices into albums in Photos. It never deletes on its own.
-Everything runs on your Mac, with no network calls.
+Photos Cleanup is a free Mac app. It clears screenshots, bursts, look-alikes and blurry shots out of your Photos library.
+
+- **Free and open source.** No subscription, no account, no daily delete limit.
+- **Private.** Everything runs on your Mac, with no network calls. Apple's on-device Vision and Apple Intelligence do the analysis.
+- **Never deletes on its own.** Your marks go into albums. You delete in Photos, and Photos keeps deleted photos for 30 days.
+- **Fast on big libraries.** You review a whole pass in one grid and mark photos keep or delete with one key.
+
+```bash
+brew install --cask khivi/photos-cleanup/photos-cleanup
+```
+
+Or download the zip from the [latest release](https://github.com/khivi/photos-cleanup/releases/latest), unzip it and move "Photos Cleanup" to Applications.
 
 It also does two jobs around the library:
 
@@ -62,7 +70,8 @@ The app says why. See AI verdicts unavailable, under Troubleshooting.
 
 ## Install
 
-Install with Homebrew.
+Install with Homebrew, or download the zip from the [latest release](https://github.com/khivi/photos-cleanup/releases/latest).
+The app is signed and notarized by Apple.
 
 ```bash
 brew install --cask khivi/photos-cleanup/photos-cleanup
