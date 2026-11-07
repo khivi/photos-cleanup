@@ -67,7 +67,12 @@ public actor Cleanup {
     /// The subset of `committed` filed into a Delete Me album.
     var filedDelete: Set<String> = []
 
-    var vision: [String: VisionResult?] = [:]  // nil: no local image
+    /// nil: no local image. Prints are dropped once paired into `near`: 3 KB each, ~600 MB at 200k photos.
+    var vision: [String: VisionResult?] = [:]
+    /// Each analysed photo's look-alikes (`nearPairs`), all grouping asks of a print.
+    var near: [String: Set<String>] = [:]
+    /// Each photo's line in the Vision cache, to read its print back when a photo it may pair with is analysed.
+    var visionLines: [String: Range<Int>] = [:]
     /// Bumped whenever a grouped pass's inputs change (photo list, commits, Vision results), so
     /// Bursts and Similar regroup only then: Similar takes ~0.5 s at 200k photos.
     var generation = 0
@@ -106,9 +111,13 @@ public actor Cleanup {
         )
         async let caches = offload { (Self.readVision(visionURL), Self.readVerdicts(verdictURL)) }
         let all = try await offload { try library.photos() }
-        (vision, verdicts) = try await caches
+        let ((read, lines), verdicts) = try await caches
         photos = all.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
         byUUID = Dictionary(photos.map { ($0.uuid, $0) }, uniquingKeysWith: { a, _ in a })
+        // ponytail: every print is in RAM until paired, a peak of the old steady state; read a day at a time if that bites.
+        let shots = Self.shots(photos, read)
+        near = try await offload { nearPairs(shots) }
+        (vision, visionLines, self.verdicts) = (read.mapValues { $0.map(\.withoutPrint) }, lines, verdicts)
         generation += 1
     }
 
@@ -152,13 +161,13 @@ public actor Cleanup {
 
     func bursts(_ photos: [Photo]) -> [[Photo]] {
         let dated = photos.sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
-        return groupByTime(dated, window: Passes.burstWindow, minSize: 2).flatMap { splitSimilar($0, vision: vision) }
+        return groupByTime(dated, window: Passes.burstWindow, minSize: 2).flatMap { splitSimilar($0, near: near) }
     }
 
     /// Same-scene groups across a day, leaving out photos already in a Bursts group.
     func similar(_ photos: [Photo]) -> [[Photo]] {
         let inBursts = Set(groups("bursts", (try? candidates("bursts")) ?? []).joined().map(\.uuid))
-        return groupSimilar(photos.filter { !inBursts.contains($0.uuid) }, vision: vision)
+        return groupSimilar(photos.filter { !inBursts.contains($0.uuid) }, near: near)
     }
 
     /// The groups of a grouped pass, oldest first. `photos` is always the pass's candidates.
@@ -283,11 +292,49 @@ public actor Cleanup {
     }
 
     func record(_ results: [String: VisionResult?], count: Int) {
-        appendLines(Self.visionCache, results.map { Self.visionLine($0.key, $0.value) })
-        vision.merge(results) { $1 }
+        let lines = results.map { ($0.key, Self.visionLine($0.key, $0.value)) }
+        if var at = appendLines(Self.visionCache, lines.map(\.1)) {
+            for (uuid, line) in lines {
+                visionLines[uuid] = at..<(at + line.utf8.count)
+                at += line.utf8.count + 1
+            }
+        }
+        pairFresh(results)
+        vision.merge(results.mapValues { $0.map(\.withoutPrint) }) { $1 }
         generation += 1
         visionQueue.removeFirst(min(count, visionQueue.count))
         visionProgress.pending = visionQueue.count
+    }
+
+    /// Pairs newly analysed photos with each other and with analysed photos they may pair with:
+    /// the same day or within `burstWindow`, their prints read back from the cache.
+    func pairFresh(_ results: [String: VisionResult?]) {
+        let fresh = Self.shots(results.keys.compactMap { byUUID[$0] }, results)
+        guard !fresh.isEmpty else { return }
+        let cal = Calendar.current
+        let spans = fresh.map { s in
+            let (from, to) = (s.photo.date! - Passes.burstWindow, s.photo.date! + Passes.burstWindow)
+            return cal.startOfDay(for: from)..<cal.dateInterval(of: .day, for: to)!.end
+        }
+        let old = photos.filter { p in
+            guard results[p.uuid] == nil, let d = p.date, let v = vision[p.uuid] ?? nil, !v.utility else {
+                return false
+            }
+            return spans.contains { $0.contains(d) }
+        }
+        let prints = Self.readPrints(
+            cacheDir.appendingPathComponent(Self.visionCache),
+            old.compactMap { p in visionLines[p.uuid].map { (p.uuid, $0) } })
+        let shots = fresh + old.compactMap { p in prints[p.uuid].map { (p, $0) } }
+        near.merge(nearPairs(shots, fresh: Set(fresh.map(\.photo.uuid)))) { $0.union($1) }
+    }
+
+    /// The dated, analysed photos that aren't utility images, with their prints: what `nearPairs` compares.
+    static func shots(_ photos: [Photo], _ vision: [String: VisionResult?]) -> [(photo: Photo, print: [Float])] {
+        photos.compactMap { p in
+            guard p.date != nil, let v = vision[p.uuid] ?? nil, !v.utility else { return nil }
+            return (p, v.print)
+        }
     }
 
     // MARK: Verdicts
@@ -408,18 +455,19 @@ public actor Cleanup {
 
     // MARK: Cache files (JSON lines)
 
-    func appendLines(_ name: String, _ lines: [String]) {
-        guard !lines.isEmpty else { return }
+    /// Returns the byte offset the first line was written at, nil when nothing was written.
+    @discardableResult
+    func appendLines(_ name: String, _ lines: [String]) -> Int? {
+        guard !lines.isEmpty else { return nil }
         try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         let url = cacheDir.appendingPathComponent(name)
         let data = Data((lines.joined(separator: "\n") + "\n").utf8)
         if let h = try? FileHandle(forWritingTo: url) {
             defer { try? h.close() }
-            _ = try? h.seekToEnd()
-            try? h.write(contentsOf: data)
-        } else {
-            try? data.write(to: url)
+            guard let end = try? h.seekToEnd(), (try? h.write(contentsOf: data)) != nil else { return nil }
+            return Int(end)
         }
+        return (try? data.write(to: url)) != nil ? 0 : nil
     }
 
     static func visionLine(_ uuid: String, _ v: VisionResult?) -> String {
@@ -431,20 +479,47 @@ public actor Cleanup {
         ])
     }
 
-    static func readVision(_ url: URL) -> [String: VisionResult?] {
+    /// Each photo's analysis (nil: none possible) and the byte range of its line; a later line wins.
+    static func readVision(_ url: URL) -> (results: [String: VisionResult?], lines: [String: Range<Int>]) {
         var out: [String: VisionResult?] = [:]
-        for row in readJSONLines(url) {
-            guard let uuid = row["uuid"] as? String else { continue }
-            guard row["error"] == nil, let b64 = row["print"] as? String, let data = Data(base64Encoded: b64),
-                let utility = row["utility"] as? Bool, let score = row["score"] as? Double
-            else {
-                out[uuid] = .some(nil)
-                continue
+        var lines: [String: Range<Int>] = [:]
+        guard let data = try? Data(contentsOf: url) else { return (out, lines) }
+        var start = data.startIndex
+        while start < data.endIndex {
+            let end = data[start...].firstIndex(of: UInt8(ascii: "\n")) ?? data.endIndex
+            if let row = (try? JSONSerialization.jsonObject(with: data[start..<end])) as? [String: Any],
+                let uuid = row["uuid"] as? String
+            {
+                out[uuid] = .some(visionRow(row))
+                lines[uuid] = start..<end
             }
-            let print = floats(data, elementType: (row["ptype"] as? Int) == 2 ? .double : .float)
-            out[uuid] = VisionResult(print: print, utility: utility, score: score)
+            start = end + 1
+        }
+        return (out, lines)
+    }
+
+    /// The prints on these lines of the Vision cache.
+    static func readPrints(_ url: URL, _ lines: [(uuid: String, range: Range<Int>)]) -> [String: [Float]] {
+        guard let h = try? FileHandle(forReadingFrom: url) else { return [:] }
+        defer { try? h.close() }
+        var out: [String: [Float]] = [:]
+        for (uuid, range) in lines {
+            guard (try? h.seek(toOffset: UInt64(range.lowerBound))) != nil,
+                let data = try? h.read(upToCount: range.count),
+                let row = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                let v = visionRow(row)
+            else { continue }
+            out[uuid] = v.print
         }
         return out
+    }
+
+    static func visionRow(_ row: [String: Any]) -> VisionResult? {
+        guard row["error"] == nil, let b64 = row["print"] as? String, let data = Data(base64Encoded: b64),
+            let utility = row["utility"] as? Bool, let score = row["score"] as? Double
+        else { return nil }
+        let print = floats(data, elementType: (row["ptype"] as? Int) == 2 ? .double : .float)
+        return VisionResult(print: print, utility: utility, score: score)
     }
 
     static func verdictLine(_ uuid: String, _ v: Verdict) -> String {
@@ -460,6 +535,10 @@ public actor Cleanup {
         }
         return out
     }
+}
+
+extension VisionResult {
+    var withoutPrint: VisionResult { VisionResult(print: [], utility: utility, score: score) }
 }
 
 func jsonLine(_ obj: [String: Any]) -> String {

@@ -338,9 +338,31 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     let line = Cleanup.visionLine("u", vr(-0.25, utility: true, [0.5, -1]))
     let url = tempDir().appendingPathComponent("v.jsonl")
     try? (line + "\n" + Cleanup.visionLine("gone", nil) + "\n").write(to: url, atomically: true, encoding: .utf8)
-    let read = Cleanup.readVision(url)
+    let (read, lines) = Cleanup.readVision(url)
     #expect(read["u"] == vr(-0.25, utility: true, [0.5, -1]))
     #expect(read["gone"] == .some(nil))
+    #expect(lines["u"] == 0..<line.utf8.count)
+    #expect(Cleanup.readPrints(url, [("u", lines["u"]!)]) == ["u": [0.5, -1]])
+}
+
+@Test func printsLeaveRAMOncePaired() async throws {
+    let photos = atHours(["a": 1, "b": 3, "c": 5])
+    let lib = FakeLibrary(photos, vision: ["c": vr(0.5, [0.1])])
+    let (c, _) = try await makeCleanup(photos, vision: ["a": vr(0.5, [0]), "b": vr(0.5, [3])], library: lib)
+    _ = try await c.pass("similar")
+    await settle(c)
+    let (vision, near) = await (c.vision, c.near)
+    #expect(vision.values.allSatisfy { $0?.print.isEmpty ?? true })
+    #expect(vision["c"]??.score == 0.5)
+    #expect(near == ["a": ["c"], "c": ["a"]])  // c, analysed now, paired with a's print read back from disk
+}
+
+@Test func aBurstAcrossMidnightStaysOneBurst() async throws {
+    let midnight = Calendar.current.startOfDay(for: t0)
+    let photos = [("a", -10.0), ("b", 10)].map { Photo(uuid: $0.0, date: midnight.addingTimeInterval($0.1)) }
+    let (c, _) = try await makeCleanup(photos, vision: ["a": vr(0.5, [0]), "b": vr(0.5, [0])])
+    #expect(try await c.pass("bursts").groups.map { $0.photos.map(\.uuid) } == [["a", "b"]])
+    #expect(try await c.pass("similar").groups.isEmpty)
 }
 
 @Test func allDeleteMeCountsAsWaitingAndEveryPassSkipsIt() async throws {

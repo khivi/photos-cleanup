@@ -224,16 +224,12 @@ public func groupByTime(_ photos: [Photo], window: TimeInterval, minSize: Int) -
 
 /// Split a time-sorted burst wherever neighbouring shots stop looking alike. Utility images
 /// (documents, labels) and photos not yet analysed never join: document pages look alike.
-public func splitSimilar(_ group: [Photo], vision: [String: VisionResult?]) -> [[Photo]] {
-    func vec(_ p: Photo) -> [Float]? {
-        guard let v = vision[p.uuid] ?? nil, !v.utility else { return nil }
-        return v.print
-    }
+public func splitSimilar(_ group: [Photo], near: [String: Set<String>]) -> [[Photo]] {
     guard let first = group.first else { return [] }
     var runs: [[Photo]] = []
     var run = [first]
     for (a, b) in zip(group, group.dropFirst()) {
-        if let pa = vec(a), let pb = vec(b), distance(pa, pb) < Passes.similarMaxDistance {
+        if near[a.uuid]?.contains(b.uuid) == true {
             run.append(b)
         } else {
             runs.append(run)
@@ -245,34 +241,56 @@ public func splitSimilar(_ group: [Photo], vision: [String: VisionResult?]) -> [
 }
 
 /// Group by calendar day: within a day, in time order, a photo joins the first group whose first
-/// photo is within `similarMaxDistance`, else starts one. Groups of one are dropped. Comparing to
-/// the first photo, not any member, stops chains of slowly changing shots merging into one group.
-/// Utility images and photos not yet analysed never join.
+/// photo is near it, else starts one. Groups of one are dropped. Comparing to the first photo, not
+/// any member, stops chains of slowly changing shots merging into one group. Utility images and
+/// photos not yet analysed are never near anything, so never join.
 /// ponytail: per-day only, so a scene shot on two days stays two groups; widen to a week if that misses real repeats.
-public func groupSimilar(_ photos: [Photo], vision: [String: VisionResult?], calendar: Calendar = .current)
-    -> [[Photo]]
-{
-    var days: [DateComponents: [(photo: Photo, print: [Float])]] = [:]
+public func groupSimilar(_ photos: [Photo], near: [String: Set<String>]) -> [[Photo]] {
+    var days: [DateComponents: [Photo]] = [:]
     for p in photos.sorted(by: { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }) {
-        guard let d = p.date, let v = vision[p.uuid] ?? nil, !v.utility else { continue }
-        days[calendar.dateComponents([.year, .month, .day], from: d), default: []].append((p, v.print))
+        guard let d = p.date, near[p.uuid] != nil else { continue }  // alike nothing: a group of one
+        days[Calendar.current.dateComponents([.year, .month, .day], from: d), default: []].append(p)
     }
     var groups: [[Photo]] = []
     for shots in days.values {
-        var day: [[(photo: Photo, print: [Float])]] = []
+        var day: [[Photo]] = []
         for s in shots {
-            if let i = day.firstIndex(where: { distance($0[0].print, s.print) < Passes.similarMaxDistance }) {
+            if let i = day.firstIndex(where: { near[$0[0].uuid]?.contains(s.uuid) == true }) {
                 day[i].append(s)
             } else {
                 day.append([s])
             }
         }
-        groups += day.filter { $0.count >= 2 }.map { $0.map(\.photo) }
+        groups += day.filter { $0.count >= 2 }
     }
     return groups.sorted { $0[0].date! < $1[0].date! }
 }
 
-/// Similar's hot path: a day's photos each against every group so far (vDSP: ~10x the loop).
+/// Each photo's look-alikes: prints within `similarMaxDistance`, compared only where Bursts and
+/// Similar would compare them, the same calendar day or within `burstWindow` (a burst across
+/// midnight). With `fresh`, only pairs with a fresh photo. Shots must be dated and not utility images.
+func nearPairs(_ shots: [(photo: Photo, print: [Float])], fresh: Set<String>? = nil) -> [String: Set<String>] {
+    let sorted = shots.sorted { $0.photo.date! < $1.photo.date! }
+    let days = sorted.map { Calendar.current.dateComponents([.year, .month, .day], from: $0.photo.date!) }
+    var near: [String: Set<String>] = [:]
+    for i in sorted.indices {
+        for j in (i + 1)..<sorted.count {
+            guard
+                days[j] == days[i]
+                    || sorted[j].photo.date!.timeIntervalSince(sorted[i].photo.date!) <= Passes.burstWindow
+            else { break }  // sorted: every later shot is further away
+            let (a, b) = (sorted[i].photo.uuid, sorted[j].photo.uuid)
+            if let fresh, !fresh.contains(a), !fresh.contains(b) { continue }
+            if distance(sorted[i].print, sorted[j].print) < Passes.similarMaxDistance {
+                near[a, default: []].insert(b)
+                near[b, default: []].insert(a)
+            }
+        }
+    }
+    return near
+}
+
+/// nearPairs' hot path: every pair of a day's photos (vDSP: ~10x the loop).
 func distance(_ a: [Float], _ b: [Float]) -> Float {
     guard a.count == b.count else {
         return zip(a, b).reduce(Float(0)) { $0 + ($1.0 - $1.1) * ($1.0 - $1.1) }.squareRoot()
