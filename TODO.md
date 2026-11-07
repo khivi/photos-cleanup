@@ -97,7 +97,7 @@ Homebrew is the only install path: the cask in `khivi/homebrew-photos-cleanup` i
 
 ## App
 
-- [ ] **Live Photos and Selfies passes** (planned 2026-11-07, from the Shredly review below). This library: 1,501 Live Photos, 1,137 selfies.
+- [x] **Live Photos and Selfies passes** (done 2026-11-07, `afcf2ae`, from the Shredly review below). This library: 1,501 Live Photos, 1,137 selfies.
   - Two passes in `Passes.all`: `live-photos` / "Live Photos" and `selfies` / "Selfies"; albums derived as usual. Newest first, like the other passes; no size sort. Nothing starts as Delete: neither kind is junk by itself. Deleting a Live Photo deletes the photo and its video; PhotoKit can't strip the video alone.
   - `Photo` gains `live` (`mediaSubtypes.photoLive`) and `selfie` (in the Selfies smart album, `smartAlbumSelfPortraits`, read in `photos()`). No Vision, no verdicts: counts are known at load.
   - Tests: candidates per pass, no Delete marks; `everyPassHasOneName` covers the names. Docs: README pass table.
@@ -149,8 +149,8 @@ Shredly: Photo Cleaner 1.0.1, iPhone/iPad, free with 30 deletions a day. Decisio
 - **Declined: anything sorted by size** (large videos, smart categories by size, a size sort option). No file sizes are read.
 - **Already here:** undo; nothing deleted until confirmed, then 30 days in Recently Deleted; bursts and screenshots (with on-device verdicts); month by month (All, month Done); video playback in the preview.
 - **Not taking:** the shredder, paper-ball mode, themes, haptics, the month celebration, one-photo-at-a-time swiping (a grid is faster for thousands).
-- **Taken (2026-11-07): screen recordings singled out in Videos.** `PHAssetMediaSubtype.videoScreenRecording` (macOS 10.15+) gives `Photo.screenRecording`; the tile and Inspector say "Screen recording". Marks unchanged (clips under 2 s still start as Delete).
-- **Taken (2026-11-07): a Live Photo is marked "Live"** on its tile and in the Inspector (from `Photo.live`, the Live Photos pass's flag). Its motion doesn't play: the still is enough to decide.
+- **Taken and done (2026-11-07, `afcf2ae`): screen recordings singled out in Videos.** `PHAssetMediaSubtype.videoScreenRecording` (macOS 10.15+) gives `Photo.screenRecording`; the tile and Inspector say "Screen recording". Marks unchanged (clips under 2 s still start as Delete).
+- **Taken and done (2026-11-07, `afcf2ae`): a Live Photo is marked "Live"** on its tile and in the Inspector (from `Photo.live`, the Live Photos pass's flag). Its motion doesn't play: the still is enough to decide.
 - **Open, not decided:** space freed by To be deleted (needs file sizes, so likely out with the size decision).
 
 ### Future (not next up)
