@@ -91,12 +91,6 @@ public struct PhotoKitLibrary: PhotoLibrary {
                     albumsOf[Self.uuid(a), default: []].append(name)
                 }
             }
-        // Selfies are a smart album, not a media subtype.
-        var selfies: Set<String> = []
-        PHAssetCollection.fetchAssetCollections(with: .smartAlbum, subtype: .smartAlbumSelfPortraits, options: nil)
-            .enumerateObjects { c, _, _ in
-                PHAsset.fetchAssets(in: c, options: nil).enumerateObjects { a, _, _ in selfies.insert(Self.uuid(a)) }
-            }
         var out: [Photo] = []
         PHAsset.fetchAssets(with: nil).enumerateObjects { a, _, _ in
             let id = Self.uuid(a)
@@ -105,7 +99,7 @@ public struct PhotoKitLibrary: PhotoLibrary {
                     uuid: id, date: a.creationDate, screenshot: a.mediaSubtypes.contains(.photoScreenshot),
                     isMovie: a.mediaType == .video, duration: a.duration,
                     favorite: a.isFavorite, edited: a.hasAdjustments, albums: albumsOf[id] ?? [],
-                    live: a.mediaSubtypes.contains(.photoLive), selfie: selfies.contains(id),
+                    live: a.mediaSubtypes.contains(.photoLive),
                     screenRecording: a.mediaSubtypes.contains(.videoScreenRecording)))
         }
         return out

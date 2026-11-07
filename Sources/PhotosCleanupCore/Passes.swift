@@ -15,8 +15,6 @@ public struct Photo: Sendable, Hashable, Identifiable {
     public var albums: [String] = []
     /// A Live Photo: a still with a short video. Deleting it deletes both.
     public var live = false
-    /// In Photos' Selfies album (front camera).
-    public var selfie = false
     public var screenRecording = false
 
     /// "m:ss" for a video, nil for a photo.
@@ -70,12 +68,10 @@ public enum Passes {
         ("similar", "Similar"),
         ("low-quality", "Low Quality"),
         ("videos", "Videos"),
-        ("live-photos", "Live Photos"),
-        ("selfies", "Selfies"),
     ]
 
     /// Passes that need neither Vision nor verdicts: their photos and counts are known at load.
-    public static let plain: Set<String> = ["videos", "live-photos", "selfies"]
+    public static let plain: Set<String> = ["videos"]
 
     /// Passes shown as groups of photos, with the best of each marked.
     public static let grouped: Set<String> = ["bursts", "similar"]
@@ -110,9 +106,6 @@ public enum Passes {
         "low-quality": "Blurry, dark or accidental shots, by Vision's aesthetics score. All start as Delete.",
         "videos":
             "Videos, longest first. Those under \(Int(accidentalVideoMax)) seconds start as Delete, the rest as Keep.",
-        "live-photos":
-            "Live Photos, newest first. All start as Keep. Deleting one deletes its photo and its video.",
-        "selfies": "Photos taken with the front camera, newest first. All start as Keep.",
     ]
 
     /// Earlier names of a pass's album: photos in them still count as filed.

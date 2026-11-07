@@ -128,7 +128,6 @@ public final class ReviewModel {
             if let v = p.verdict, !v.keep { return .delete }
             return .keep
         case .pass("videos"): return p.photo.duration < Passes.accidentalVideoMax ? .delete : .keep
-        case .pass("live-photos"), .pass("selfies"): return .keep  // neither kind is junk by itself
         case .pass: return p.photo.edited ? .keep : .delete  // Low Quality: edits are kept
         default: return .keep
         }

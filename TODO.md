@@ -96,10 +96,7 @@ Homebrew is the only install path: the cask in `khivi/homebrew-photos-cleanup` i
 
 ## App
 
-- [x] **Live Photos and Selfies passes** (done 2026-11-07, `afcf2ae`, from the Shredly review below). This library: 1,501 Live Photos, 1,137 selfies.
-  - Two passes in `Passes.all`: `live-photos` / "Live Photos" and `selfies` / "Selfies"; albums derived as usual. Newest first, like the other passes; no size sort. Nothing starts as Delete: neither kind is junk by itself. Deleting a Live Photo deletes the photo and its video; PhotoKit can't strip the video alone.
-  - `Photo` gains `live` (`mediaSubtypes.photoLive`) and `selfie` (in the Selfies smart album, `smartAlbumSelfPortraits`, read in `photos()`). No Vision, no verdicts: counts are known at load.
-  - Tests: candidates per pass, no Delete marks; `everyPassHasOneName` covers the names. Docs: README pass table.
+- [x] **Live Photos and Selfies passes: built, then removed** (2026-11-07; built in `afcf2ae`, never released). Every photo started as Keep with no signal, so each pass was only a copy of Photos' own album. Selfie retakes are what a sweep finds, and Bursts and Similar already catch them. The "Live" tile tag stays (`Photo.live`).
 - [x] **Job progress in the sidebar, not the toolbar** (done 2026-11-07). Every pass row shows a filling ring while its count is unknown, then its count, 0 included: a ring or a number. Exception: Paperwork before it is opened, whose count waits on verdicts that only start in the pass, stays blank.
   - Paperwork, Bursts, Similar, Low Quality: the Vision ring (already in `1dd75da`), tooltip "Analysing photos on this Mac: N of M".
   - Screenshots, Paperwork: the verdict ring once Vision is done for the pass, tooltip "Checking photos with Apple Intelligence: N of M"; only on a pass with photos in the queue (screenshots → Screenshots, the rest → Paperwork). One ring per row.
@@ -144,7 +141,7 @@ Compared against CleanMy Phone, Gemini 2, PhotoSweeper, PowerPhotos, Slidebox/Sw
 
 Shredly: Photo Cleaner 1.0.1, iPhone/iPad, free with 30 deletions a day. Decisions:
 
-- **Taken:** Live Photos and Selfies categories (the item above).
+- **Taken, then removed:** Live Photos and Selfies categories (the item above): no signal, so nothing to suggest.
 - **Declined: anything sorted by size** (large videos, smart categories by size, a size sort option). No file sizes are read.
 - **Already here:** undo; nothing deleted until confirmed, then 30 days in Recently Deleted; bursts and screenshots (with on-device verdicts); month by month (All, month Done); video playback in the preview.
 - **Not taking:** the shredder, paper-ball mode, themes, haptics, the month celebration, one-photo-at-a-time swiping (a grid is faster for thousands).

@@ -135,10 +135,6 @@ public actor Cleanup {
                 photos, ignoring: ignoreAlbums, kind: .screenshot, keepAlbumPhotos: keepAlbumPhotos)
         case "videos":
             found = candidatePhotos(photos, ignoring: ignoreAlbums, kind: .video, keepAlbumPhotos: keepAlbumPhotos)
-        case "live-photos":
-            found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos).filter(\.live)
-        case "selfies":
-            found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos).filter(\.selfie)
         case "paperwork", "low-quality":
             found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos)
         case "bursts", "similar":

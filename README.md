@@ -109,8 +109,6 @@ To change this later, open System Settings > Privacy & Security > Automation.
 | Similar | The same scene on one day | All but the best of each group |
 | Low Quality | Blurry, dark or accidental shots, worst first | All |
 | Videos | Videos, longest first | Clips under 2 seconds |
-| Live Photos | Live Photos, newest first | None. Deleting one deletes its photo and its video |
-| Selfies | Photos from the front camera, newest first | None |
 
 In Bursts and Similar, the best shot is the one whose worst face Vision rates best: sharp, well lit, facing the camera. Without faces, it's the one Vision scores highest.
 
