@@ -831,3 +831,16 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
     #expect(m2.passNote("bursts").hasSuffix("Favorites and photos in your albums are never suggested."))
     #expect(m2.sidebar.flatMap(\.items).first { $0.title == "Bursts" }?.help == m2.passNote("bursts"))
 }
+
+@MainActor @Test func subtitleCountsHaveThousandsSeparators() async throws {
+    let clips = (0..<1200).map {
+        Photo(uuid: "v\($0)", date: t0 + Double($0), isMovie: true, duration: $0 < 1001 ? 1 : 30)
+    }
+    let (c, _) = try await makeCleanup(clips)
+    let m = ReviewModel(cleanup: c, dir: tempDir())
+    await m.select(.pass("videos"))
+    #expect(m.summary == "\(1200.formatted()) candidates · \(1001.formatted()) to delete")
+    #expect(m.summary.contains(1200.formatted()) && 1200.formatted() != "1200")  // the separator shows
+    await m.select(.all)
+    #expect(m.summary == "\(1200.formatted()) photos")
+}

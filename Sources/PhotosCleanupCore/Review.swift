@@ -248,14 +248,15 @@ public final class ReviewModel {
 
     /// "N candidates · M to delete", "N photos" or "N queued for deletion".
     public var summary: String {
-        if view == .deleted { return "\(deleted.count) queued for deletion" }
+        if view == .deleted { return "\(deleted.count.formatted()) queued for deletion" }
         if view == .export { return exportCountsLabel }
         if view == .importFolders { return importSummary }
         if inPass {
-            return "\(photos.count) \(photos.count == 1 ? "candidate" : "candidates") · \(doomed.count) to delete"
+            return
+                "\(photos.count.formatted()) \(photos.count == 1 ? "candidate" : "candidates") · \(doomed.count.formatted()) to delete"
         }
         let n = "\(photos.count.formatted()) \(photos.count == 1 ? "photo" : "photos")"
-        return doomed.isEmpty ? n : "\(n) · \(doomed.count) to delete"
+        return doomed.isEmpty ? n : "\(n) · \(doomed.count.formatted()) to delete"
     }
 
     /// Passes whose photos depend on the Vision analysis.
