@@ -40,7 +40,9 @@ struct ReviewScreen: View {
                                     ProgressView(value: p).progressViewStyle(.circular).controlSize(.mini)
                                 }
                             }
-                            .badge(item.progress == nil ? item.badge ?? 0 : 0).help(item.help).tag(item.view)
+                            // A Text badge: .badge(Int) hides 0, and a pass's 0 says it found nothing.
+                            .badge(item.progress == nil ? item.badge.map { Text($0.formatted()) } : nil)
+                            .help(item.help).tag(item.view)
                         }
                     }
                 }
@@ -96,7 +98,8 @@ struct ReviewScreen: View {
         .task(id: countsKey) {
             guard !model.loading && !model.committing else { return }
             await model.refreshCounts()
-            while model.countsPending && !Task.isCancelled {  // badges appear as the background Vision run finishes
+            // Badges appear as Vision finishes; rings move while it or the verdicts run, in any view.
+            while (model.countsPending || model.jobsRunning) && !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
                 await model.refreshPassCounts()
             }
@@ -104,13 +107,6 @@ struct ReviewScreen: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        if model.showsProgress {
-            ToolbarItem {
-                ProgressView(value: Double(model.progressDone), total: Double(max(model.progressTotal, 1)))
-                    .frame(width: 100)
-                    .help(model.progressLabel)
-            }
-        }
         ToolbarItem {
             Button(model.inspectorToggleLabel, systemImage: "info.circle") { model.showsInspector.toggle() }
         }

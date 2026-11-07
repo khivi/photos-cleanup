@@ -236,7 +236,8 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
             Dictionary(uniqueKeysWithValues: m.sidebar.flatMap(\.items).map { ($0.title, $0.badge) })
         }
         #expect(badges["All"] == 2 && badges["Screenshots"] == 2)
-        #expect(badges["Bursts"] == .some(nil) && badges["To be deleted"] == .some(nil))  // 0 shows no badge
+        // A pass that found nothing says 0; an empty queue shows no badge.
+        #expect(badges["Bursts"] == 0 && badges["To be deleted"] == .some(nil))
         await m.select(.pass("screenshots"))
         await m.commit()
         #expect(badges["To be deleted"] == 1)
@@ -774,19 +775,35 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
     #expect(row("Bursts")?.badge == 2)
 }
 
-@MainActor @Test func toolbarProgressNamesTheJob() async throws {
+@MainActor @Test func sidebarRingNamesItsJobOnTheQueuedPassOnly() async throws {
     let photos = [Photo(uuid: "p", date: t0), Photo(uuid: "s", screenshot: true)]
     let lib = FakeLibrary(photos, vision: ["p": vr(0.5, utility: true, [0])])
     lib.gate.close()
     let judge = FakeJudge(["s": Verdict(keep: false, kind: "notes", reason: "")])
     judge.gate.close()
     let (c, _) = try await makeCleanup(photos, judge: judge, library: lib)
+    await c.startVision([photos[0]])
     let m = ReviewModel(cleanup: c, dir: tempDir())
-    await m.select(.pass("paperwork"))
-    #expect(m.progressLabel == "Analysing photos on this Mac: 0 of 1")
-    await m.select(.pass("screenshots"))
-    #expect(m.progressLabel == "Checking photos with Apple Intelligence: 0 of 1")
-    lib.gate.open()
+    func row(_ title: String) -> ReviewModel.SidebarItem? { m.sidebar.flatMap(\.items).first { $0.title == title } }
+
+    await m.select(.pass("screenshots"))  // queues s for a verdict
+    await m.refreshPassCounts()
+    #expect(m.jobsRunning)
+    #expect(row("Paperwork")?.help == "Analysing photos on this Mac: 0 of 1")
+    #expect(row("Screenshots")?.progress == 0)
+    #expect(row("Screenshots")?.help == "Checking photos with Apple Intelligence: 0 of 1")
+
+    lib.gate.open()  // Vision done; only Screenshots has photos in the verdict queue
+    for _ in 0..<500 where await c.visionRunning { try? await Task.sleep(for: .milliseconds(10)) }
+    await m.refreshPassCounts()
+    #expect(row("Paperwork")?.progress == nil)
+    #expect(row("Screenshots")?.progress == 0)
+
     judge.gate.open()
     await settle(c)
+    await m.refreshPassCounts()
+    #expect(!m.jobsRunning)
+    #expect(
+        row("Screenshots")?.progress == nil
+            && row("Screenshots")?.help == ReviewModel.tabs.first { $0.title == "Screenshots" }?.help)
 }

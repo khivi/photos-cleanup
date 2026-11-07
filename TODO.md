@@ -97,7 +97,7 @@ Homebrew is the only install path: the cask in `khivi/homebrew-photos-cleanup` i
 
 ## App
 
-- [ ] **Job progress in the sidebar, not the toolbar** (planned 2026-11-07; waits on the pair-map commit releasing `Cleanup.swift` and `Tests/`). Every pass row shows a filling ring while its count is unknown, then its count, 0 included: a ring or a number, never blank.
+- [x] **Job progress in the sidebar, not the toolbar** (done 2026-11-07). Every pass row shows a filling ring while its count is unknown, then its count, 0 included: a ring or a number. Exception: Paperwork before it is opened, whose count waits on verdicts that only start in the pass, stays blank.
   - Paperwork, Bursts, Similar, Low Quality: the Vision ring (already in `1dd75da`), tooltip "Analysing photos on this Mac: N of M".
   - Screenshots, Paperwork: the verdict ring once Vision is done for the pass, tooltip "Checking photos with Apple Intelligence: N of M"; only on a pass with photos in the queue (screenshots → Screenshots, the rest → Paperwork). One ring per row.
   - `Cleanup.verdictStatus()` beside `visionStatus()`; `ReviewModel.verdictJob` and `jobsRunning`; the counts poll in `ReviewScreen` runs while `countsPending || jobsRunning`, so rings move in any view.

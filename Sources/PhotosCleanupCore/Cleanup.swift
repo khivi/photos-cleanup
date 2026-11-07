@@ -244,6 +244,12 @@ public actor Cleanup {
     /// The Vision analysis, whichever pass started it: the sidebar shows it until counts are known.
     public func visionStatus() -> JobProgress { visionProgress }
 
+    /// The verdict queue, and the passes with photos in it (a screenshot is Screenshots', the rest
+    /// Paperwork's): the sidebar shows the job on those rows.
+    public func verdictStatus() -> (progress: JobProgress, passes: Set<String>) {
+        (classify, Set(inflight.compactMap { byUUID[$0].map { $0.screenshot ? "screenshots" : "paperwork" } }))
+    }
+
     /// Queue photos not yet analysed; returns the analysis progress.
     @discardableResult
     public func startVision(_ photos: [Photo]) -> JobProgress {

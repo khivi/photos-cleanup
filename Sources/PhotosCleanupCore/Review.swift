@@ -56,8 +56,10 @@ public final class ReviewModel {
     /// The last sort's moves that failed, "from: why".
     public private(set) var importFailures: [String] = []
     public private(set) var counts: [String: Int?] = [:]
-    /// The background Vision analysis, refreshed with `counts`.
+    /// The background Vision analysis and verdict queue, refreshed with `counts`.
     public private(set) var vision = JobProgress()
+    public private(set) var verdictJob = JobProgress()
+    var verdictPasses: Set<String> = []
     public private(set) var loading = false
     public private(set) var committing = false
     public private(set) var deleting = false
@@ -182,9 +184,9 @@ public final class ReviewModel {
         public let view: ReviewView
         public let title: String
         public let help: String
-        /// The photo count; nil while unknown or at 0, so the row shows no badge.
+        /// The photo count: nil while unknown. A pass or All shows 0; the other rows show no badge at 0.
         public let badge: Int?
-        /// A running job's fraction done, shown instead of the badge.
+        /// A running job's fraction done, shown instead of the badge; `help` then says which job.
         public var progress: Double?
         public var id: ReviewView { view }
     }
@@ -206,12 +208,16 @@ public final class ReviewModel {
                 case .export: export.destination == nil ? nil : export.pending
                 case .importFolders: importScans.values.map(\.newCount).reduce(0, +)
                 }
-            // A pass that needs the Vision analysis has no count until it finishes: show how far it is.
-            let analysing =
-                t.view.passKey.map { Self.visionPasses.contains($0) && n == nil && vision.pending > 0 } ?? false
+            // A pass waiting on a job shows how far it is: Vision first, then the verdicts. One per row.
+            let job: JobProgress? = t.view.passKey.flatMap { k in
+                if Self.visionPasses.contains(k) && n == nil && vision.pending > 0 { return vision }
+                return verdictPasses.contains(k) && verdictJob.pending > 0 ? verdictJob : nil
+            }
+            let showsZero = t.view == .all || t.view.passKey != nil
             return SidebarItem(
-                view: t.view, title: t.title, help: t.help, badge: n.flatMap { $0 > 0 ? $0 : nil },
-                progress: t.view == .export && export.running ? exportFraction : analysing ? vision.fraction : nil)
+                view: t.view, title: t.title, help: job.map(Self.jobLabel) ?? t.help,
+                badge: n.flatMap { $0 > 0 || showsZero ? $0 : nil },
+                progress: t.view == .export && export.running ? exportFraction : job?.fraction)
         }
         func items(_ keep: (ReviewView) -> Bool) -> [SidebarItem] { Self.tabs.filter { keep($0.view) }.map(item) }
         return [
@@ -239,16 +245,14 @@ public final class ReviewModel {
     /// Passes whose photos depend on the Vision analysis.
     static let visionPasses: Set<String> = ["paperwork", "bursts", "similar", "low-quality"]
 
-    /// The toolbar bar's tooltip: which job, and how far.
-    public var progressLabel: String {
-        let what = progress.verdicts ? "Checking photos with Apple Intelligence" : "Analysing photos on this Mac"
-        return "\(what): \(progressDone.formatted()) of \(progressTotal.formatted())"
+    /// A sidebar ring's tooltip: which job, and how far.
+    static func jobLabel(_ j: JobProgress) -> String {
+        let what = j.verdicts ? "Checking photos with Apple Intelligence" : "Analysing photos on this Mac"
+        return "\(what): \((j.total - j.pending).formatted()) of \(j.total.formatted())"
     }
 
-    /// Progress text and fraction while Vision or verdicts run in a pass.
-    public var progressDone: Int { (progress.total > 0 ? progress.total : progress.pending) - progress.pending }
-    public var progressTotal: Int { progress.total > 0 ? progress.total : progress.pending }
-    public var showsProgress: Bool { inPass && !loading && progress.pending > 0 }
+    /// Vision or the verdicts still have photos to go: the sidebar keeps polling so its rings move.
+    public var jobsRunning: Bool { vision.pending > 0 || verdictJob.pending > 0 }
 
     public var progressError: String? {
         guard !loading, let e = progress.error else { return nil }
@@ -384,8 +388,7 @@ public final class ReviewModel {
     }
 
     public func refreshCounts() async {
-        counts = await cleanup.counts()
-        vision = await cleanup.visionStatus()
+        await refreshPassCounts()
         await loadWaiting()
     }
 
@@ -399,6 +402,7 @@ public final class ReviewModel {
     public func refreshPassCounts() async {
         counts = await cleanup.counts()
         vision = await cleanup.visionStatus()
+        (verdictJob, verdictPasses) = await cleanup.verdictStatus()
     }
 
     /// Read once per launch; photos deleted in Photos since then drop out on the next launch.
