@@ -147,7 +147,6 @@ Shredly: Photo Cleaner 1.0.1, iPhone/iPad, free with 30 deletions a day. Decisio
 - **Not taking:** the shredder, paper-ball mode, themes, haptics, the month celebration, one-photo-at-a-time swiping (a grid is faster for thousands).
 - **Taken and done (2026-11-07, `afcf2ae`): screen recordings singled out in Videos.** `PHAssetMediaSubtype.videoScreenRecording` (macOS 10.15+) gives `Photo.screenRecording`; the tile and Inspector say "Screen recording". Marks unchanged (clips under 2 s still start as Delete).
 - **Taken and done (2026-11-07, `afcf2ae`): a Live Photo is marked "Live"** on its tile and in the Inspector (from `Photo.live`, the Live Photos pass's flag). Its motion doesn't play: the still is enough to decide.
-- **Open, not decided:** space freed by To be deleted (needs file sizes, so likely out with the size decision).
 
 ### PicSift review (2026-11-07)
 
