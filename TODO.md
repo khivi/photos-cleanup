@@ -107,6 +107,12 @@ Homebrew is the only install path: the cask in `khivi/homebrew-photos-cleanup` i
   - `Cleanup.verdictStatus()` beside `visionStatus()`; `ReviewModel.verdictJob` and `jobsRunning`; the counts poll in `ReviewScreen` runs while `countsPending || jobsRunning`, so rings move in any view.
   - 0 shows as a badge (macOS hides `.badge(0)`: a text badge). The toolbar `ProgressView` goes; errors stay where they show.
   - Tests, each failing without its change: verdict ring and tooltip on the queued pass only; a finished empty pass shows 0; the toolbar-label test becomes a sidebar-tooltip test.
+- [x] **Feature prints out of RAM** (done 2026-11-07, `0b0cb2b`). Prints are 3 KB each: 117 MB for 38k photos, ~600 MB at 200k. Bursts and Similar only ask whether two prints are within `similarMaxDistance`, so `Cleanup.near` keeps those pairs (~1 MB here; median 1 look-alike per photo, p99 12) and the prints stay in the Vision cache.
+  - Pairs: same calendar day, or within `burstWindow` (a burst across midnight). Launch pairs everything (0.14 s here); a Vision batch reads only its days' prints back, by each line's byte range.
+  - Groups identical to before on the real library; grouping 0.082 → 0.036 s.
+  - Not taken: Float16 prints (lossless, half the memory; moot once prints leave RAM), dropping utility photos' prints (15%), a binary or mmapped cache.
+  - Open (`ponytail:` in `load()`): every print is in RAM at launch until paired. Read a day at a time if the memory log line shows it matters.
+- [x] **Memory in the log** (done 2026-11-07, `0d182d3`). `footprintMB()` (`phys_footprint`, Activity Monitor's figure): "Loaded: N photos, memory N MB" after load, and the Vision line ends with the footprint. No UI: nobody can act on the number. 38–40 MB after load here.
 - [x] **Inspector (was Phase 5's V6; `9ca4745`)** — a side panel for the selected photo, on ⌘I or the toolbar ⓘ, open state kept across launches: date, kind, verdict, "In album: …", the album it would move to, and Keep/Delete with undo.
 - [x] **Faster first Vision analysis** — `PhotoKitLibrary.vision` now runs the per-photo image fetch + Vision requests 4 at a time (`DispatchQueue.concurrentPerform`) inside each batch of 20. Measured on the real library (6802 photos, cache renamed away): 104.9 s sequential (65/s), 31.3 s concurrent (217/s), 3.4x; cache lines identical. `drainVision` logs `Vision: N photos in X s`. Only a first run or a new Mac pays it; later starts read the cache.
 - [x] **Measure verdicts against real choices** — closed 2026-11-02: the log agrees 1367/1367 (paperwork) and 33/33 (screenshots), because filings accept the preselection; it can't tune the prompt until choices override verdicts. Baseline: `f1751a9` (summary before `keep`, greedy, new kinds) matched 96/102 filed screenshots, but those filings mostly accepted the old preselected verdicts. Known miss: a medicine-box photo gets delete; adding "medical or health information" to the keep list didn't fix it and flipped another photo. Tried and dropped: asking for facts (`timeSensitive`/`reusableInfo`) and deciding in code — 66/101. After a prompt change, rename `Cleanup.verdictCache` to re-judge everything.
@@ -145,7 +151,7 @@ Shredly: Photo Cleaner 1.0.1, iPhone/iPad, free with 30 deletions a day. Decisio
 - **Not taking:** the shredder, paper-ball mode, themes, haptics, the month celebration, one-photo-at-a-time swiping (a grid is faster for thousands).
 - **Taken (2026-11-07): screen recordings singled out in Videos.** `PHAssetMediaSubtype.videoScreenRecording` (macOS 10.15+) gives `Photo.screenRecording`; the tile and Inspector say "Screen recording". Marks unchanged (clips under 2 s still start as Delete).
 - **Taken (2026-11-07): a Live Photo is marked "Live"** on its tile and in the Inspector (from `Photo.live`, the Live Photos pass's flag). Its motion doesn't play: the still is enough to decide.
-- **Open, not decided:** space freed by To be deleted (needs file sizes, so likely out with the size decision); a "% reviewed" line in All.
+- **Open, not decided:** space freed by To be deleted (needs file sizes, so likely out with the size decision).
 
 ### Future (not next up)
 
@@ -178,7 +184,7 @@ Photos Takeout stalls on "Fetching assets" with 0 photos (likely no Photos acces
 - [x] ~~Try osxphotos first~~ — dropped: Export in the app does the same incremental backup with the app's own Photos access.
 - [x] **A `photos-export` target** (`989f9bc`). `PHAssetResourceManager.writeData` per resource; a manifest of photo uuid → modification date so a rerun copies only new or changed photos. Hard parts: iCloud "Optimize Storage" downloads (slow, network), Live Photo pairs, edits plus originals, name collisions, and photos deleted from the library (kept: a backup doesn't lose files).
 - [x] **Export in the app** (`4f4c60b`) — Transfer → Export in the sidebar: destination, free space, last export, counts, progress, Stop, failures. The badge counts photos to copy; To be deleted warns about photos not in the export. `photos-export` wraps the same `Exporter`.
-- [ ] **A full export run** — only tests and a dry run so far: check iCloud downloads, Live Photo pairs and edits on the real library, and that a stopped run resumes.
+- [x] **A full export run** — done on the real library. Was: check iCloud downloads, Live Photo pairs and edits, and that a stopped run resumes.
 - [x] **Parallel downloads** (2026-11-02) — `Exporter.parallel` = 4 exports in flight; naming and the manifest stay on the actor.
 - ~~**Export: grid of photos to copy, size estimate**~~: dropped 2026-11-02, counts and the failure list cover it; size needs an undocumented PhotoKit key. Was: the grid of what isn't exported yet, and "needs ~X GB" next to free space.
 - [x] **Import in the app** (`6d9e4b7`) — Transfer → Import: checked folders (kept in Application Support) with counts per status, Sort into Done and Import…, Open Import in Photos. Same `Importer` as `photos-import`, which is now a wrapper (same results as `2739ef3` on PhotosBackup and PhotoScans). No library exports in the app: one folder at a time.
