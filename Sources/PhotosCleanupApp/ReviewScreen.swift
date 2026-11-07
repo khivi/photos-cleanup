@@ -38,6 +38,7 @@ struct ReviewScreen: View {
                                 if let p = item.progress {
                                     Spacer()
                                     ProgressView(value: p).progressViewStyle(.circular).controlSize(.mini)
+                                        .tint(.accentColor)  // a selected row draws it grey, near-invisible early on
                                 }
                             }
                             // A Text badge: .badge(Int) hides 0, and a pass's 0 says it found nothing.
