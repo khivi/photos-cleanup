@@ -23,6 +23,9 @@ enum Phase {
     case failed(String)
 }
 
+/// The fixtures folder when the app runs in demo mode (`--demo`, Dev bundle built by `scripts/app.sh demo`).
+let demoDirectory = demoFixtures(resources: Bundle.main.resourceURL)
+
 let photosSettings = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Photos")!
 
 struct ContentView: View {
@@ -57,24 +60,42 @@ struct ContentView: View {
         .task { phase = await start() }
     }
 
-    func start() async -> Phase {
-        let library = PhotoKitLibrary()
+    func settings() -> LaunchSettings {
         let defaults = UserDefaults.standard
-        let settings = LaunchSettings(
+        return LaunchSettings(
             ignoreAlbums: loadIgnoreAlbums(),
             keepAlbumPhotos: defaults.object(forKey: keepAlbumPhotosKey) as? Bool ?? true,
             exportFolder: loadExportDestination(),
             showsInspector: savedInspector(.all),
             zoom: defaults.object(forKey: zoomKey) as? Int,
             aspectFit: defaults.bool(forKey: aspectFitKey))
-        let result = await launch(
-            library: library, judge: FoundationModelsJudge(library: library), settings: settings,
-            cacheDir: URL.cachesDirectory.appending(path: "photos-cleanup", directoryHint: .isDirectory))
+    }
+
+    func start() async -> Phase {
+        let result: LaunchResult
+        let thumbnails: ([String], CGFloat) -> Thumbnails
+        if let demoDirectory {
+            // Caches and decisions go in a fresh folder, so every demo launch starts the same.
+            let scratch = URL.temporaryDirectory.appending(path: "photos-cleanup-demo", directoryHint: .isDirectory)
+            try? FileManager.default.removeItem(at: scratch)
+            guard let library = try? DemoLibrary(directory: demoDirectory) else {
+                return .failed("The demo manifest is unreadable.")
+            }
+            result = await launch(
+                library: library, judge: DemoJudge(library: library), settings: settings(), cacheDir: scratch,
+                dir: scratch)
+            thumbnails = { Thumbnails(files: library.imageURLs, uuids: $0, cell: $1) }
+        } else {
+            let library = PhotoKitLibrary()
+            result = await launch(
+                library: library, judge: FoundationModelsJudge(library: library), settings: settings(),
+                cacheDir: URL.cachesDirectory.appending(path: "photos-cleanup", directoryHint: .isDirectory))
+            thumbnails = { Thumbnails(library: library, uuids: $0, cell: $1) }
+        }
         switch result {
         case .noAccess(let status): return .noAccess(status)
         case .failed(let message): return .failed(message)
-        case .loaded(let model, let uuids):
-            return .loaded(model, Thumbnails(library: library, uuids: uuids, cell: model.cellSize))
+        case .loaded(let model, let uuids): return .loaded(model, thumbnails(uuids, model.cellSize))
         }
     }
 }

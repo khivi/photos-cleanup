@@ -84,10 +84,12 @@ struct ImportView: View {
                         Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
                             .accessibilityIdentifier("import-show-in-finder")
                         Spacer()
-                        Button("Open Import in Photos") { openInPhotos(model.importInbox!) }
-                            .disabled(model.importInbox == nil)
-                            .help("Photos shows its import window for the Import folder.")
-                            .accessibilityIdentifier("import-open-in-photos")
+                        if demoDirectory == nil {
+                            Button("Open Import in Photos") { openInPhotos(model.importInbox!) }
+                                .disabled(model.importInbox == nil)
+                                .help("Photos shows its import window for the Import folder.")
+                                .accessibilityIdentifier("import-open-in-photos")
+                        }
                     }
                 } footer: {
                     Text(

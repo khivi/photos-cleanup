@@ -1,5 +1,6 @@
 import AVKit
 import AppKit
+import ImageIO
 import Photos
 import PhotosCleanupCore
 import SwiftUI
@@ -8,6 +9,7 @@ import SwiftUI
 let cellGrowth: CGFloat = 1.25
 
 /// Thumbnails for the grid, from one PHCachingImageManager (settings measured in the grid spike, `feea7cb`).
+/// In demo mode `files` holds each photo's image file and PhotoKit is never used.
 @MainActor
 final class Thumbnails {
     private let manager = PHCachingImageManager()
@@ -18,12 +20,35 @@ final class Thumbnails {
     private let ahead = 240, behind = 120
     private var cached = 0..<0
     private let index: [String: Int]
+    private let files: [String: URL]?
 
     init(library: PhotoKitLibrary, uuids: [String], cell: CGFloat) {
         self.uuids = uuids
+        files = nil
         assets = library.assets(uuids)
         index = Dictionary(uuids.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
         setCell(cell)
+    }
+
+    init(files: [String: URL], uuids: [String], cell: CGFloat) {
+        self.uuids = uuids
+        self.files = files
+        assets = [:]
+        index = [:]
+        setCell(cell)
+    }
+
+    /// An image file's picture, at most `side` pixels on its long edge.
+    private func decode(_ uuid: String, side: CGFloat) -> NSImage? {
+        guard let url = files?[uuid], let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+            let cg = CGImageSourceCreateThumbnailAtIndex(
+                src, 0,
+                [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: side,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                ] as CFDictionary)
+        else { return nil }
+        return NSImage(cgImage: cg, size: .zero)
     }
 
     /// Requests and caches thumbnails for cells up to `cell` × `cellGrowth` points wide. A new size
@@ -47,6 +72,10 @@ final class Thumbnails {
 
     /// Calls `done` once, on the main actor. Returns an ID for `cancel`.
     func request(_ uuid: String, done: @escaping (NSImage?) -> Void) -> PHImageRequestID? {
+        if files != nil {
+            done(decode(uuid, side: size.width))
+            return nil
+        }
         guard let asset = assets[uuid] else { return nil }
         return manager.requestImage(for: asset, targetSize: size, contentMode: .aspectFill, options: options()) {
             image, _ in
@@ -56,6 +85,10 @@ final class Thumbnails {
 
     /// A large aspect-fit image for the preview. Own options: the cache only holds grid-sized images.
     func requestLarge(_ uuid: String, side: CGFloat, done: @escaping (NSImage?) -> Void) -> PHImageRequestID? {
+        if files != nil {
+            done(decode(uuid, side: side * (NSScreen.main?.backingScaleFactor ?? 2)))
+            return nil
+        }
         guard let asset = assets[uuid] else { return nil }
         let scale = NSScreen.main?.backingScaleFactor ?? 2
         let o = PHImageRequestOptions()
@@ -86,7 +119,7 @@ final class Thumbnails {
     /// Called as a cell appears: slide the caching window when it nears either edge.
     /// Positions are in whole-library order, so any subset of photos can share one instance.
     func near(_ uuid: String) {
-        guard let i = index[uuid] else { return }
+        guard files == nil, let i = index[uuid] else { return }
         guard i + ahead / 2 > cached.upperBound || i - behind / 2 < cached.lowerBound else { return }
         let want = max(0, i - behind)..<min(uuids.count, i + ahead)
         func list(_ s: IndexSet) -> [PHAsset] { s.compactMap { assets[uuids[$0]] } }
@@ -116,6 +149,8 @@ struct PhotoCell: View {
     var best = false
     /// A small cell in a group's row: the Delete badge is just ✗, and no kind or duration pill.
     var compact = false
+    /// The number key that keeps this photo, shown on the selected group's tiles.
+    var number: Int?
     var label = ""
     let thumbnails: Thumbnails
     /// The whole photo, fitted in the square cell, instead of a square crop.
@@ -159,6 +194,13 @@ struct PhotoCell: View {
                     pill(Text(v.kind).font(.caption2))
                 } else if let t = photo.photo.kindTag {
                     pill(Text(t).font(.caption2))
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {  // bottom left holds the Live pill
+                if let number {
+                    Text("\(number)").font(.caption.weight(.bold).monospacedDigit()).foregroundStyle(.white)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(Color.accentColor, in: .circle).padding(compact ? 4 : 6)
                 }
             }
             .clipped()

@@ -41,7 +41,26 @@ It only reads the library. CI cannot run it, because it needs a Photos library a
 The main controls have accessibility identifiers, so automation finds them by a stable id, not by their label. Examples are `tab-<pass key>` for each sidebar pass, `commit`, `delete-in-photos`, `export-start`, `import-start` and `photo-<uuid>` for each grid cell. Search for `accessibilityIdentifier` in `Sources/PhotosCleanupApp/` for the full list.
 A `tab-<key>` id lands on a text inside the sidebar's `AXRow`, because SwiftUI's `List` owns the row. To select a tab, set `AXSelected` on the `AXRow` that contains the id. Find the row from the window down: SwiftUI sometimes gives the text no `AXParent`.
 The [sandbox check](#sandbox-check) uses them when Claude drives the app with cmux-cua.
-There is no XCUITest suite. The app always works on the real Photos library, so a UI test would move real photos.
+There is no XCUITest suite. Outside demo mode the app works on the real Photos library, so a UI test would move real photos. Drive the [demo](#demo-mode) instead.
+
+### Demo mode
+
+```bash
+scripts/app.sh demo
+```
+
+It builds and opens "Photos Cleanup Demo" (`com.khivi.photos-cleanup.demo`) with the `--demo` argument.
+The app then runs the full UI on a fake library. It never reads or changes your Photos library.
+The demo has its own sandbox container, so it shares no settings with the Dev build or the release.
+`scripts/demo/manifest.json` lists the photos: dates, sizes, flags, Vision results, albums and AI verdicts. Every pass has candidates, and Bursts and Similar have groups.
+`scripts/demo/generate.swift` draws the images into the bundle at build time. Only the manifest and the generator are committed.
+Commit, Delete Me and Delete in Photos… change memory only, so each launch starts from the manifest.
+Export writes real files into the folder you choose.
+The build also writes a sample folder to `.build/demo-import` for the Import screen. Import moves its files, so each `scripts/app.sh demo` makes a new one.
+The app chooses the demo only when `--demo` is set and the bundle holds fixtures. Release builds hold none, and `scripts/app.sh demo` refuses `SIGN_IDENTITY`.
+A launch argument fits `open --args`; a sandboxed app cannot read a fixtures folder outside its bundle, so the build copies the fixtures in.
+Show in Photos and Open Import in Photos are hidden.
+To check the launch, run `scripts/app.sh demo smoke`.
 
 ## Pre-commit
 
@@ -56,7 +75,8 @@ The commit hook runs the linters and builds the Swift package.
 
 - `Sources/PhotosCleanupCore/` — PhotoKit, Vision, Foundation Models, the passes, the `Cleanup` actor and the `ReviewModel` the app's screen runs on. No web framework, no SwiftUI.
 - `Sources/PhotosCleanupApp/` — the native SwiftUI app, its `Info.plist` (the release version) and its entitlements
-- `scripts/app.sh` — builds and signs the app bundle; `run` opens it, `smoke` checks that it launches
+- `scripts/app.sh` — builds and signs the app bundle; `run` opens it, `smoke` checks that it launches, `demo` runs it on fixtures
+- `scripts/demo/` — the demo fixtures: `manifest.json` lists the photos and `generate.swift` draws their images
 - `Tests/` — Core tests
 
 ## Release

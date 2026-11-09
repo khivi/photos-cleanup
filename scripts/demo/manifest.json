@@ -1,0 +1,1226 @@
+{
+ "photos": [
+  {
+   "uuid": "demo-screenshot-1",
+   "file": "demo-screenshot-1.jpg",
+   "date": "2025-01-09T09:31:00Z",
+   "width": 390,
+   "height": 844,
+   "scene": {
+    "hue": 0.58,
+    "lines": [
+     "Your code is",
+     "482 913",
+     "Expires in 10 min"
+    ],
+    "kind": "screenshot"
+   },
+   "screenshot": true,
+   "verdict": {
+    "keep": false,
+    "kind": "screenshot",
+    "reason": "Verification code that expired months ago"
+   }
+  },
+  {
+   "uuid": "demo-screenshot-2",
+   "file": "demo-screenshot-2.jpg",
+   "date": "2025-02-02T09:32:00Z",
+   "width": 390,
+   "height": 844,
+   "scene": {
+    "hue": 0.58,
+    "lines": [
+     "WHEN THE BUILD",
+     "PASSES ON",
+     "THE FIRST TRY"
+    ],
+    "kind": "screenshot"
+   },
+   "screenshot": true,
+   "verdict": {
+    "keep": false,
+    "kind": "meme",
+    "reason": "Meme sent in a group chat"
+   }
+  },
+  {
+   "uuid": "demo-screenshot-3",
+   "file": "demo-screenshot-3.jpg",
+   "date": "2025-03-18T09:33:00Z",
+   "width": 390,
+   "height": 844,
+   "scene": {
+    "hue": 0.58,
+    "lines": [
+     "Directions",
+     "12 min by car",
+     "Arrive 9:40"
+    ],
+    "kind": "screenshot"
+   },
+   "screenshot": true,
+   "verdict": {
+    "keep": false,
+    "kind": "screenshot",
+    "reason": "Map directions to a past appointment"
+   }
+  },
+  {
+   "uuid": "demo-screenshot-4",
+   "file": "demo-screenshot-4.jpg",
+   "date": "2025-04-05T09:34:00Z",
+   "width": 390,
+   "height": 844,
+   "scene": {
+    "hue": 0.58,
+    "lines": [
+     "Cabin Wi-Fi",
+     "Password:",
+     "pine-lake-2025"
+    ],
+    "kind": "screenshot"
+   },
+   "screenshot": true,
+   "verdict": {
+    "keep": true,
+    "kind": "document",
+    "reason": "Wi-Fi password for the cabin"
+   }
+  },
+  {
+   "uuid": "demo-screenshot-5",
+   "file": "demo-screenshot-5.jpg",
+   "date": "2025-05-21T09:35:00Z",
+   "width": 390,
+   "height": 844,
+   "scene": {
+    "hue": 0.58,
+    "lines": [
+     "Parcel delivered",
+     "Order 88-1204",
+     "Left at door"
+    ],
+    "kind": "screenshot"
+   },
+   "screenshot": true,
+   "verdict": {
+    "keep": false,
+    "kind": "tracking",
+    "reason": "Delivery notice for a parcel already delivered"
+   }
+  },
+  {
+   "uuid": "demo-screenshot-6",
+   "file": "demo-screenshot-6.jpg",
+   "date": "2025-06-30T09:36:00Z",
+   "width": 390,
+   "height": 844,
+   "scene": {
+    "hue": 0.58,
+    "lines": [
+     "Concert",
+     "Sat 12 Dec",
+     "Gate B, Row 14"
+    ],
+    "kind": "screenshot"
+   },
+   "screenshot": true,
+   "verdict": {
+    "keep": true,
+    "kind": "ticket",
+    "reason": "Concert ticket for an upcoming show"
+   }
+  },
+  {
+   "uuid": "demo-paperwork-1",
+   "file": "demo-paperwork-1.jpg",
+   "date": "2025-02-04T13:00:00Z",
+   "width": 400,
+   "height": 600,
+   "scene": {
+    "hue": 0.1,
+    "lines": [
+     "CORNER CAFE",
+     "Latte 4.50",
+     "TOTAL 4.50"
+    ],
+    "kind": "receipt"
+   },
+   "vision": {
+    "print": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": true,
+    "score": 0.2,
+    "face": 0.0
+   },
+   "verdict": {
+    "keep": false,
+    "kind": "receipt",
+    "reason": "Coffee shop receipt for 4.50"
+   }
+  },
+  {
+   "uuid": "demo-paperwork-2",
+   "file": "demo-paperwork-2.jpg",
+   "date": "2025-03-05T13:00:00Z",
+   "width": 400,
+   "height": 600,
+   "scene": {
+    "hue": 0.2,
+    "lines": [
+     "TECH STORE",
+     "Laptop 1299.00",
+     "WARRANTY 2Y"
+    ],
+    "kind": "receipt"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": true,
+    "score": 0.2,
+    "face": 0.0
+   },
+   "verdict": {
+    "keep": true,
+    "kind": "receipt",
+    "reason": "Laptop receipt still under warranty"
+   }
+  },
+  {
+   "uuid": "demo-paperwork-3",
+   "file": "demo-paperwork-3.jpg",
+   "date": "2025-04-06T13:00:00Z",
+   "width": 400,
+   "height": 600,
+   "scene": {
+    "hue": 0.30000000000000004,
+    "lines": [
+     "TRAIN",
+     "Zurich - Bern",
+     "14 Mar 2024"
+    ],
+    "kind": "ticket"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": true,
+    "score": 0.2,
+    "face": 0.0
+   },
+   "verdict": {
+    "keep": false,
+    "kind": "ticket",
+    "reason": "Train ticket for a trip last year"
+   }
+  },
+  {
+   "uuid": "demo-paperwork-4",
+   "file": "demo-paperwork-4.jpg",
+   "date": "2025-05-07T13:00:00Z",
+   "width": 400,
+   "height": 600,
+   "scene": {
+    "hue": 0.4,
+    "lines": [
+     "ROUTER AX-3000",
+     "S/N 7F31-92AA",
+     "MADE IN TW"
+    ],
+    "kind": "label"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": true,
+    "score": 0.2,
+    "face": 0.0
+   },
+   "verdict": {
+    "keep": true,
+    "kind": "label",
+    "reason": "Serial number label of the router"
+   }
+  },
+  {
+   "uuid": "demo-paperwork-5",
+   "file": "demo-paperwork-5.jpg",
+   "date": "2025-06-08T13:00:00Z",
+   "width": 400,
+   "height": 600,
+   "scene": {
+    "hue": 0.5,
+    "lines": [
+     "POLICY 55-901",
+     "Home contents",
+     "Valid to 2026"
+    ],
+    "kind": "document"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": true,
+    "score": 0.2,
+    "face": 0.0
+   },
+   "verdict": {
+    "keep": true,
+    "kind": "document",
+    "reason": "Insurance policy page"
+   }
+  },
+  {
+   "uuid": "demo-paperwork-6",
+   "file": "demo-paperwork-6.jpg",
+   "date": "2025-07-09T13:00:00Z",
+   "width": 400,
+   "height": 600,
+   "scene": {
+    "hue": 0.6000000000000001,
+    "lines": [
+     "SUMMER SALE",
+     "30% OFF",
+     "ENDS 31 JULY"
+    ],
+    "kind": "receipt"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "utility": true,
+    "score": 0.2,
+    "face": 0.0
+   },
+   "verdict": {
+    "keep": false,
+    "kind": "promo",
+    "reason": "Flyer for a sale that ended"
+   }
+  },
+  {
+   "uuid": "demo-paperwork-7",
+   "file": "demo-paperwork-7.jpg",
+   "date": "2025-08-10T13:00:00Z",
+   "width": 400,
+   "height": 600,
+   "scene": {
+    "hue": 0.7000000000000001,
+    "lines": [
+     "Pancakes",
+     "2 eggs, 200 g flour",
+     "300 ml milk"
+    ],
+    "kind": "document"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    "utility": true,
+    "score": 0.2,
+    "face": 0.0
+   },
+   "verdict": {
+    "keep": true,
+    "kind": "notes",
+    "reason": "Handwritten recipe"
+   }
+  },
+  {
+   "uuid": "demo-burst-a1",
+   "file": "demo-burst-a1.jpg",
+   "date": "2025-05-10T12:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.58,
+    "shift": 0,
+    "kind": "people"
+   },
+   "vision": {
+    "print": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.55,
+    "face": 0.7
+   }
+  },
+  {
+   "uuid": "demo-burst-a2",
+   "file": "demo-burst-a2.jpg",
+   "date": "2025-05-10T12:00:06Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.58,
+    "shift": 1,
+    "kind": "people"
+   },
+   "vision": {
+    "print": [
+     1.0,
+     0.03,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.62,
+    "face": 0.9
+   }
+  },
+  {
+   "uuid": "demo-burst-a3",
+   "file": "demo-burst-a3.jpg",
+   "date": "2025-05-10T12:00:12Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.58,
+    "shift": 2,
+    "kind": "people"
+   },
+   "vision": {
+    "print": [
+     1.0,
+     0.06,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.48,
+    "face": 0.4
+   }
+  },
+  {
+   "uuid": "demo-burst-a4",
+   "file": "demo-burst-a4.jpg",
+   "date": "2025-05-10T12:00:18Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.58,
+    "shift": 3,
+    "kind": "people"
+   },
+   "edited": true,
+   "vision": {
+    "print": [
+     1.0,
+     0.09,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.4,
+    "face": 0.6
+   }
+  },
+  {
+   "uuid": "demo-burst-b1",
+   "file": "demo-burst-b1.jpg",
+   "date": "2025-04-02T12:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.08,
+    "shift": 0,
+    "kind": "food"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.5,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-burst-b2",
+   "file": "demo-burst-b2.jpg",
+   "date": "2025-04-02T12:00:05Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.08,
+    "shift": 1,
+    "kind": "food"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     1.0,
+     0.03,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.7,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-burst-b3",
+   "file": "demo-burst-b3.jpg",
+   "date": "2025-04-02T12:00:10Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.08,
+    "shift": 2,
+    "kind": "food"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     1.0,
+     0.06,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.45,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-similar-a1",
+   "file": "demo-similar-a1.jpg",
+   "date": "2025-03-15T12:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.6,
+    "shift": 0,
+    "kind": "mountain"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.35,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-similar-a2",
+   "file": "demo-similar-a2.jpg",
+   "date": "2025-03-15T12:08:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.6,
+    "shift": 1,
+    "kind": "mountain"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     1.0,
+     0.04,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.52,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-similar-a3",
+   "file": "demo-similar-a3.jpg",
+   "date": "2025-03-15T12:20:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.6,
+    "shift": 2,
+    "kind": "mountain"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     1.0,
+     0.08,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.44,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-similar-b1",
+   "file": "demo-similar-b1.jpg",
+   "date": "2025-02-20T12:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.5,
+    "shift": 0,
+    "kind": "beach"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.6,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-similar-b2",
+   "file": "demo-similar-b2.jpg",
+   "date": "2025-02-20T12:30:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.5,
+    "shift": 1,
+    "kind": "beach"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.04,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.3,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-lowquality-1",
+   "file": "demo-lowquality-1.jpg",
+   "date": "2025-02-08T20:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.1,
+    "shift": 1,
+    "kind": "dark"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": -1.2,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-lowquality-2",
+   "file": "demo-lowquality-2.jpg",
+   "date": "2025-03-09T20:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.2,
+    "shift": 2,
+    "kind": "blur"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": -0.95,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-lowquality-3",
+   "file": "demo-lowquality-3.jpg",
+   "date": "2025-04-10T20:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.30000000000000004,
+    "shift": 3,
+    "kind": "dark"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    "utility": false,
+    "score": -1.05,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-lowquality-4",
+   "file": "demo-lowquality-4.jpg",
+   "date": "2025-05-11T20:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.4,
+    "shift": 4,
+    "kind": "blur"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ],
+    "utility": false,
+    "score": -0.85,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-lowquality-5",
+   "file": "demo-lowquality-5.jpg",
+   "date": "2025-06-12T20:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.5,
+    "shift": 5,
+    "kind": "dark"
+   },
+   "vision": {
+    "print": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": -0.78,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-lowquality-edited",
+   "file": "demo-lowquality-edited.jpg",
+   "date": "2025-07-03T20:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.9,
+    "kind": "blur"
+   },
+   "edited": true,
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ],
+    "utility": false,
+    "score": -0.8,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-photo-1",
+   "file": "demo-photo-1.jpg",
+   "date": "2024-02-11T15:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.12,
+    "shift": 1,
+    "kind": "landscape"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.9,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-photo-2",
+   "file": "demo-photo-2.jpg",
+   "date": "2024-03-12T15:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.24,
+    "shift": 2,
+    "kind": "people"
+   },
+   "favorite": true,
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.8,
+    "face": 0.8
+   }
+  },
+  {
+   "uuid": "demo-photo-3",
+   "file": "demo-photo-3.jpg",
+   "date": "2024-04-13T15:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.36,
+    "shift": 3,
+    "kind": "beach"
+   },
+   "albums": [
+    "Family Trip"
+   ],
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.7,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-photo-4",
+   "file": "demo-photo-4.jpg",
+   "date": "2024-05-14T15:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.48,
+    "shift": 4,
+    "kind": "mountain"
+   },
+   "albums": [
+    "Family Trip"
+   ],
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ],
+    "utility": false,
+    "score": 0.65,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-photo-5",
+   "file": "demo-photo-5.jpg",
+   "date": "2024-06-15T15:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.6,
+    "shift": 5,
+    "kind": "food"
+   },
+   "vision": {
+    "print": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.5,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-photo-6",
+   "file": "demo-photo-6.jpg",
+   "date": "2024-07-16T15:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.72,
+    "shift": 6,
+    "kind": "landscape"
+   },
+   "favorite": true,
+   "vision": {
+    "print": [
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.6,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-photo-7",
+   "file": "demo-photo-7.jpg",
+   "date": "2024-08-17T15:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.84,
+    "shift": 7,
+    "kind": "people"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.45,
+    "face": 0.8
+   }
+  },
+  {
+   "uuid": "demo-photo-8",
+   "file": "demo-photo-8.jpg",
+   "date": null,
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.96,
+    "shift": 8,
+    "kind": "beach"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.55,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-video-1",
+   "file": "demo-video-1.jpg",
+   "date": "2025-02-12T17:00:00Z",
+   "width": 640,
+   "height": 360,
+   "scene": {
+    "hue": 0.3,
+    "kind": "video"
+   },
+   "movie": true,
+   "duration": 1.2
+  },
+  {
+   "uuid": "demo-video-2",
+   "file": "demo-video-2.jpg",
+   "date": "2025-04-12T17:00:00Z",
+   "width": 640,
+   "height": 360,
+   "scene": {
+    "hue": 0.6,
+    "kind": "video"
+   },
+   "movie": true,
+   "duration": 1.8
+  },
+  {
+   "uuid": "demo-video-3",
+   "file": "demo-video-3.jpg",
+   "date": "2025-06-12T17:00:00Z",
+   "width": 640,
+   "height": 360,
+   "scene": {
+    "hue": 0.8999999999999999,
+    "kind": "video"
+   },
+   "movie": true,
+   "duration": 7,
+   "albums": [
+    "Family Trip"
+   ]
+  },
+  {
+   "uuid": "demo-video-4",
+   "file": "demo-video-4.jpg",
+   "date": "2025-08-12T17:00:00Z",
+   "width": 640,
+   "height": 360,
+   "scene": {
+    "hue": 0.19999999999999996,
+    "kind": "video"
+   },
+   "movie": true,
+   "duration": 42
+  },
+  {
+   "uuid": "demo-video-5",
+   "file": "demo-video-5.jpg",
+   "date": "2025-10-12T17:00:00Z",
+   "width": 640,
+   "height": 360,
+   "scene": {
+    "hue": 0.5,
+    "kind": "video"
+   },
+   "movie": true,
+   "duration": 128,
+   "favorite": true
+  },
+  {
+   "uuid": "demo-waiting-1",
+   "file": "demo-waiting-1.jpg",
+   "date": "2025-08-01T21:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.7,
+    "kind": "dark"
+   },
+   "albums": [
+    "Low Quality - Delete Me"
+   ],
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    "utility": false,
+    "score": -1.0,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-waiting-2",
+   "file": "demo-waiting-2.jpg",
+   "date": "2025-08-02T21:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.7,
+    "kind": "dark"
+   },
+   "albums": [
+    "Low Quality - Delete Me"
+   ],
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ],
+    "utility": false,
+    "score": -1.0,
+    "face": 0.0
+   }
+  }
+ ]
+}
