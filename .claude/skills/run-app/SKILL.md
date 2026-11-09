@@ -1,19 +1,21 @@
 ---
 name: run-app
-description: Build, sign and open the Photos Cleanup app from this checkout, and run the sandbox check by driving it. TRIGGER when the user asks to run, start, open or restart the app, or for a sandbox check.
+description: Build and open the Photos Cleanup app from this checkout, the demo by default or the real library on request, and run the sandbox check by driving it. TRIGGER when the user asks to run, start, open or restart the app, or for a sandbox check.
 ---
 
 # run-app
 
 Run from the repo root.
 
+By default, open the demo: the full UI on a fake library, which never touches the user's Photos. Open the Dev build on the real library only when the user asks for `library` (or "real library", "my photos").
+
 1. Quit any running copy first, or `open -n` starts a second one beside it:
-   `pkill -f "Photos Cleanup.app/Contents/MacOS/PhotosCleanupApp" || true`
+   `pkill -f "Photos Cleanup( Demo)?.app/Contents/MacOS/PhotosCleanupApp" || true`
    (it may be denied; then ask the user to quit it with Cmd-Q).
-2. `scripts/app.sh run`: builds `.build/Photos Cleanup.app` (release), signs it ad hoc as "Photos Cleanup Dev" in the App Sandbox with
-   the Photos entitlement, and opens it. Output goes to `/tmp/photos-cleanup-app.log`.
-   Without `run` it only builds.
-3. Report that it opened. Claude can't see the window: ask the user to check it.
+2. Default: `scripts/app.sh demo` builds `.build/Photos Cleanup Demo.app` and opens it with `--demo`.
+   `library`: `scripts/app.sh run` builds `.build/Photos Cleanup.app`, signed ad hoc as "Photos Cleanup Dev" in the App Sandbox, and opens it on the real library.
+   Both are release builds, and their output goes to `/tmp/photos-cleanup-app.log`.
+3. Report which one opened. Claude can't see the window: ask the user to check it.
 
 ## Sandbox check
 
