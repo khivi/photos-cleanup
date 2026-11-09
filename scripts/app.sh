@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 # Build and sign `.build/Photos Cleanup.app`. `run` also opens it, with output in a log.
-#   scripts/app.sh [run] [--universal]
+# `smoke` opens it and waits for the app's `Loaded:` line (exit 0), or fails if it quits or times out.
+#   scripts/app.sh [run|smoke] [--universal]
+# SMOKE_TIMEOUT: seconds `smoke` waits for `Loaded:` (default 120).
 # SIGN_IDENTITY (e.g. "Developer ID Application: …") signs with the hardened runtime; default ad hoc.
 # Without SIGN_IDENTITY the bundle is "Photos Cleanup Dev" (com.khivi.photos-cleanup.dev), so it shares no sandbox container or Photos access with the release.
 # BUILD_NUMBER, if set, replaces CFBundleVersion in the bundle (the release uses the commit count).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-run=0 arch=()
+run=0 smoke=0 arch=()
 for a in "$@"; do
   case $a in
     run) run=1 ;;
+    smoke) smoke=1 ;;
     --universal) arch=(--arch arm64 --arch x86_64) ;;
-    *) echo "usage: scripts/app.sh [run] [--universal]" >&2; exit 2 ;;
+    *) echo "usage: scripts/app.sh [run|smoke] [--universal]" >&2; exit 2 ;;
   esac
 done
 
@@ -57,4 +60,25 @@ echo "$app"
 if [ "$run" = 1 ]; then
   open -n "$app" --stdout /tmp/photos-cleanup-app.log --stderr /tmp/photos-cleanup-app.log
   echo "log: /tmp/photos-cleanup-app.log"
+fi
+
+if [ "$smoke" = 1 ]; then
+  log=/tmp/photos-cleanup-app.log
+  bin_path="$PWD/$app/Contents/MacOS/PhotosCleanupApp"
+  quit() { pkill -f "$bin_path" || true; }
+  quit
+  : >"$log"
+  open -n "$app" --stdout "$log" --stderr "$log"
+  for ((i = 0; i < ${SMOKE_TIMEOUT:-120}; i++)); do
+    if grep -q '^Loaded:' "$log"; then
+      grep '^Loaded:' "$log"; quit; exit 0
+    fi
+    if ! pgrep -f "$bin_path" >/dev/null && [ "$i" -ge 3 ]; then
+      cat "$log"; echo "smoke: the app crashed or quit before printing Loaded:" >&2; exit 1
+    fi
+    sleep 1
+  done
+  quit
+  echo "smoke: no Loaded: within ${SMOKE_TIMEOUT:-120}s; most likely no Photos access (the No access screen) or a slow library" >&2
+  exit 1
 fi
