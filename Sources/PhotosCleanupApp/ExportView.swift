@@ -2,8 +2,6 @@ import AppKit
 import PhotosCleanupCore
 import SwiftUI
 
-let exportDestinationKey = "exportDestination"
-
 /// The Export status card: destination, counts, progress, failures. Labels come from `ReviewModel`.
 struct ExportView: View {
     let model: ReviewModel
@@ -52,7 +50,6 @@ struct ExportView: View {
 
     private func choose() {
         guard let url = pickFolder(prompt: "Export Here") else { return }
-        UserDefaults.standard.set(url.path, forKey: exportDestinationKey)
-        Task { await model.setExportDestination(url) }
+        Task { await model.chooseExportDestination(url) }
     }
 }

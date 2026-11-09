@@ -134,7 +134,8 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     try jpeg(root.appending(path: "Export/c.jpg"), 64, 48, taken: "2024:01:01 12:00:00", gray: 0.8)
     let (cleanup, _) = try await makeCleanup([], library: lib)
     let settings = tempDir()
-    let m = ReviewModel(cleanup: cleanup, importer: Importer(library: lib), dir: settings)
+    let defaults = freshDefaults()
+    let m = ReviewModel(cleanup: cleanup, importer: Importer(library: lib), dir: settings, defaults: defaults)
     await m.select(.importFolders)
     #expect(m.importSummary == "No folders")
 
@@ -142,7 +143,7 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     #expect(m.importSummary == "2 new · 3 to move")
     #expect(m.sidebar.first { $0.title == "Transfer" }?.items.map(\.badge) == [nil, 2])
     #expect(m.importSortPreview == "1 → Done\n2 → Import")
-    #expect(loadImportFolders(dir: settings) == [root])
+    #expect(loadImportFolders(defaults: defaults).map(\.url.canonical) == [root.canonical])
 
     await m.sortImportFolder()
     #expect(m.status == "Moved 3 of 3 files.")
@@ -151,7 +152,7 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     #expect(!m.canSortImport)
 
     m.removeImportFolder(root)
-    #expect(m.importFolder == nil && loadImportFolders(dir: settings).isEmpty)
+    #expect(m.importFolder == nil && loadImportFolders(defaults: defaults).isEmpty)
 }
 
 @Test func importMatchesHoldWhenFilesMove() async throws {

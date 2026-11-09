@@ -612,20 +612,6 @@ func movieInfo(_ url: URL) async -> (date: Date?, trusted: Bool, width: Int, hei
     return (date, date != nil, Int(abs(size.width)), Int(abs(size.height)))
 }
 
-/// `import_folders`: the folders Import checks, one path per line.
-public func loadImportFolders(dir: URL = settingsDir) -> [URL] {
-    guard let text = try? String(contentsOf: dir.appendingPathComponent("import_folders"), encoding: .utf8) else {
-        return []
-    }
-    return text.split(whereSeparator: \.isNewline).map { URL(filePath: String($0)) }
-}
-
-public func saveImportFolders(_ folders: [URL], dir: URL = settingsDir) throws {
-    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    try folders.map { $0.path + "\n" }.joined()
-        .write(to: dir.appendingPathComponent("import_folders"), atomically: true, encoding: .utf8)
-}
-
 /// Photos keyed by pixel size and capture time. Size ignores orientation: EXIF sizes are
 /// unrotated, PhotoKit's are rotated.
 public struct LibraryIndex {

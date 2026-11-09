@@ -109,3 +109,17 @@ let utc = TimeZone(identifier: "UTC")!
     await model.select(.deleted)
     #expect(model.banner?.contains("export") == false)
 }
+
+@MainActor @Test func chosenExportDestinationIsSavedAndReplaced() async throws {
+    let (cleanup, lib) = try await makeCleanup([])
+    let defaults = freshDefaults()
+    let model = ReviewModel(
+        cleanup: cleanup, exporter: Exporter(library: lib, timeZone: utc), dir: tempDir(), defaults: defaults)
+    let first = tempDir()
+    let second = tempDir()
+
+    await model.chooseExportDestination(first)
+    await model.chooseExportDestination(second)
+    #expect(loadExportDestination(defaults: defaults)?.url.canonical == second.canonical)
+    #expect(model.export.destination?.canonical == second.canonical)
+}

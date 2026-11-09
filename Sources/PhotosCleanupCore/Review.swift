@@ -47,7 +47,9 @@ public final class ReviewModel {
     public private(set) var export = ExportStatus()
     /// Photos in `deleted` the export doesn't hold: Delete in Photos would lose them.
     public private(set) var deletedNotExported = 0
-    public private(set) var importFolders: [URL] = []
+    private var importBookmarks: [FolderBookmark] = []
+    private var exportBookmark: FolderBookmark?
+    public var importFolders: [URL] { importBookmarks.map(\.url) }
     /// This session's checks, by folder.
     public private(set) var importScans: [URL: ImportScan] = [:]
     /// The folder the Import screen shows.
@@ -83,16 +85,22 @@ public final class ReviewModel {
     private let exporter: Exporter?
     private let importer: Importer?
     private let dir: URL
+    private let defaults: UserDefaults
     /// Months marked Done in All, by "2024-03" key, with the photo count when marked.
     public private(set) var reviewedMonths: [String: Int]
 
-    public init(cleanup: Cleanup, exporter: Exporter? = nil, importer: Importer? = nil, dir: URL = settingsDir) {
+    public init(
+        cleanup: Cleanup, exporter: Exporter? = nil, exportBookmark: FolderBookmark? = nil, importer: Importer? = nil,
+        dir: URL = settingsDir, defaults: UserDefaults = .standard
+    ) {
+        self.exportBookmark = exportBookmark
         self.cleanup = cleanup
         self.exporter = exporter
         self.importer = importer
         self.dir = dir
+        self.defaults = defaults
         reviewedMonths = loadReviewedMonths(dir: dir)
-        importFolders = loadImportFolders(dir: dir)
+        importBookmarks = loadImportFolders(defaults: defaults)
         importFolder = importFolders.first
     }
 
@@ -861,6 +869,20 @@ extension ReviewModel {
         await refreshExport()
     }
 
+    /// Keeps access to the picked folder across launches and stops access to the previous one.
+    public func chooseExportDestination(_ url: URL) async {
+        do {
+            let folder = try FolderBookmark(url)
+            exportBookmark?.release()
+            exportBookmark = folder
+            saveExportDestination(folder, defaults: defaults)
+        } catch {
+            self.error = "\(error)"
+            return
+        }
+        await setExportDestination(url)
+    }
+
     public func startExport() async {
         guard canExport, let exporter else { return }
         await exporter.start()
@@ -919,26 +941,31 @@ extension ImportScan {
 extension ReviewModel {
     public func addImportFolder(_ url: URL) async {
         if !importFolders.contains(url) {
-            importFolders.append(url)
-            saveFolders()
+            do {
+                importBookmarks.append(try FolderBookmark(url))
+                saveImportFolders(importBookmarks, defaults: defaults)
+            } catch {
+                self.error = "\(error)"
+                return
+            }
         }
         importFolder = url
         await checkImportFolder(url)
     }
 
     public func removeImportFolder(_ url: URL) {
-        importFolders.removeAll { $0 == url }
+        for folder in importBookmarks where folder.url == url { folder.release() }
+        importBookmarks.removeAll { $0.url == url }
         importScans[url] = nil
         if importFolder == url { importFolder = importFolders.first }
-        saveFolders()
+        saveImportFolders(importBookmarks, defaults: defaults)
     }
 
-    private func saveFolders() {
-        do { try saveImportFolders(importFolders, dir: dir) } catch { self.error = "\(error)" }
-    }
+    /// The folder can't be found: deleted, or its drive is unplugged. Remove it by hand.
+    public func isMissing(_ url: URL) -> Bool { importBookmarks.contains { $0.url == url && $0.missing } }
 
     public func checkImportFolder(_ url: URL) async {
-        guard let importer, importBusy == nil, importFolders.contains(url) else { return }
+        guard let importer, importBusy == nil, importFolders.contains(url), !isMissing(url) else { return }
         importBusy = url
         importProgress = (0, 0)
         defer { importBusy = nil }
@@ -968,7 +995,7 @@ extension ReviewModel {
 
     public var importScan: ImportScan? { importFolder.flatMap { importScans[$0] } }
     public var canSortImport: Bool { importBusy == nil && !(importScan?.moves.isEmpty ?? true) }
-    public var canCheckImport: Bool { importBusy == nil && importFolder != nil }
+    public var canCheckImport: Bool { importBusy == nil && importFolder.map { !isMissing($0) } ?? false }
     public var importChecking: Bool { importBusy != nil && importBusy == importFolder }
 
     /// "~/Pictures/Old Laptop".
@@ -979,6 +1006,7 @@ extension ReviewModel {
 
     /// "341 new · 12,804 in library", or "Not checked".
     public func importFolderCounts(_ url: URL) -> String {
+        if isMissing(url) { return "Not found" }
         guard let s = importScans[url] else { return "Not checked" }
         let inLib = s.rows.count { $0.status.isInLibrary }
         return "\(s.newCount.formatted()) new · \(inLib.formatted()) in library"

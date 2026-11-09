@@ -75,10 +75,10 @@ struct ContentView: View {
         print("Loaded: \(photos.count) photos, \(memoryLabel())")
         fflush(stdout)
         await cleanup.startVision(photos.filter { !$0.isMovie && !$0.screenshot })
-        let exporter = Exporter(
-            library: library,
-            destination: UserDefaults.standard.string(forKey: exportDestinationKey).map { URL(filePath: $0) })
-        let model = ReviewModel(cleanup: cleanup, exporter: exporter, importer: Importer(library: library))
+        let exportFolder = loadExportDestination()
+        let exporter = Exporter(library: library, destination: exportFolder?.url)
+        let model = ReviewModel(
+            cleanup: cleanup, exporter: exporter, exportBookmark: exportFolder, importer: Importer(library: library))
         model.showsInspector = UserDefaults.standard.bool(forKey: inspectorKey)
         model.zoom = UserDefaults.standard.object(forKey: zoomKey) as? Int ?? model.zoom
         model.aspectFit = UserDefaults.standard.bool(forKey: aspectFitKey)

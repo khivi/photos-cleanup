@@ -174,3 +174,15 @@ func settle(_ c: Cleanup) async {
         try? await Task.sleep(for: .milliseconds(10))
     }
 }
+
+func freshDefaults() -> UserDefaults {
+    let name = "pc-test-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: name)!
+    defaults.removePersistentDomain(forName: name)
+    return defaults
+}
+
+extension URL {
+    /// Bookmarks resolve through /private; compare folders by this.
+    var canonical: String { resolvingSymlinksInPath().path }
+}
