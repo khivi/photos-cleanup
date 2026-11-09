@@ -39,6 +39,7 @@ It only reads the library. CI cannot run it, because it needs a Photos library a
 ### Driving the app
 
 The main controls have accessibility identifiers, so automation finds them by a stable id, not by their label. Examples are `tab-<pass key>` for each sidebar pass, `commit`, `delete-in-photos`, `export-start`, `import-start` and `photo-<uuid>` for each grid cell. Search for `accessibilityIdentifier` in `Sources/PhotosCleanupApp/` for the full list.
+A `tab-<key>` id lands on a text inside the sidebar's `AXRow`, because SwiftUI's `List` owns the row. To select a tab, set `AXSelected` on the `AXRow` that contains the id. Find the row from the window down: SwiftUI sometimes gives the text no `AXParent`.
 The [sandbox check](#sandbox-check) uses them when Claude drives the app with cmux-cua.
 There is no XCUITest suite. The app always works on the real Photos library, so a UI test would move real photos.
 
