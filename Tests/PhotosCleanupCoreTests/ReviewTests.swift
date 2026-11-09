@@ -881,6 +881,43 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         #expect(m.photos.map(\.id) == m.groups.flatMap(\.photos).map(\.id))  // arrow order is the display order
     }
 
+    @Test func returnAcceptsTheGroupAndMovesOn() async throws {
+        let (m, _) = try await twoBursts()
+        let (first, second) = (m.groups[0], m.groups[1])
+        m.accept()
+        #expect(m.isAccepted(first) && !m.isAccepted(second))
+        #expect(m.anchor == second.photos[0].id)
+        #expect(m.acceptedLabel == "1 of 2 groups accepted" && m.summary.hasSuffix("· 1 of 2 groups accepted"))
+        m.undoManager.undo()
+        #expect(!m.isAccepted(first) && m.acceptedLabel == nil)
+    }
+
+    @Test func aNumberKeepsOnlyThatPhoto() async throws {
+        let (m, _) = try await twoBursts()
+        let g = try #require(m.groups.first { $0.photos.count == 3 })
+        m.click(g.photos[0].id)
+        m.accept(keeping: 2)
+        #expect(g.photos.map { m.decision($0.id) } == [.delete, .delete, .keep])
+        #expect(m.isAccepted(g))
+        m.accept(keeping: 8)  // the next group has 2 photos: nothing happens
+        #expect(m.acceptedGroups == 1)
+        m.undoManager.undo()
+        #expect(g.photos.map { m.decision($0.id) } == [.keep, .delete, .delete] && m.acceptedGroups == 0)
+    }
+
+    @Test func moveAcceptedSendsOnlyAcceptedGroups() async throws {
+        let (m, lib) = try await twoBursts()
+        #expect(!m.canMoveAccepted)
+        let g = m.groups[0]
+        m.accept()
+        #expect(m.canMoveAccepted && m.moveAcceptedLabel == "Move 1 Accepted Group")
+        #expect(m.commitPreview(.accepted).map(\.count) == [g.photos.count - 1, 1])
+        await m.commit(.accepted)
+        let sent = lib.adds.withLock { $0 }
+        #expect(Set(sent.flatMap(\.uuids)) == Set(g.photos.map(\.id)))
+        #expect(m.groups.count == 1 && m.accepted.isEmpty && !m.canMoveAccepted)
+    }
+
     @Test func aGroupHoldingTheAnchorIsExpanded() async throws {
         let (m, _) = try await twoBursts()
         let (a, b) = (m.groups[0], m.groups[1])
@@ -898,7 +935,7 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         let defaults = freshDefaults()
         let m = ReviewModel(cleanup: c, dir: tempDir(), defaults: defaults)
         await m.select(.pass("bursts"))
-        #expect(!m.captionFolded)
+        #expect(m.passCaption?.hasSuffix(ReviewModel.groupKeysNote) == true && !m.captionFolded)
         m.toggleCaption()
         #expect(m.captionFolded && m.captionToggleLabel == "Show More")
         await m.select(.pass("similar"))

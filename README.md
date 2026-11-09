@@ -125,6 +125,9 @@ A tile marks a Live Photo "Live" and a screen recording "Screen recording".
 
 Bursts and Similar show one row per group: the best shot large, the others smaller beside it.
 A long group ends in "+N"; click it, or select a photo in the group, to see the rest.
+Press Return to accept a group as marked, or 1–9 to keep only that photo of it. Either way the next group is selected.
+Move to Albums… then offers to move only the groups you accepted, so you can review a big pass over several sittings.
+Accepted groups are kept until you quit; moving them is what saves your progress.
 
 All shows every photo by month. Mark any photo delete there; it goes to "All - Delete Me".
 Switch a month to Done to remember you reviewed it.
@@ -133,6 +136,7 @@ Switch a month to Done to remember you reviewed it.
 | --- | --- |
 | Click, ⇧-click, ⌘-click, ⌘A | Select |
 | Arrow keys | Move the selection; in Bursts and Similar, ↑ and ↓ move by group |
+| Return, 1–9 | Bursts and Similar: accept the group, or keep only photo N of it, and go to the next group |
 | K / ⌫ | Mark keep / delete; with one photo selected, move to the next |
 | Space, Esc | Show or close the large preview (videos play) |
 | ⌘I | Show the Info panel: date, albums, and why the photo was picked |

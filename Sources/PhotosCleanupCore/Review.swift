@@ -30,6 +30,8 @@ public final class ReviewModel {
     public private(set) var decisions: [String: Decision] = [:]
     /// Decided explicitly by the user.
     public private(set) var touched: Set<String> = []
+    /// Grouped passes: photos in groups accepted this session, with Return or a number key.
+    public private(set) var accepted: Set<String> = []
     /// Grouped passes: groups shown past their first row, by `best`.
     public private(set) var expanded: Set<String> = []
     /// Photos this session's commits moved to a Delete Me album, newest first.
@@ -265,8 +267,9 @@ public final class ReviewModel {
         if view == .export { return exportCountsLabel }
         if view == .importFolders { return importSummary }
         if inPass {
-            return
+            let line =
                 "\(photos.count.formatted()) \(photos.count == 1 ? "candidate" : "candidates") · \(doomed.count.formatted()) to delete"
+            return acceptedLabel.map { "\(line) · \($0)" } ?? line
         }
         let n = "\(photos.count.formatted()) \(photos.count == 1 ? "photo" : "photos")"
         return doomed.isEmpty ? n : "\(n) · \(doomed.count.formatted()) to delete"
@@ -281,8 +284,11 @@ public final class ReviewModel {
         return "\(Passes.about[key] ?? "") \(spared) never suggested."
     }
 
-    /// The line above a pass's grid.
-    public var passCaption: String? { view.passKey.map(passNote) }
+    /// The line above a pass's grid; in a grouped pass, then its keys.
+    public var passCaption: String? {
+        view.passKey.map { passNote($0) + (isGrouped ? " " + Self.groupKeysNote : "") }
+    }
+    public static let groupKeysNote = "Return accepts a group as marked. 1–9 keeps only that photo of the group."
     public var captionFolded: Bool { view.passKey.map(foldedCaptions.contains) ?? false }
     public var captionToggleLabel: String { captionFolded ? "Show More" : "Show Less" }
 
@@ -338,13 +344,24 @@ public final class ReviewModel {
     }
 
     /// Exactly what `commit()` sends: `doomed` to the Delete Me album, `keepers` to the Keep album.
-    public var commitPreview: [CommitLine] {
+    public var commitPreview: [CommitLine] { commitPreview(.all) }
+
+    public func commitPreview(_ scope: MoveScope) -> [CommitLine] {
+        let (doomed, keepers) = (scoped(doomed, scope), scoped(keepers, scope))
         if view == .all { return doomed.isEmpty ? [] : [CommitLine(count: doomed.count, album: Passes.allDeleteAlbum)] }
         guard let key = view.passKey, let del = Passes.deleteAlbum(key), let keep = Passes.keepAlbum(key) else {
             return []
         }
         return [CommitLine(count: doomed.count, album: del), CommitLine(count: keepers.count, album: keep)]
             .filter { $0.count > 0 }
+    }
+
+    /// The "Move to Albums?" dialog's text: with accepted groups, what each button moves.
+    public var moveMessage: String {
+        let all = commitPreview(.all).map(\.label).joined(separator: "\n")
+        guard canMoveAccepted else { return all }
+        let mine = commitPreview(.accepted).map(\.label).joined(separator: "\n")
+        return "\(moveAcceptedLabel):\n\(mine)\n\n\(Self.moveAllLabel), unchecked groups too:\n\(all)"
     }
 
     /// Window title: the sidebar item's title.
@@ -408,6 +425,7 @@ public final class ReviewModel {
             progress = prog
             decisions = [:]
             touched = []
+            accepted = []
             expanded = []
             if v != .all { for p in items { decisions[p.id] = initialDecision(p) } }
         } catch {
@@ -759,10 +777,10 @@ public final class ReviewModel {
 
     // MARK: Commit
 
-    public func commit() async {
+    public func commit(_ scope: MoveScope = .all) async {
         guard let key = view.passKey ?? (view == .all ? Passes.allKey : nil) else { return }
-        let doomed = doomed
-        let keep = keepers.map(\.id)
+        let doomed = scoped(doomed, scope)
+        let keep = scoped(keepers, scope).map(\.id)
         if doomed.isEmpty && keep.isEmpty { return }
         committing = true
         status = nil
@@ -781,6 +799,7 @@ public final class ReviewModel {
             for id in gone { decisions[id] = nil }
             undoManager.removeAllActions()
             touched.subtract(gone)
+            accepted.subtract(gone)
             pruneSelection()
             var parts: [String] = []
             if r.added > 0 { parts.append("\(r.added) to “\(r.album)”") }
@@ -805,10 +824,14 @@ extension Photo {
 
 // MARK: Group review
 
+public enum MoveScope: Sendable {
+    case all, accepted
+}
+
 let foldedCaptionsKey = "foldedCaptions"
 
 extension BurstGroup {
-    /// The ★ first, the rest in time order: a group's row shows it largest.
+    /// The ★ first, the rest in time order: a group's row shows it largest, and 1 is its key.
     var bestFirst: BurstGroup {
         guard let i = photos.firstIndex(where: { $0.id == best }), i > 0 else { return self }
         var ps = photos
@@ -821,6 +844,15 @@ extension ReviewModel {
     /// Bursts or Similar: one row per group.
     public var isGrouped: Bool { view.passKey.map(Passes.grouped.contains) == true }
 
+    /// Every photo accepted, so a photo that joins later reopens the group.
+    public func isAccepted(_ g: BurstGroup) -> Bool { g.photos.allSatisfy { accepted.contains($0.id) } }
+    public var acceptedGroups: Int { isGrouped ? groups.count(where: isAccepted) : 0 }
+    /// "240 of 4,180 groups accepted", or nil before the first. The grid shows it too: the subtitle is often cut off.
+    public var acceptedLabel: String? {
+        let n = acceptedGroups
+        return n == 0 ? nil : "\(n.formatted()) of \(groups.count.formatted()) groups accepted"
+    }
+
     /// Shown in full: opened by hand, or holding the anchor, so arrow keys never select a hidden photo.
     public func isExpanded(_ g: BurstGroup) -> Bool {
         expanded.contains(g.best) || anchor.map { a in g.photos.contains { $0.id == a } } == true
@@ -829,6 +861,52 @@ extension ReviewModel {
     public func toggleExpanded(_ g: BurstGroup) {
         if expanded.remove(g.best) == nil { expanded.insert(g.best) }
     }
+
+    /// The anchor's group, or the first one shown.
+    private var currentGroup: BurstGroup? {
+        let gs = shownGroups
+        return anchor.flatMap { a in gs.first { $0.photos.contains { $0.id == a } } } ?? gs.first
+    }
+
+    public var canAccept: Bool { isGrouped && !loading && !committing && currentGroup != nil }
+
+    /// Return accepts the current group as marked; a number key (`keeping` 0–8) keeps only that photo
+    /// of it and marks the rest Delete. Either way the group's marks count as the user's, and the
+    /// selection moves to the next group. One undo step.
+    public func accept(keeping place: Int? = nil) {
+        guard canAccept, let g = currentGroup else { return }
+        if let place, !g.photos.indices.contains(place) { return }
+        let marks = Dictionary(
+            uniqueKeysWithValues: g.photos.enumerated().map { i, p in
+                (p.id, (decision: place.map { $0 == i ? Decision.keep : .delete } ?? decisions[p.id], touched: true))
+            })
+        undoManager.beginUndoGrouping()
+        apply(marks)
+        setAccepted(accepted.union(g.photos.map(\.id)))
+        undoManager.setActionName(place == nil ? "Accept Group" : "Keep One")
+        undoManager.endUndoGrouping()
+        anchor = g.photos[0].id  // with no selection, `currentGroup` was the first group: move on from it
+        selected = [g.photos[0].id]
+        moveSection(by: 1)
+    }
+
+    private func setAccepted(_ new: Set<String>) {
+        let old = accepted
+        accepted = new
+        undoManager.registerUndo(withTarget: self) { m in MainActor.assumeIsolated { m.setAccepted(old) } }
+    }
+
+    func scoped(_ ps: [PassPhoto], _ scope: MoveScope) -> [PassPhoto] {
+        scope == .all ? ps : ps.filter { accepted.contains($0.id) }
+    }
+
+    /// The dialog offers to move only the accepted groups.
+    public var canMoveAccepted: Bool { isGrouped && !commitPreview(.accepted).isEmpty }
+    public var moveAcceptedLabel: String {
+        let n = acceptedGroups
+        return "Move \(n.formatted()) Accepted \(n == 1 ? "Group" : "Groups")"
+    }
+    public static let moveAllLabel = "Move All"
 }
 
 // MARK: Month sections in All

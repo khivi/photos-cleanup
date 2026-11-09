@@ -65,10 +65,18 @@ struct ReviewScreen: View {
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
                 .confirmationDialog("Move to Albums?", isPresented: $model.confirmingMove) {
-                    Button("Move", role: .destructive) { Task { await model.commit() } }
-                        .accessibilityIdentifier("commit-confirm")
+                    if model.canMoveAccepted {
+                        Button(model.moveAcceptedLabel) { Task { await model.commit(.accepted) } }
+                            .keyboardShortcut(.defaultAction)
+                            .accessibilityIdentifier("commit-accepted")
+                        Button(ReviewModel.moveAllLabel, role: .destructive) { Task { await model.commit() } }
+                            .accessibilityIdentifier("commit-confirm")
+                    } else {
+                        Button("Move", role: .destructive) { Task { await model.commit() } }
+                            .accessibilityIdentifier("commit-confirm")
+                    }
                 } message: {
-                    Text(model.commitPreview.map(\.label).joined(separator: "\n"))
+                    Text(model.moveMessage)
                 }
         }
         .focusedSceneValue(\.reviewModel, model)
@@ -221,6 +229,12 @@ struct ReviewScreen: View {
                     .font(.callout).foregroundStyle(.secondary)
                     .padding(.horizontal, gridPadding).padding(.top, 8)
                 }
+                if let accepted = model.acceptedLabel {
+                    Label(accepted, systemImage: "checkmark.circle.fill").font(.callout.weight(.semibold))
+                        .foregroundStyle(.green)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, gridPadding).padding(.top, 4)
+                }
                 if model.isGrouped {
                     LazyVStack(alignment: .leading, spacing: 4) {
                         ForEach(model.shownGroups, id: \.best) { groupRow($0) }
@@ -297,6 +311,9 @@ struct ReviewScreen: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(model.header(group)).font(.headline)
+                if model.isAccepted(group) {
+                    Label("Accepted", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                }
                 if model.expanded.contains(group.best) {
                     Button("Show Less") { model.toggleExpanded(group) }.buttonStyle(.link).focusable(false)
                 }
@@ -350,7 +367,8 @@ struct ReviewScreen: View {
 }
 
 extension View {
-    /// The grid takes keyboard focus: arrows move the selection, Space toggles the preview, ⌘A selects all. K and ⌫ are menu commands.
+    /// The grid takes keyboard focus: arrows move the selection, Space toggles the preview, ⌘A selects all,
+    /// and in a grouped pass Return and 1–9 accept the group. K and ⌫ are menu commands.
     fileprivate func keyboardSelection(
         model: ReviewModel, focused: FocusState<Bool>.Binding, width: Binding<CGFloat>,
         move: @escaping (KeyEquivalent) -> Void
@@ -371,6 +389,16 @@ extension View {
             }
             .onKeyPress(.space) {
                 model.togglePreview()
+                return .handled
+            }
+            .onKeyPress(.return) {
+                guard model.canAccept && !model.previewing else { return .ignored }
+                model.accept()
+                return .handled
+            }
+            .onKeyPress(characters: CharacterSet(charactersIn: "123456789")) { press in
+                guard model.canAccept && !model.previewing, let n = Int(press.characters) else { return .ignored }
+                model.accept(keeping: n - 1)
                 return .handled
             }
             .onKeyPress(.escape) {
@@ -417,6 +445,8 @@ struct ReviewCommands: Commands {
                     .accessibilityIdentifier("mark-delete")
             }
             .disabled(model?.canMark != true)
+            // No shortcut: a bare Return key equivalent would also catch Return in dialogs; the grid handles it.
+            Button("Accept Group") { model?.accept() }.disabled(model?.canAccept != true)
             Divider()
             Group {
                 Button(ReviewModel.keepAllLabel) { model?.setAll(.keep) }
