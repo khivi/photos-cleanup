@@ -341,8 +341,10 @@ struct ReviewCommands: Commands {
                 .disabled(model?.canDeleteInPhotos != true)
             Button("Move to Albums…") { model?.confirmingMove = true }
                 .disabled(model?.canMove != true)
-            Button(ReviewModel.showInPhotosLabel) { Task { await model?.showInPhotos(run: runAppleScript) } }
-                .keyboardShortcut("r").disabled(model?.canShowInPhotos != true)
+            if canShowInPhotos {
+                Button(ReviewModel.showInPhotosLabel) { Task { await model?.showInPhotos(run: runAppleScript) } }
+                    .keyboardShortcut("r").disabled(model?.canShowInPhotos != true)
+            }
         }
         CommandGroup(after: .toolbar) {
             Divider()
@@ -431,13 +433,15 @@ struct InspectorView: View {
                         }
                         .pickerStyle(.segmented).labelsHidden().focusable(false)
                     }
-                    Button(ReviewModel.showInPhotosLabel) {
-                        Task {
-                            await model.showInPhotos(run: runAppleScript)
-                            refocus()
+                    if canShowInPhotos {
+                        Button(ReviewModel.showInPhotosLabel) {
+                            Task {
+                                await model.showInPhotos(run: runAppleScript)
+                                refocus()
+                            }
                         }
+                        .focusable(false)
                     }
-                    .focusable(false)
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
