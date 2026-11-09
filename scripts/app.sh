@@ -2,6 +2,7 @@
 # Build and sign `.build/Photos Cleanup.app`. `run` also opens it, with output in a log.
 #   scripts/app.sh [run] [--universal]
 # SIGN_IDENTITY (e.g. "Developer ID Application: …") signs with the hardened runtime; default ad hoc.
+# Without SIGN_IDENTITY the bundle is "Photos Cleanup Dev" (com.khivi.photos-cleanup.dev), so it shares no sandbox container or Photos access with the release.
 # BUILD_NUMBER, if set, replaces CFBundleVersion in the bundle (the release uses the commit count).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -29,6 +30,10 @@ mkdir -p "$app/Contents/MacOS"
 cp "$bin/PhotosCleanupApp" "$app/Contents/MacOS/"
 cp Sources/PhotosCleanupApp/Info.plist "$app/Contents/Info.plist"
 [ -z "${BUILD_NUMBER:-}" ] || /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$app/Contents/Info.plist"
+if [ -z "${SIGN_IDENTITY:-}" ]; then
+  for k in CFBundleName CFBundleDisplayName; do /usr/libexec/PlistBuddy -c "Set :$k 'Photos Cleanup Dev'" "$app/Contents/Info.plist"; done
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.khivi.photos-cleanup.dev" "$app/Contents/Info.plist"
+fi
 mkdir -p "$app/Contents/Resources"
 iconset=$(mktemp -d)/AppIcon.iconset
 mkdir "$iconset"

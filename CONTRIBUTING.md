@@ -11,8 +11,8 @@
 scripts/app.sh run
 ```
 
-It builds `.build/Photos Cleanup.app`, signs it ad hoc and opens it. Its output goes to `/tmp/photos-cleanup-app.log`.
-macOS asks for Photos access once for "Photos Cleanup".
+It builds `.build/Photos Cleanup.app`, signs it ad hoc and opens it. The ad hoc build is "Photos Cleanup Dev" (`com.khivi.photos-cleanup.dev`), so it has its own sandbox container (`~/Library/Containers/com.khivi.photos-cleanup.dev`) and Photos access, apart from the release. Its output goes to `/tmp/photos-cleanup-app.log`.
+macOS asks for Photos access once for "Photos Cleanup Dev".
 A bare binary started from a shell never gets its window in front, so always run the app as a bundle.
 
 ## Tests
@@ -43,10 +43,10 @@ The commit hook runs the linters and builds the Swift package.
 ## Release
 
 1. Change `CFBundleShortVersionString` in `Sources/PhotosCleanupApp/Info.plist` on `master`. A manual run of `release.yml` also works. The build number (`CFBundleVersion`) is the commit count, set by `release.yml`; `Info.plist` keeps `1`.
-2. `release.yml` builds the universal app with `scripts/app.sh` on the `xcode-27` runner. It fails if AI verdicts are not compiled in or the Photos entitlement is missing.
+2. `release.yml` builds the universal app with `scripts/app.sh` on the `xcode-27` runner. It fails if AI verdicts are not compiled in or the Photos or App Sandbox entitlement is missing.
 3. It signs the app with Developer ID and the hardened runtime, notarizes it and staples the ticket. It fails if Apple does not accept it. The certificate and API key secrets are listed in `release.yml`.
 4. It creates the GitHub Release `v<version>` with `Photos-Cleanup-<version>.zip` attached.
 5. It writes `Casks/photos-cleanup.rb` in `khivi/homebrew-photos-cleanup` and removes the old formula. The cask exists only in `release.yml`; don't edit it in the tap.
 6. Replace the generated notes with notes for users: what changed for them, then how to upgrade. Run `gh release edit v<version> --notes-file <file>`.
 
-The hardened runtime denies Photos access without the `com.apple.security.personal-information.photos-library` entitlement, even when System Settings allows the app. `scripts/app.sh` always signs with it.
+The hardened runtime denies Photos access without the `com.apple.security.personal-information.photos-library` entitlement, even when System Settings allows the app. `scripts/app.sh` always signs with it, and with `com.apple.security.app-sandbox`.

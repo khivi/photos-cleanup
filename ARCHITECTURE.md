@@ -135,7 +135,7 @@ After such a change, rename the constant to force a recompute. Old files stay in
 ## Security
 
 - The app has its own Photos access. It needs no Full Disk Access.
-- The release is signed with Developer ID, uses the hardened runtime and is notarized. The hardened runtime denies Photos access without the `com.apple.security.personal-information.photos-library` entitlement, so that is the app's one entitlement.
+- The release is signed with Developer ID, uses the hardened runtime and is notarized. The hardened runtime denies Photos access without the `com.apple.security.personal-information.photos-library` entitlement, and the App Sandbox limits file access to folders you pick (kept as security-scoped bookmarks) and the app's own container.
 - The app makes no network calls and opens no port. When you preview a photo that is stored only in iCloud, Photos downloads it.
 
 ## Tools

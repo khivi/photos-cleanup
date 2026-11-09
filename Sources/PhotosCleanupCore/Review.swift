@@ -1000,7 +1000,8 @@ extension ReviewModel {
 
     /// "~/Pictures/Old Laptop".
     public func pathLabel(_ url: URL) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        // Under the sandbox homeDirectoryForCurrentUser is the container.
+        let home = getpwuid(getuid()).map { String(cString: $0.pointee.pw_dir) } ?? NSHomeDirectory()
         return url.path.hasPrefix(home + "/") ? "~" + url.path.dropFirst(home.count) : url.path
     }
 
