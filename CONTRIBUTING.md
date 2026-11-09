@@ -60,7 +60,7 @@ The build also writes a sample folder to `.build/demo-import` for the Import scr
 The app chooses the demo only when `--demo` is set and the bundle holds fixtures. Release builds hold none, and `scripts/app.sh demo` refuses `SIGN_IDENTITY`.
 A launch argument fits `open --args`; a sandboxed app cannot read a fixtures folder outside its bundle, so the build copies the fixtures in.
 Show in Photos and Open Import in Photos are hidden.
-To check the launch, run `scripts/app.sh demo smoke`.
+To check the launch, run `scripts/app.sh demo smoke`. CI runs it on every push.
 
 ## Pre-commit
 
@@ -92,15 +92,19 @@ The hardened runtime denies Photos access without the `com.apple.security.person
 
 ### Sandbox check
 
-Do this before each release. CI cannot do it: it needs a Photos library and Photos access. The `run-app` skill's sandbox check does the same steps with Claude driving the app.
+Do this before each release. It has two parts. Both run `scripts/check-sandbox.sh watch` in a second terminal, and pass when it prints no `deny` line. Each `deny(1) <operation> <path>` names something the sandbox blocked. `vfs.disk-space`, `AppleNVMeEANUC` and `syspolicy.exec` come from system frameworks and are expected. The `run-app` skill's sandbox check does both parts with Claude driving the app.
 
-1. Run `scripts/app.sh run`. In a second terminal, run `scripts/check-sandbox.sh watch`.
-2. Allow Photos access if macOS asks. The library loads.
-3. Review: open each pass and mark a photo Keep. Don't click Delete in Photos….
-4. Let the Vision and AI passes give verdicts.
-5. Export: choose a new, empty folder and export.
-6. Import: add a folder and click Check. Its sidebar path starts with `~`.
-7. Click Show in Photos. Photos selects the photo. macOS asks once for Automation access.
-8. Change the zoom. Quit and open the app again. The zoom, the Export folder and the Import folder are kept, and no folder shows "Not found".
+**Demo part.** It covers every file and settings path, including the steps that change photos, because the demo never touches your library.
 
-The check passes when `watch` prints no `deny` line. Each `deny(1) <operation> <path>` names something the sandbox blocked.
+1. Run `scripts/app.sh demo`.
+2. Open each tab. Mark photos Keep and Delete Me, then Commit. Click Delete in Photos….
+3. Export: choose a new, empty folder and export.
+4. Import: add `.build/demo-import`, click Check, then Sort. Its sidebar path starts with `~`.
+5. Change the zoom. Quit and open the demo again with `open ".build/Photos Cleanup Demo.app" --args --demo`. The zoom, the Export folder and the Import folder are kept, and no folder shows "Not found".
+
+**Library part.** It covers only what the demo fakes: PhotoKit, Vision, the AI judge and Show in Photos.
+
+1. Run `scripts/app.sh smoke`. It exits 0 when the Dev build loads your library.
+2. Run `scripts/app.sh run`. Allow Photos access if macOS asks.
+3. Let the Vision and AI passes give verdicts. Don't click Delete in Photos….
+4. Click Show in Photos. Photos selects the photo. macOS asks once for Automation access.
