@@ -2,6 +2,7 @@
 # Build and sign `.build/Photos Cleanup.app`. `run` also opens it, with output in a log.
 #   scripts/app.sh [run] [--universal]
 # SIGN_IDENTITY (e.g. "Developer ID Application: …") signs with the hardened runtime; default ad hoc.
+# BUILD_NUMBER, if set, replaces CFBundleVersion in the bundle (the release uses the commit count).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -27,6 +28,7 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"
 cp "$bin/PhotosCleanupApp" "$app/Contents/MacOS/"
 cp Sources/PhotosCleanupApp/Info.plist "$app/Contents/Info.plist"
+[ -z "${BUILD_NUMBER:-}" ] || /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$app/Contents/Info.plist"
 mkdir -p "$app/Contents/Resources"
 iconset=$(mktemp -d)/AppIcon.iconset
 mkdir "$iconset"

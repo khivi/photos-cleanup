@@ -41,6 +41,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 0 # full history: BUILD_NUMBER is the commit count
 
       - name: Read version and skip if already released
         id: ver
@@ -86,7 +87,8 @@ jobs:
           while read -r line; do kcs+=("${line//\"/}"); done < <(security list-keychains -d user)
           security list-keychains -d user -s "${kcs[@]}"
 
-          SIGN_IDENTITY="Developer ID Application: Amit Khivesara (3WD7XPJ5M5)" KEYCHAIN="$kc" \
+          BUILD_NUMBER="$(git rev-list --count HEAD)" \
+            SIGN_IDENTITY="Developer ID Application: Amit Khivesara (3WD7XPJ5M5)" KEYCHAIN="$kc" \
             scripts/app.sh --universal
           app=".build/Photos Cleanup.app"
           bin="$app/Contents/MacOS/PhotosCleanupApp"
