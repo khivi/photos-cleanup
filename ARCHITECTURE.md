@@ -48,14 +48,14 @@ The Swift package has no dependencies.
 
 | File | Role |
 | --- | --- |
-| `PhotosCleanupApp.swift` | The app, its window and the Settings window. It asks for Photos access, loads the library, then shows the review screen. |
+| `PhotosCleanupApp.swift` | The app, its window and the Settings window. It calls Core's `launch(...)` with PhotoKit and the saved settings, then shows the review screen. |
 | `ReviewScreen.swift` | The sidebar, the toolbar, the grid, the Info panel (an `.inspector`, ⌘I) and the menu commands. Bursts and Similar show as one grid section per group. The grid takes the arrow keys and Space; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
 | `Thumbnails.swift` | One `PHCachingImageManager`: high-quality thumbnails, cached about 30 rows ahead of the visible ones, and the large preview. The settings come from the grid spike (`feea7cb`). |
 | `ExportView.swift` | The Export screen: destination, counts, progress and failures. |
 | `ImportView.swift` | The Import screen: the checked folders, their counts, Sort into Done and Import…, and Open Import in Photos. |
 | `SettingsView.swift` | The Settings window: Keep photos in albums, and the ignored albums. |
 
-The tests fake `PhotoLibrary` and `Judge`, so they need no library and no Apple Intelligence.
+The tests fake `PhotoLibrary` and `Judge`, so they need no library and no Apple Intelligence. Launch is in Core too: `launch(...)` authorizes, loads, starts Vision and builds the `ReviewModel`. The app only supplies PhotoKit, the judge and the saved settings.
 
 ## The passes
 

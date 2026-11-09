@@ -23,6 +23,24 @@ swift test
 
 The tests use a fake Photos library and a fake judge.
 They need no Photos library, no Photos access and no Apple Intelligence.
+CI runs them on every push and pull request.
+
+Put each rule the app follows in `PhotosCleanupCore`, where these tests reach it. This includes launch: `launch(library:judge:settings:cacheDir:)` returns no access, failed or loaded. The views hold no decisions, so there are no view tests.
+
+### Launch check
+
+```bash
+scripts/app.sh smoke
+```
+
+It builds and opens "Photos Cleanup Dev", then waits for the `Loaded:` line in `/tmp/photos-cleanup-app.log`. It quits the app and exits 0 when the library loads. It exits 1 if the app quits first, or if no `Loaded:` line appears in `SMOKE_TIMEOUT` seconds (default 120). A timeout usually means no Photos access.
+It only reads the library. CI cannot run it, because it needs a Photos library and Photos access.
+
+### Driving the app
+
+The main controls have accessibility identifiers, so automation finds them by a stable id, not by their label. Examples are `tab-<pass key>` for each sidebar pass, `commit`, `delete-in-photos`, `export-start`, `import-start` and `photo-<uuid>` for each grid cell. Search for `accessibilityIdentifier` in `Sources/PhotosCleanupApp/` for the full list.
+The [sandbox check](#sandbox-check) uses them when Claude drives the app with cmux-cua.
+There is no XCUITest suite. The app always works on the real Photos library, so a UI test would move real photos.
 
 ## Pre-commit
 
@@ -37,7 +55,7 @@ The commit hook runs the linters and builds the Swift package.
 
 - `Sources/PhotosCleanupCore/` — PhotoKit, Vision, Foundation Models, the passes, the `Cleanup` actor and the `ReviewModel` the app's screen runs on. No web framework, no SwiftUI.
 - `Sources/PhotosCleanupApp/` — the native SwiftUI app, its `Info.plist` (the release version) and its entitlements
-- `scripts/app.sh` — builds and signs the app bundle
+- `scripts/app.sh` — builds and signs the app bundle; `run` opens it, `smoke` checks that it launches
 - `Tests/` — Core tests
 
 ## Release
