@@ -81,6 +81,8 @@ The commit hook runs the linters and builds the Swift package.
 
 ## Release
 
+Before you start, run the [sandbox check](#sandbox-check): `/run-app sandbox check` in Claude Code, or its steps by hand. No hook or CI job runs it.
+
 1. Change `CFBundleShortVersionString` in `Sources/PhotosCleanupApp/Info.plist` on `master`. A manual run of `release.yml` also works. The build number (`CFBundleVersion`) is the commit count, set by `release.yml`; `Info.plist` keeps `1`.
 2. `release.yml` builds the universal app with `scripts/app.sh` on the `xcode-27` runner. It fails if AI verdicts are not compiled in, the Photos or App Sandbox entitlement is missing, or `scripts/check-sandbox.sh entitlements` finds an entitlement outside its allowlist.
 3. It signs the app with Developer ID and the hardened runtime, notarizes it and staples the ticket. It fails if Apple does not accept it. The certificate and API key secrets are listed in `release.yml`.
