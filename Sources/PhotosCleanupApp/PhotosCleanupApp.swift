@@ -59,29 +59,22 @@ struct ContentView: View {
 
     func start() async -> Phase {
         let library = PhotoKitLibrary()
-        let status = await library.authorize()
-        guard status == "authorized" else { return .noAccess(status) }
-        let judge = FoundationModelsJudge(library: library)
-        let verdictsOff = judge.unavailableReason()
-        let cleanup = Cleanup(
-            library: library, judge: judge,
-            cacheDir: URL.cachesDirectory.appending(path: "photos-cleanup", directoryHint: .isDirectory),
+        let defaults = UserDefaults.standard
+        let settings = LaunchSettings(
             ignoreAlbums: loadIgnoreAlbums(),
-            keepAlbumPhotos: UserDefaults.standard.object(forKey: keepAlbumPhotosKey) as? Bool ?? true,
-            verdictsOff: verdictsOff)
-        do { try await cleanup.load() } catch { return .failed("\(error)") }
-        let photos = await cleanup.photos
-        print("Loaded: \(photos.count) photos, \(memoryLabel())")
-        fflush(stdout)
-        await cleanup.startVision(photos.filter { !$0.isMovie && !$0.screenshot })
-        let exportFolder = loadExportDestination()
-        let exporter = Exporter(library: library, destination: exportFolder?.url)
-        let model = ReviewModel(
-            cleanup: cleanup, exporter: exporter, exportBookmark: exportFolder, importer: Importer(library: library))
-        model.showsInspector = UserDefaults.standard.bool(forKey: inspectorKey)
-        model.zoom = UserDefaults.standard.object(forKey: zoomKey) as? Int ?? model.zoom
-        model.aspectFit = UserDefaults.standard.bool(forKey: aspectFitKey)
-        await model.select(.all)
-        return .loaded(model, Thumbnails(library: library, uuids: photos.map(\.uuid), cell: model.cellSize))
+            keepAlbumPhotos: defaults.object(forKey: keepAlbumPhotosKey) as? Bool ?? true,
+            exportFolder: loadExportDestination(),
+            showsInspector: defaults.bool(forKey: inspectorKey),
+            zoom: defaults.object(forKey: zoomKey) as? Int,
+            aspectFit: defaults.bool(forKey: aspectFitKey))
+        let result = await launch(
+            library: library, judge: FoundationModelsJudge(library: library), settings: settings,
+            cacheDir: URL.cachesDirectory.appending(path: "photos-cleanup", directoryHint: .isDirectory))
+        switch result {
+        case .noAccess(let status): return .noAccess(status)
+        case .failed(let message): return .failed(message)
+        case .loaded(let model, let uuids):
+            return .loaded(model, Thumbnails(library: library, uuids: uuids, cell: model.cellSize))
+        }
     }
 }

@@ -8,6 +8,8 @@ final class FakeLibrary: PhotoLibrary {
     let all: [Photo]
     let analysis: [String: VisionResult?]
     let status: String
+    /// Makes photos() throw, as a failed library read.
+    let failsToLoad: Bool
     let adds = Mutex<[(album: String, uuids: [String])]>([])
     let deletes = Mutex<[[String]]>([])
     /// Makes delete() act as if the user cancelled macOS's confirmation.
@@ -16,14 +18,21 @@ final class FakeLibrary: PhotoLibrary {
     /// Blocks vision() until released, to observe a job mid-run.
     let gate = Gate()
 
-    init(_ photos: [Photo] = [], vision: [String: VisionResult?] = [:], status: String = "authorized") {
+    init(
+        _ photos: [Photo] = [], vision: [String: VisionResult?] = [:], status: String = "authorized",
+        failsToLoad: Bool = false
+    ) {
+        self.failsToLoad = failsToLoad
         all = photos
         analysis = vision
         self.status = status
     }
 
     func authorize() async -> String { status }
-    func photos() throws -> [Photo] { all }
+    func photos() throws -> [Photo] {
+        if failsToLoad { throw LibraryError.failed("library unreadable") }
+        return all
+    }
 
     func vision(_ uuids: [String]) -> [String: VisionResult?] {
         gate.wait()

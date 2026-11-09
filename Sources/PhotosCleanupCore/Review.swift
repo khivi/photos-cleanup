@@ -1046,3 +1046,57 @@ extension ReviewModel {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 }
+
+/// The saved settings the app applies at launch.
+public struct LaunchSettings: Sendable {
+    public var ignoreAlbums: Set<String>
+    public var keepAlbumPhotos = true
+    public var exportFolder: FolderBookmark?
+    public var showsInspector = false
+    public var zoom: Int?
+    public var aspectFit = false
+
+    public init(
+        ignoreAlbums: Set<String> = [], keepAlbumPhotos: Bool = true, exportFolder: FolderBookmark? = nil,
+        showsInspector: Bool = false, zoom: Int? = nil, aspectFit: Bool = false
+    ) {
+        self.ignoreAlbums = ignoreAlbums
+        self.keepAlbumPhotos = keepAlbumPhotos
+        self.exportFolder = exportFolder
+        self.showsInspector = showsInspector
+        self.zoom = zoom
+        self.aspectFit = aspectFit
+    }
+}
+
+public enum LaunchResult {
+    case noAccess(String)
+    case failed(String)
+    case loaded(ReviewModel, uuids: [String])
+}
+
+/// Authorizes, loads the library, starts Vision and builds the model on the All view.
+@MainActor
+public func launch(
+    library: PhotoLibrary, judge: Judge, settings: LaunchSettings, cacheDir: URL,
+    dir: URL = settingsDir, defaults: UserDefaults = .standard
+) async -> LaunchResult {
+    let status = await library.authorize()
+    guard status == "authorized" else { return .noAccess(status) }
+    let cleanup = Cleanup(
+        library: library, judge: judge, cacheDir: cacheDir, ignoreAlbums: settings.ignoreAlbums,
+        keepAlbumPhotos: settings.keepAlbumPhotos, verdictsOff: judge.unavailableReason())
+    do { try await cleanup.load() } catch { return .failed("\(error)") }
+    let photos = await cleanup.photos
+    print("Loaded: \(photos.count) photos, \(memoryLabel())")
+    fflush(stdout)
+    await cleanup.startVision(photos.filter { !$0.isMovie && !$0.screenshot })
+    let model = ReviewModel(
+        cleanup: cleanup, exporter: Exporter(library: library, destination: settings.exportFolder?.url),
+        exportBookmark: settings.exportFolder, importer: Importer(library: library), dir: dir, defaults: defaults)
+    model.showsInspector = settings.showsInspector
+    model.zoom = settings.zoom ?? model.zoom
+    model.aspectFit = settings.aspectFit
+    await model.select(.all)
+    return .loaded(model, uuids: photos.map(\.uuid))
+}
