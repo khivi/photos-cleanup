@@ -149,8 +149,7 @@ public let cleanupAlbumNames: Set<String> = [
     "Similar Photos - Review Me", "Documents - Review Me",
 ]
 
-public let settingsDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-    "Library/Application Support/photos-cleanup")
+public let settingsDir = URL.applicationSupportDirectory.appending(path: "photos-cleanup", directoryHint: .isDirectory)
 
 /// Albums whose membership doesn't protect a photo: the defaults, review albums, and any listed
 /// in albums_ignore or albums_ignore.local in `dir` (one per line, '#' comments).

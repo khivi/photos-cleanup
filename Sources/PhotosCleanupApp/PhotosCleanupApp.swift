@@ -65,8 +65,7 @@ struct ContentView: View {
         let verdictsOff = judge.unavailableReason()
         let cleanup = Cleanup(
             library: library, judge: judge,
-            cacheDir: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-                "Library/Caches/photos-cleanup"),
+            cacheDir: URL.cachesDirectory.appending(path: "photos-cleanup", directoryHint: .isDirectory),
             ignoreAlbums: loadIgnoreAlbums(),
             keepAlbumPhotos: UserDefaults.standard.object(forKey: keepAlbumPhotosKey) as? Bool ?? true,
             verdictsOff: verdictsOff)
