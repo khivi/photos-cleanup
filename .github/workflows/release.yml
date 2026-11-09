@@ -95,7 +95,7 @@ jobs:
           codesign --verify --deep --strict "$app"
           codesign -dv "$app" 2>&1 | grep -q "TeamIdentifier=3WD7XPJ5M5"
           codesign -d --entitlements - "$app" 2>&1 | grep -q "personal-information.photos-library"
-          codesign -d --entitlements - "$app" 2>&1 | grep -q "app-sandbox"
+          scripts/check-sandbox.sh entitlements
           lipo -archs "$bin" | grep -q x86_64 && lipo -archs "$bin" | grep -q arm64
           # Never ship a build without AI verdicts (an SDK older than macOS 27).
           strings "$bin" | grep -q "photo library and decide whether each is still worth keeping"
