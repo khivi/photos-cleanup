@@ -60,7 +60,7 @@ The build also writes a sample folder to `.build/demo-import` for the Import scr
 The app chooses the demo only when `--demo` is set and the bundle holds fixtures. Release builds hold none, and `scripts/app.sh demo` refuses `SIGN_IDENTITY`.
 A launch argument fits `open --args`; a sandboxed app cannot read a fixtures folder outside its bundle, so the build copies the fixtures in.
 Show in Photos and Open Import in Photos are hidden.
-To check the launch, run `scripts/app.sh demo smoke`. CI runs it on every push.
+To check the launch, run `scripts/app.sh demo smoke`. CI and the pre-push hook run `scripts/check-sandbox.sh smoke`, which also fails on a sandbox denial not on its expected list.
 
 ## Pre-commit
 

@@ -51,8 +51,8 @@ jobs:
       - run: swift test --skip-build
 
       # The demo needs no Photos library or access, so the sandboxed app can launch here.
-      - name: Demo launches
-        run: scripts/app.sh demo smoke
+      - name: Demo launches with no unexpected sandbox denials
+        run: scripts/check-sandbox.sh smoke
 
       # The release's build path, ad hoc signed: catches bundling and entitlement breakage,
       # and a build without AI verdicts.
@@ -63,6 +63,7 @@ jobs:
           bin=".build/Photos Cleanup.app/Contents/MacOS/PhotosCleanupApp"
           codesign --verify --strict ".build/Photos Cleanup.app"
           codesign -d --entitlements - ".build/Photos Cleanup.app" 2>&1 | grep -q "personal-information.photos-library"
+          scripts/check-sandbox.sh entitlements
           strings "$bin" | grep -q "photo library and decide whether each is still worth keeping"
           # Both slices, each built against SDK 26+, or macOS draws the window in its old style.
           archs=$(lipo -archs "$bin")

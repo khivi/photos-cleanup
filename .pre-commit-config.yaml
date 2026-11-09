@@ -75,10 +75,10 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
-      # CI's demo launch check; opens the demo window for a few seconds.
+      # CI's demo launch check, failing on unexpected sandbox denials; opens the demo behind other windows.
       - id: demo-smoke
         name: demo smoke
-        entry: scripts/app.sh demo smoke
+        entry: scripts/check-sandbox.sh smoke
         language: system
         files: ^(Sources/|scripts/app\.sh$|scripts/demo/|Package\.swift$)
         pass_filenames: false

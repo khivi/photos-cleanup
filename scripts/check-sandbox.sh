@@ -2,6 +2,7 @@
 # App Sandbox checks for `.build/Photos Cleanup.app`.
 #   scripts/check-sandbox.sh entitlements [--store]   fail on any entitlement outside the allowlist
 #   scripts/check-sandbox.sh watch                     print sandbox denials until Ctrl-C
+#   scripts/check-sandbox.sh smoke                     demo smoke; fail on any denial not in `expected`
 set -euo pipefail
 cd "$(dirname "$0")/.."
 app=".build/Photos Cleanup.app"
@@ -14,6 +15,9 @@ allowed=(
 )
 # The App Store rejects temporary exceptions; Show in Photos hides itself without this one.
 homebrew_only=(com.apple.security.temporary-exception.apple-events)
+# Denials from system frameworks the app loads, seen with every feature still working.
+expected='vfs.disk-space|AppleNVMeEANUC|syspolicy.exec'
+predicate='sender == "Sandbox" AND eventMessage CONTAINS "PhotosCleanupApp"'
 
 case ${1:-} in
   entitlements)
@@ -25,7 +29,19 @@ case ${1:-} in
     echo "entitlements ok"
     ;;
   watch)
-    log stream --style compact --predicate 'sender == "Sandbox" AND eventMessage CONTAINS "PhotosCleanupApp"'
+    log stream --style compact --predicate "$predicate"
     ;;
-  *) echo "usage: scripts/check-sandbox.sh entitlements [--store] | watch" >&2; exit 2 ;;
+  smoke)
+    out=$(mktemp)
+    log stream --style compact --predicate "$predicate" >"$out" 2>&1 &
+    stream=$!
+    trap 'kill "$stream" 2>/dev/null || true' EXIT
+    sleep 2
+    scripts/app.sh demo smoke
+    sleep 2
+    bad=$(grep 'deny(' "$out" | grep -vE "$expected" || true)
+    [ -z "$bad" ] || { echo "sandbox denials:" >&2; echo "$bad" >&2; exit 1; }
+    echo "no unexpected sandbox denials"
+    ;;
+  *) echo "usage: scripts/check-sandbox.sh entitlements [--store] | watch | smoke" >&2; exit 2 ;;
 esac
