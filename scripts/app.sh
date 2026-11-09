@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build and sign `.build/Photos Cleanup.app`. `run` also opens it, with output in a log.
 # `smoke` opens it and waits for the app's `Loaded:` line (exit 0), or fails if it quits or times out.
-#   scripts/app.sh [run|smoke|demo] [--universal]
+#   scripts/app.sh [run|smoke|demo] [--hidden] [--universal]
+# `--hidden` opens the app behind other windows without taking focus, for automation; `smoke` always does.
 # `demo` builds "Photos Cleanup Demo" (com.khivi.photos-cleanup.demo) with generated fixtures bundled, and opens it
 # with `--demo`: the full UI on a fake library, never your Photos. It combines with `smoke`. Dev builds only.
 # SMOKE_TIMEOUT: seconds `smoke` waits for `Loaded:` (default 120).
@@ -11,14 +12,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-run=0 smoke=0 demo=0 arch=()
+run=0 smoke=0 demo=0 hide=() arch=()
 for a in "$@"; do
   case $a in
     run) run=1 ;;
     smoke) smoke=1 ;;
     demo) demo=1 ;;
+    --hidden) hide=(-g -j) ;;
     --universal) arch=(--arch arm64 --arch x86_64) ;;
-    *) echo "usage: scripts/app.sh [run|smoke|demo] [--universal]" >&2; exit 2 ;;
+    *) echo "usage: scripts/app.sh [run|smoke|demo] [--hidden] [--universal]" >&2; exit 2 ;;
   esac
 done
 
@@ -72,7 +74,7 @@ fi
 echo "$app"
 
 if [ "$run" = 1 ]; then
-  open -n "$app" --stdout /tmp/photos-cleanup-app.log --stderr /tmp/photos-cleanup-app.log ${open_args[@]+"${open_args[@]}"}
+  open -n ${hide[@]+"${hide[@]}"} "$app" --stdout /tmp/photos-cleanup-app.log --stderr /tmp/photos-cleanup-app.log ${open_args[@]+"${open_args[@]}"}
   echo "log: /tmp/photos-cleanup-app.log"
 fi
 
@@ -82,7 +84,7 @@ if [ "$smoke" = 1 ]; then
   quit() { pkill -f "$bin_path" || true; }
   quit
   : >"$log"
-  open -n "$app" --stdout "$log" --stderr "$log" ${open_args[@]+"${open_args[@]}"}
+  open -n -g -j "$app" --stdout "$log" --stderr "$log" ${open_args[@]+"${open_args[@]}"}
   for ((i = 0; i < ${SMOKE_TIMEOUT:-120}; i++)); do
     if grep -q '^Loaded:' "$log"; then
       grep '^Loaded:' "$log"; quit; exit 0

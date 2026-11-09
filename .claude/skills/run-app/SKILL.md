@@ -20,7 +20,7 @@ Run from the repo root.
 Run when the user asks for a sandbox check, or before a release. These are the steps in `CONTRIBUTING.md` → Sandbox check, with Claude driving the app.
 
 1. Run `scripts/check-sandbox.sh entitlements`. Stop if it fails.
-2. Start `scripts/check-sandbox.sh watch` with `run_in_background`.
+2. Start `scripts/check-sandbox.sh watch` with `run_in_background`. Add `--hidden` to every `scripts/app.sh run` or `demo` below, so the app opens behind the user's windows without taking focus.
 3. Demo part: quit any running copy, then follow its steps. Drive "Photos Cleanup Demo" with the `cmux-cua` tools (`launch_app` attaches to the running copy), and read the window state after each action. Find controls by their accessibility ids (`CONTRIBUTING.md` → Driving the app).
    - Every step is safe here, Delete in Photos… included: the demo never touches the user's library.
    - Export into a new folder under `/tmp`. The folder picker is a separate system panel. If you can't drive it, ask the user to pick the folder.
