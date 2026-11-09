@@ -102,7 +102,7 @@ Do this before each release. It has two parts. Both run `scripts/check-sandbox.s
 4. Import: add `.build/demo-import`, click Check, then Sort. Its sidebar path starts with `~`.
 5. Change the zoom. Quit and open the demo again with `open ".build/Photos Cleanup Demo.app" --args --demo`. The zoom, the Export folder and the Import folder are kept, and no folder shows "Not found".
 
-**Library part.** It covers only what the demo fakes: PhotoKit, Vision, the AI judge and Show in Photos.
+**Photos part.** It covers only what the demo fakes: PhotoKit, Vision, the AI judge and Show in Photos.
 
 1. Run `scripts/app.sh smoke`. It exits 0 when the Dev build loads your library.
 2. Run `scripts/app.sh run`. Allow Photos access if macOS asks.
