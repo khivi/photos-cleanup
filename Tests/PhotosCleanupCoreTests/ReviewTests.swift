@@ -862,3 +862,49 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
     await m.select(.all)
     #expect(m.summary == "\(1200.formatted()) photos")
 }
+
+@MainActor
+@Suite struct GroupReviewTests {
+    /// Two bursts a day apart: x, y (★), z and p, q (★).
+    private func twoBursts() async throws -> (ReviewModel, FakeLibrary) {
+        let photos = dated(["x": 0, "y": 1, "z": 2, "p": 86_400, "q": 86_401])
+        let (c, lib) = try await makeCleanup(
+            photos, vision: ["x": vr(0.1), "y": vr(0.9), "z": vr(0.2), "p": vr(0.1), "q": vr(0.8)])
+        let m = ReviewModel(cleanup: c, dir: tempDir(), defaults: freshDefaults())
+        await m.select(.pass("bursts"))
+        return (m, lib)
+    }
+
+    @Test func theBestPhotoLeadsItsGroup() async throws {
+        let (m, _) = try await twoBursts()
+        #expect(m.groups.map { $0.photos.map(\.id) }.sorted { $0[0] < $1[0] } == [["q", "p"], ["y", "x", "z"]])
+        #expect(m.photos.map(\.id) == m.groups.flatMap(\.photos).map(\.id))  // arrow order is the display order
+    }
+
+    @Test func aGroupHoldingTheAnchorIsExpanded() async throws {
+        let (m, _) = try await twoBursts()
+        let (a, b) = (m.groups[0], m.groups[1])
+        m.click(a.photos[1].id)
+        #expect(m.isExpanded(a) && !m.isExpanded(b))
+        m.toggleExpanded(b)
+        #expect(m.isExpanded(b))
+        m.toggleExpanded(b)
+        #expect(!m.isExpanded(b))
+    }
+
+    @Test func theCaptionFoldsPerPassAndStaysFolded() async throws {
+        let photos = dated(["x": 0, "y": 1])
+        let (c, _) = try await makeCleanup(photos, vision: ["x": vr(0.1), "y": vr(0.9)])
+        let defaults = freshDefaults()
+        let m = ReviewModel(cleanup: c, dir: tempDir(), defaults: defaults)
+        await m.select(.pass("bursts"))
+        #expect(!m.captionFolded)
+        m.toggleCaption()
+        #expect(m.captionFolded && m.captionToggleLabel == "Show More")
+        await m.select(.pass("similar"))
+        #expect(!m.captionFolded)
+        let again = ReviewModel(cleanup: c, dir: tempDir(), defaults: defaults)
+        await again.select(.pass("bursts"))
+        #expect(again.captionFolded)
+    }
+}

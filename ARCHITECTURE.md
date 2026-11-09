@@ -49,7 +49,7 @@ The Swift package has no dependencies.
 | File | Role |
 | --- | --- |
 | `PhotosCleanupApp.swift` | The app, its window and the Settings window. It calls Core's `launch(...)` with PhotoKit and the saved settings, then shows the review screen. |
-| `ReviewScreen.swift` | The sidebar, the toolbar, the grid, the Info panel (an `.inspector`, ⌘I) and the menu commands. Bursts and Similar show as one grid section per group. The grid takes the arrow keys and Space; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
+| `ReviewScreen.swift` | The sidebar, the toolbar, the grid, the Info panel (an `.inspector`, ⌘I) and the menu commands. Bursts and Similar show one row per group: the ★ full size, the others smaller, "+N" past one row. The grid takes the arrow keys and Space; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
 | `Thumbnails.swift` | One `PHCachingImageManager`: high-quality thumbnails, cached about 30 rows ahead of the visible ones, and the large preview. The settings come from the grid spike (`feea7cb`). |
 | `ExportView.swift` | The Export screen: destination, counts, progress and failures. |
 | `ImportView.swift` | The Import screen: the checked folders, their counts, Sort into Done and Import…, and Open Import in Photos. |

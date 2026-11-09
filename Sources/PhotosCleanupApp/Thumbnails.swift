@@ -114,6 +114,8 @@ struct PhotoCell: View {
     let mark: Mark
     var selected = false
     var best = false
+    /// A small cell in a group's row: the Delete badge is just ✗, and no kind or duration pill.
+    var compact = false
     var label = ""
     let thumbnails: Thumbnails
     /// The whole photo, fitted in the square cell, instead of a square crop.
@@ -148,10 +150,12 @@ struct PhotoCell: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                if let d = photo.photo.durationLabel { pill(Text(d).font(.caption2.monospacedDigit())) }
+                if !compact, let d = photo.photo.durationLabel { pill(Text(d).font(.caption2.monospacedDigit())) }
             }
             .overlay(alignment: .bottomLeading) {
-                if case .decision = mark, let v = photo.verdict {
+                if compact {
+                    EmptyView()
+                } else if case .decision = mark, let v = photo.verdict {
                     pill(Text(v.kind).font(.caption2))
                 } else if let t = photo.photo.kindTag {
                     pill(Text(t).font(.caption2))
@@ -182,7 +186,7 @@ struct PhotoCell: View {
         switch mark {
         case .none: EmptyView()
         case .deleteMe: label("✗ Delete Me", .red)
-        case .decision(.delete): label("✗ Delete", .red)
+        case .decision(.delete): label(compact ? "✗" : "✗ Delete", .red)
         case .decision(.keep): EmptyView()  // most photos start as Keep: only the exceptions are marked
         }
     }

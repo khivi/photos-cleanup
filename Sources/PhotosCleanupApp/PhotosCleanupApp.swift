@@ -64,7 +64,7 @@ struct ContentView: View {
             ignoreAlbums: loadIgnoreAlbums(),
             keepAlbumPhotos: defaults.object(forKey: keepAlbumPhotosKey) as? Bool ?? true,
             exportFolder: loadExportDestination(),
-            showsInspector: defaults.bool(forKey: inspectorKey),
+            showsInspector: savedInspector(.all),
             zoom: defaults.object(forKey: zoomKey) as? Int,
             aspectFit: defaults.bool(forKey: aspectFitKey))
         let result = await launch(

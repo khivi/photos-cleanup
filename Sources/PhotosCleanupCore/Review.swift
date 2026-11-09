@@ -30,6 +30,8 @@ public final class ReviewModel {
     public private(set) var decisions: [String: Decision] = [:]
     /// Decided explicitly by the user.
     public private(set) var touched: Set<String> = []
+    /// Grouped passes: groups shown past their first row, by `best`.
+    public private(set) var expanded: Set<String> = []
     /// Photos this session's commits moved to a Delete Me album, newest first.
     private var committed: [Photo] = []
     private var committedAlbum: [String: String] = [:]
@@ -88,6 +90,8 @@ public final class ReviewModel {
     private let defaults: UserDefaults
     /// Months marked Done in All, by "2024-03" key, with the photo count when marked.
     public private(set) var reviewedMonths: [String: Int]
+    /// Pass keys whose caption shows as one line.
+    private var foldedCaptions: Set<String>
 
     public init(
         cleanup: Cleanup, exporter: Exporter? = nil, exportBookmark: FolderBookmark? = nil, importer: Importer? = nil,
@@ -100,6 +104,7 @@ public final class ReviewModel {
         self.dir = dir
         self.defaults = defaults
         reviewedMonths = loadReviewedMonths(dir: dir)
+        foldedCaptions = Set(defaults.stringArray(forKey: foldedCaptionsKey) ?? [])
         importBookmarks = loadImportFolders(defaults: defaults)
         importFolder = importFolders.first
     }
@@ -278,6 +283,14 @@ public final class ReviewModel {
 
     /// The line above a pass's grid.
     public var passCaption: String? { view.passKey.map(passNote) }
+    public var captionFolded: Bool { view.passKey.map(foldedCaptions.contains) ?? false }
+    public var captionToggleLabel: String { captionFolded ? "Show More" : "Show Less" }
+
+    public func toggleCaption() {
+        guard let key = view.passKey else { return }
+        if foldedCaptions.remove(key) == nil { foldedCaptions.insert(key) }
+        defaults.set(foldedCaptions.sorted(), forKey: foldedCaptionsKey)
+    }
 
     /// A sidebar ring's tooltip: which job, and how far.
     static func jobLabel(_ j: JobProgress) -> String {
@@ -376,9 +389,9 @@ public final class ReviewModel {
             var prog = JobProgress()
             if let key = v.passKey {
                 let r = try await cleanup.pass(key)
-                (items, gs, sc, fc, prog) = (
-                    Passes.grouped.contains(key) ? Self.flat(r.groups) : r.photos, r.groups, r.scores, r.faces,
-                    r.progress
+                gs = r.groups.map(\.bestFirst)
+                (items, sc, fc, prog) = (
+                    Passes.grouped.contains(key) ? Self.flat(gs) : r.photos, r.scores, r.faces, r.progress
                 )
             } else {
                 let all = await cleanup.photos
@@ -395,6 +408,7 @@ public final class ReviewModel {
             progress = prog
             decisions = [:]
             touched = []
+            expanded = []
             if v != .all { for p in items { decisions[p.id] = initialDecision(p) } }
         } catch {
             self.error = "\(error)"
@@ -411,8 +425,8 @@ public final class ReviewModel {
         scores = r.scores
         faces = r.faces
         if Passes.grouped.contains(key) {  // groups change as more photos are analysed: take them wholesale
-            groups = r.groups
-            photos = Self.flat(r.groups)
+            groups = r.groups.map(\.bestFirst)
+            photos = Self.flat(groups)
         } else {
             let fresh = Dictionary(r.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             let have = Set(photos.map(\.id))
@@ -787,6 +801,34 @@ extension Photo {
 
     /// The tile's pill for a kind the thumbnail doesn't show: "Live" or "Screen recording".
     public var kindTag: String? { screenRecording ? "Screen recording" : live ? "Live" : nil }
+}
+
+// MARK: Group review
+
+let foldedCaptionsKey = "foldedCaptions"
+
+extension BurstGroup {
+    /// The ★ first, the rest in time order: a group's row shows it largest.
+    var bestFirst: BurstGroup {
+        guard let i = photos.firstIndex(where: { $0.id == best }), i > 0 else { return self }
+        var ps = photos
+        ps.insert(ps.remove(at: i), at: 0)
+        return BurstGroup(photos: ps, best: best)
+    }
+}
+
+extension ReviewModel {
+    /// Bursts or Similar: one row per group.
+    public var isGrouped: Bool { view.passKey.map(Passes.grouped.contains) == true }
+
+    /// Shown in full: opened by hand, or holding the anchor, so arrow keys never select a hidden photo.
+    public func isExpanded(_ g: BurstGroup) -> Bool {
+        expanded.contains(g.best) || anchor.map { a in g.photos.contains { $0.id == a } } == true
+    }
+
+    public func toggleExpanded(_ g: BurstGroup) {
+        if expanded.remove(g.best) == nil { expanded.insert(g.best) }
+    }
 }
 
 // MARK: Month sections in All

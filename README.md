@@ -123,13 +123,16 @@ In Bursts and Similar, the best shot is the one whose worst face Vision rates be
 
 A tile marks a Live Photo "Live" and a screen recording "Screen recording".
 
+Bursts and Similar show one row per group: the best shot large, the others smaller beside it.
+A long group ends in "+N"; click it, or select a photo in the group, to see the rest.
+
 All shows every photo by month. Mark any photo delete there; it goes to "All - Delete Me".
 Switch a month to Done to remember you reviewed it.
 
 | Key | Action |
 | --- | --- |
 | Click, ⇧-click, ⌘-click, ⌘A | Select |
-| Arrow keys | Move the selection |
+| Arrow keys | Move the selection; in Bursts and Similar, ↑ and ↓ move by group |
 | K / ⌫ | Mark keep / delete; with one photo selected, move to the next |
 | Space, Esc | Show or close the large preview (videos play) |
 | ⌘I | Show the Info panel: date, albums, and why the photo was picked |

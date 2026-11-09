@@ -80,7 +80,10 @@ struct ReviewScreen: View {
                 position.scrollTo(id: a)
             }
         }
-        .onChange(of: model.showsInspector) { UserDefaults.standard.set(model.showsInspector, forKey: inspectorKey) }
+        .onChange(of: model.view) { model.showsInspector = savedInspector(model.view) }
+        .onChange(of: model.showsInspector) {
+            UserDefaults.standard.set(model.showsInspector, forKey: inspectorKey(model.view))
+        }
         .onChange(of: model.zoom) {
             UserDefaults.standard.set(model.zoom, forKey: zoomKey)
             thumbnails.setCell(model.cellSize)
@@ -207,40 +210,55 @@ struct ReviewScreen: View {
             // One ScrollView for every list: a second one would leave keyboard focus on the old one.
             ScrollView {
                 if let caption = model.passCaption {
-                    Text(caption).font(.callout).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, gridPadding).padding(.top, 8)
-                }
-                LazyVGrid(
-                    columns: [
-                        GridItem(.adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
-                    ], spacing: 4
-                ) {
-                    if model.view == .all || model.view.passKey.map(Passes.grouped.contains) == true {
-                        ForEach(model.shownGroups, id: \.best) { group in
-                            Section {
-                                ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
-                            } header: {
-                                HStack {
-                                    Text(model.header(group)).font(.headline)
-                                    if model.view == .all {
-                                        Toggle(
-                                            "Done",
-                                            isOn: Binding(
-                                                get: { model.isDone(group) }, set: { _ in model.toggleDone(group) })
-                                        )
-                                        .accessibilityIdentifier("done-\(group.best)")
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
-                                .id(sectionID(group.best))
-                            }
-                        }
-                    } else {
-                        ForEach(items) { cell($0) }
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(caption).lineLimit(model.captionFolded ? 1 : nil)
+                            .help(model.captionFolded ? caption : "")
+                        Spacer()
+                        Button(model.captionToggleLabel) { model.toggleCaption() }
+                            .buttonStyle(.link).focusable(false)
+                            .accessibilityIdentifier("caption-toggle")
                     }
+                    .font(.callout).foregroundStyle(.secondary)
+                    .padding(.horizontal, gridPadding).padding(.top, 8)
                 }
-                .padding(.horizontal, gridPadding)
+                if model.isGrouped {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(model.shownGroups, id: \.best) { groupRow($0) }
+                    }
+                    .padding(.horizontal, gridPadding)
+                } else {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(
+                                .adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
+                        ], spacing: 4
+                    ) {
+                        if model.view == .all {
+                            ForEach(model.shownGroups, id: \.best) { group in
+                                Section {
+                                    ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
+                                } header: {
+                                    HStack {
+                                        Text(model.header(group)).font(.headline)
+                                        if model.view == .all {
+                                            Toggle(
+                                                "Done",
+                                                isOn: Binding(
+                                                    get: { model.isDone(group) }, set: { _ in model.toggleDone(group) })
+                                            )
+                                            .accessibilityIdentifier("done-\(group.best)")
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                                    .id(sectionID(group.best))
+                                }
+                            }
+                        } else {
+                            ForEach(items) { cell($0) }
+                        }
+                    }
+                    .padding(.horizontal, gridPadding)
+                }
             }
             .scrollPosition($position)
             .keyboardSelection(model: model, focused: $focused, width: $width) { move($0) }
@@ -255,6 +273,9 @@ struct ReviewScreen: View {
     /// An arrow key: the model moves the selection; `onChange(of: model.anchor)` scrolls it into view.
     private func move(_ key: KeyEquivalent) {
         let step = model.previewing ? 1 : columns  // in the preview, up and down are one photo like left and right
+        if model.isGrouped && !model.previewing && (key == .upArrow || key == .downArrow) {
+            return model.moveSection(by: key == .upArrow ? -1 : 1)  // one row per group
+        }
         switch key {
         case .leftArrow: model.moveSelection(by: -1)
         case .rightArrow: model.moveSelection(by: 1)
@@ -263,7 +284,50 @@ struct ReviewScreen: View {
         }
     }
 
-    private func cell(_ p: PassPhoto) -> some View {
+    /// A grouped pass's row: the ★ at full size, the others smaller beside it. Collapsed, the row
+    /// ends in "+N"; expanded, the others wrap onto more rows beside the ★.
+    private func groupRow(_ group: BurstGroup) -> some View {
+        let big = model.cellSize
+        let small = (big * 0.6).rounded()
+        let perRow = max(1, Int((width - 2 * gridPadding - big) / (small + 4)))
+        let rest = group.photos.dropFirst().map { PassPhoto(photo: $0) }
+        let open = model.isExpanded(group)
+        let shown = open || rest.count <= perRow ? rest : Array(rest.prefix(perRow - 1))
+        let rows = stride(from: 0, to: shown.count, by: perRow).map { Array(shown[$0..<min($0 + perRow, shown.count)]) }
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(model.header(group)).font(.headline)
+                if model.expanded.contains(group.best) {
+                    Button("Show Less") { model.toggleExpanded(group) }.buttonStyle(.link).focusable(false)
+                }
+            }
+            .padding(.top, 8)
+            HStack(alignment: .top, spacing: 4) {
+                cell(PassPhoto(photo: group.photos[0])).frame(width: big, height: big)
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(rows.indices, id: \.self) { r in
+                        HStack(spacing: 4) {
+                            ForEach(rows[r]) { cell($0, compact: true).frame(width: small, height: small) }
+                            if r == rows.count - 1 && shown.count < rest.count {
+                                Button {
+                                    model.toggleExpanded(group)
+                                } label: {
+                                    Text("+\(rest.count - shown.count)").font(.title3.weight(.semibold))
+                                        .frame(width: small, height: small)
+                                        .background(.gray.opacity(0.15), in: .rect(cornerRadius: 4))
+                                }
+                                .buttonStyle(.plain).focusable(false)
+                                .accessibilityIdentifier("expand-\(group.best)")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .id(sectionID(group.best))
+    }
+
+    private func cell(_ p: PassPhoto, compact: Bool = false) -> some View {
         let mark: PhotoCell.Mark =
             switch model.view {
             case .all:
@@ -273,7 +337,7 @@ struct ReviewScreen: View {
             case .export, .importFolders: .none
             }
         return PhotoCell(
-            photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id),
+            photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id), compact: compact,
             label: model.accessibilityLabel(p), thumbnails: thumbnails, aspectFit: model.aspectFit,
             onTap: {
                 focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
@@ -321,7 +385,7 @@ extension View {
 }
 
 extension ReviewView {
-    fileprivate var sidebarID: String {
+    var sidebarID: String {
         switch self {
         case .all: "tab-all"
         case .pass(let key): "tab-\(key)"
@@ -408,6 +472,11 @@ struct ReviewCommands: Commands {
 }
 
 let inspectorKey = "showsInspector"
+/// The Info panel is open or closed per view; a view never set falls back to the old app-wide setting.
+func inspectorKey(_ v: ReviewView) -> String { "\(inspectorKey).\(v.sidebarID)" }
+func savedInspector(_ v: ReviewView) -> Bool {
+    UserDefaults.standard.object(forKey: inspectorKey(v)) as? Bool ?? UserDefaults.standard.bool(forKey: inspectorKey)
+}
 let zoomKey = "gridZoom"
 let aspectFitKey = "gridAspectFit"
 
