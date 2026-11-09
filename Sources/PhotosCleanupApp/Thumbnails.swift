@@ -164,6 +164,7 @@ struct PhotoCell: View {
             .onTapGesture { onTap?() }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
+            .accessibilityIdentifier("photo-\(photo.id)")
             .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             .accessibilityAction { onTap?() }
             .help(photo.verdict.map { "\($0.kind): \($0.reason)" } ?? "")

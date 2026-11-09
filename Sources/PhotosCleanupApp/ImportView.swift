@@ -27,10 +27,12 @@ struct ImportView: View {
                     Button("Add Folder…", systemImage: "plus") {
                         if let url = pickFolder(prompt: "Add") { Task { await model.addImportFolder(url) } }
                     }
+                    .accessibilityIdentifier("import-add-folder")
                     Button("Remove", systemImage: "minus") {
                         if let url = model.importFolder { model.removeImportFolder(url) }
                     }
                     .disabled(model.importFolder == nil || model.importBusy != nil)
+                    .accessibilityIdentifier("import-remove-folder")
                     Spacer()
                 }
                 .labelStyle(.iconOnly).buttonStyle(.borderless).padding(6)
@@ -47,6 +49,7 @@ struct ImportView: View {
         }
         .confirmationDialog("Sort into Done and Import?", isPresented: $confirmingSort) {
             Button("Sort") { Task { await model.sortImportFolder() } }
+                .accessibilityIdentifier("import-sort-confirm")
         } message: {
             Text(model.importSortPreview + "\n\nFiles move within the folder. Nothing is deleted.")
         }
@@ -70,17 +73,21 @@ struct ImportView: View {
                     HStack {
                         Button("Check Again") { Task { await model.checkImportFolder(url) } }
                             .disabled(!model.canCheckImport)
+                            .accessibilityIdentifier("import-check")
                         Spacer()
                         Button("Sort into Done and Import…") { confirmingSort = true }
                             .disabled(!model.canSortImport)
                             .keyboardShortcut(.defaultAction)
+                            .accessibilityIdentifier("import-start")
                     }
                     HStack {
                         Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                            .accessibilityIdentifier("import-show-in-finder")
                         Spacer()
                         Button("Open Import in Photos") { openInPhotos(model.importInbox!) }
                             .disabled(model.importInbox == nil)
                             .help("Photos shows its import window for the Import folder.")
+                            .accessibilityIdentifier("import-open-in-photos")
                     }
                 } footer: {
                     Text(
@@ -104,6 +111,7 @@ struct ImportView: View {
                 Button("Add Folder…") {
                     if let url = pickFolder(prompt: "Add") { Task { await model.addImportFolder(url) } }
                 }
+                .accessibilityIdentifier("import-add-folder-empty")
             }
         }
     }

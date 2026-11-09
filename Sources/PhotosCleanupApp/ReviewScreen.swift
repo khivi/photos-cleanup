@@ -47,6 +47,7 @@ struct ReviewScreen: View {
                             // A Text badge: .badge(Int) hides 0, and a pass's 0 says it found nothing.
                             .badge(item.progress == nil ? item.badge.map { Text($0.formatted()) } : nil)
                             .tag(item.view)
+                            .accessibilityIdentifier(item.view.sidebarID)
                         }
                     }
                 }
@@ -65,6 +66,7 @@ struct ReviewScreen: View {
                 .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
                 .confirmationDialog("Move to Albums?", isPresented: $model.confirmingMove) {
                     Button("Move", role: .destructive) { Task { await model.commit() } }
+                        .accessibilityIdentifier("commit-confirm")
                 } message: {
                     Text(model.commitPreview.map(\.label).joined(separator: "\n"))
                 }
@@ -119,16 +121,20 @@ struct ReviewScreen: View {
         if showsGrid {
             ToolbarItemGroup {
                 Button("Zoom Out", systemImage: "minus") { model.zoomOut() }.disabled(!model.canZoomOut)
+                    .accessibilityIdentifier("zoom-out")
                 Button("Zoom In", systemImage: "plus") { model.zoomIn() }.disabled(!model.canZoomIn)
+                    .accessibilityIdentifier("zoom-in")
             }
             ToolbarItem {
                 @Bindable var model = model
                 Toggle(model.aspectToggleLabel, systemImage: "aspectratio", isOn: $model.aspectFit)
                     .help(model.aspectToggleLabel)
+                    .accessibilityIdentifier("aspect-toggle")
             }
         }
         ToolbarItem {
             Button(model.inspectorToggleLabel, systemImage: "info.circle") { model.showsInspector.toggle() }
+                .accessibilityIdentifier("inspector-toggle")
         }
         if model.canFilter {
             ToolbarItem {
@@ -138,13 +144,16 @@ struct ReviewScreen: View {
                     isOn: $model.onlyDelete
                 )
                 .help(ReviewModel.onlyDeleteLabel)
+                .accessibilityIdentifier("only-delete-toggle")
             }
         }
         if model.inPass {
             ToolbarItemGroup {
                 Group {
                     Button(ReviewModel.keepAllLabel, systemImage: "checkmark") { model.setAll(.keep) }
+                        .accessibilityIdentifier("keep-all")
                     Button(ReviewModel.deleteAllLabel, systemImage: "trash") { model.setAll(.delete) }
+                        .accessibilityIdentifier("delete-all")
                 }
                 .labelStyle(.titleAndIcon)
                 .disabled(!model.canSetAll)
@@ -155,12 +164,14 @@ struct ReviewScreen: View {
                 Button(model.deleteInPhotosLabel, systemImage: "trash") { Task { await model.deleteInPhotos() } }
                     .labelStyle(.titleAndIcon)
                     .disabled(!model.canDeleteInPhotos)
+                    .accessibilityIdentifier("delete-in-photos")
             }
         }
         if model.canMark {  // Keep All / Delete All stay pass-only; All has just the move
             ToolbarItem {
                 Button(model.moveButtonLabel) { model.confirmingMove = true }
                     .disabled(!model.canMove)
+                    .accessibilityIdentifier("commit")
             }
         }
     }
@@ -216,7 +227,9 @@ struct ReviewScreen: View {
                                         Toggle(
                                             "Done",
                                             isOn: Binding(
-                                                get: { model.isDone(group) }, set: { _ in model.toggleDone(group) }))
+                                                get: { model.isDone(group) }, set: { _ in model.toggleDone(group) })
+                                        )
+                                        .accessibilityIdentifier("done-\(group.best)")
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
@@ -307,6 +320,18 @@ extension View {
     }
 }
 
+extension ReviewView {
+    fileprivate var sidebarID: String {
+        switch self {
+        case .all: "tab-all"
+        case .pass(let key): "tab-\(key)"
+        case .deleted: "tab-deleted"
+        case .export: "tab-export"
+        case .importFolders: "tab-import"
+        }
+    }
+}
+
 extension FocusedValues {
     @Entry var reviewModel: ReviewModel?
 }
@@ -322,8 +347,10 @@ struct ReviewCommands: Commands {
             Group {
                 Button("Keep") { model?.markSelection(.keep) }
                     .keyboardShortcut("k", modifiers: [])
+                    .accessibilityIdentifier("mark-keep")
                 Button("Delete") { model?.markSelection(.delete) }
                     .keyboardShortcut(.delete, modifiers: [])
+                    .accessibilityIdentifier("mark-delete")
             }
             .disabled(model?.canMark != true)
             Divider()
@@ -341,6 +368,7 @@ struct ReviewCommands: Commands {
                 .disabled(model?.canDeleteInPhotos != true)
             Button("Move to Albums…") { model?.confirmingMove = true }
                 .disabled(model?.canMove != true)
+                .accessibilityIdentifier("commit-menu")
             if canShowInPhotos {
                 Button(ReviewModel.showInPhotosLabel) { Task { await model?.showInPhotos(run: runAppleScript) } }
                     .keyboardShortcut("r").disabled(model?.canShowInPhotos != true)

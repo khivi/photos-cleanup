@@ -14,6 +14,7 @@ struct ExportView: View {
                         Text(model.exportDestinationLabel).textSelection(.enabled)
                         Spacer()
                         Button("Choose…", action: choose).disabled(model.export.running)
+                            .accessibilityIdentifier("export-choose")
                     }
                 }
                 if let disk = model.exportDiskLabel { LabeledContent("Disk", value: disk) }
@@ -31,6 +32,7 @@ struct ExportView: View {
                     }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!model.export.running && !model.canExport)
+                    .accessibilityIdentifier("export-start")
                 }
             } footer: {
                 Text(

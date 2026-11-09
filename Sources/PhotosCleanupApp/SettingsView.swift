@@ -16,6 +16,7 @@ struct SettingsView: View {
         Form {
             Section {
                 Toggle("Keep photos in albums", isOn: $keepAlbumPhotos)
+                    .accessibilityIdentifier("settings-keep-album-photos")
                 Text(
                     "On: a photo in one of your own albums is never suggested. Off: it can be. Favorites, videos and photos already filed by a pass are always skipped."
                 )
@@ -31,13 +32,16 @@ struct SettingsView: View {
                     .overlay { if ignored.isEmpty { Text("None").foregroundStyle(.secondary) } }
                 HStack {
                     TextField("Album name", text: $newName).onSubmit(add)
+                        .accessibilityIdentifier("settings-album-name")
                     Button("Add", action: add).disabled(trimmed.isEmpty)
+                        .accessibilityIdentifier("settings-album-add")
                     Button("Remove") {
                         ignored.removeAll { $0 == selection }
                         selection = nil
                         save()
                     }
                     .disabled(selection == nil)
+                    .accessibilityIdentifier("settings-album-remove")
                 }
             }
             if let saveError {
