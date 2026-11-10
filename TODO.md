@@ -174,11 +174,13 @@ Homebrew reaches only developers who already know the app. Users search the App 
   - [x] Show in Photos hidden in the store build: no Apple Events exception (`0bd5295`, 2026-11-10).
   - [x] `scripts/app.sh store` builds the signed `.pkg`: Apple Distribution signing, `AppStore.provisionprofile` (expires 2027-11-10) (`0bd5295`, 2026-11-10).
   - [x] App Store Connect record "Photos Cleanup: On-Device AI" (app ID 6833111040; "Photos Cleanup" was taken), 2026-11-10.
-  - [x] Build 0.11.0 (266) uploaded with Transporter, ready for internal testing, 2026-11-10.
-  - [ ] TestFlight check of the installed build: Photos access, Import and Export bookmarks across relaunch, sandbox denials.
-  - [ ] Store listing: privacy policy (PRIVACY.md), description, screenshots, review notes in `docs/app-store/`.
-  - [ ] Rename the App Store Connect version 1.0 to 0.11.0.
-  - [ ] CI job in `release.yml` to build and upload: App Store Connect API key with the App Manager role, and the two certificates as `.p12` secrets.
+  - [x] Build 0.11.0 (274), from the v0.11.0 commit, uploaded with Transporter (266, older, unused), 2026-11-10.
+  - [x] Store listing: privacy policy (`PRIVACY.md`), listing fields, review notes and three screenshots in `docs/app-store/` (`b3655d8`, `1b67ddd`); version 1.0 renamed 0.11.0.
+  - [x] Submitted for review, manual release, 2026-11-10.
+  - [ ] TestFlight check of 274: Photos access, Import and Export folders kept across relaunch, no Show in Photos.
+  - [ ] After approval: Release This Version in App Store Connect.
+  - [ ] An Import screenshot from a sample folder with a neutral path (the demo's is under `.build/`).
+  - [ ] Later: a CI job in `release.yml` that builds the store `.pkg` and uploads it to App Store Connect (TestFlight); review stays manual. Needs an App Store Connect API key that may upload, and the Apple Distribution and installer certificates as a `.p12` secret.
 - Say on every page: macOS 15 or later; Screenshots and Paperwork verdicts need macOS 27 with Apple Intelligence.
 
 ### Future (not next up)
