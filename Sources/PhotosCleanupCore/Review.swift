@@ -1048,6 +1048,11 @@ extension ReviewModel {
     public var canConfirm: Bool { hasSections && !loading && !committing && currentGroup != nil }
     public static let confirmLabel = "Confirm"
     public static let confirmUpToHereLabel = "Confirm Up to Here"
+    public static let reviewedLabel = "Mark Reviewed"
+    public static let reviewedUpToHereLabel = "Mark Reviewed Up to Here"
+    /// All has no suggestions to accept: its Confirm records the month as looked at.
+    public var confirmTitle: String { view == .all ? Self.reviewedLabel : Self.confirmLabel }
+    public var confirmUpToHereTitle: String { view == .all ? Self.reviewedUpToHereLabel : Self.confirmUpToHereLabel }
 
     /// Return, or a section's Confirm button: files the section as marked, then selects the next one.
     /// A number key (`keeping` 0–8) first keeps only that photo of the group and marks the rest Delete.
@@ -1055,7 +1060,7 @@ extension ReviewModel {
         guard canConfirm, let g = section ?? currentGroup else { return }
         guard place.map(g.photos.indices.contains) ?? true else { return }
         let keep = place.map { g.photos[$0].id }
-        await confirm([full(g)], keeping: keep, name: keep == nil ? Self.confirmLabel : "Keep One")
+        await confirm([full(g)], keeping: keep, name: keep == nil ? confirmTitle : "Keep One")
     }
 
     /// ⇧Return, or a section's Confirm Up to Here button: confirms every section from the top through
@@ -1064,7 +1069,7 @@ extension ReviewModel {
         guard canConfirm, let g = section ?? currentGroup else { return }
         let gs = shownGroups
         guard let i = gs.firstIndex(where: { $0.best == g.best }) else { return }
-        await confirm(gs[...i].map(full), keeping: nil, name: Self.confirmUpToHereLabel)
+        await confirm(gs[...i].map(full), keeping: nil, name: confirmUpToHereTitle)
     }
 
     /// A number key, or a photo's Keep Only This button: keeps this photo of its group, marks the rest Delete, confirms.
@@ -1078,10 +1083,13 @@ extension ReviewModel {
     private var sectionUnit: String { isGrouped ? "group" : "month" }
     /// A section's tooltips name the key only on the current section, where the key acts.
     public func confirmHelp(_ g: BurstGroup) -> String {
-        "Confirm this \(sectionUnit)" + (isCurrent(g) ? " (Return)" : "")
+        (view == .all ? "Mark this month reviewed; its Delete marks wait in Pending" : "Confirm this \(sectionUnit)")
+            + (isCurrent(g) ? " (Return)" : "")
     }
     public func confirmUpToHereHelp(_ g: BurstGroup) -> String {
-        "Confirm every section from the top through this \(sectionUnit)" + (isCurrent(g) ? " (⇧Return)" : "")
+        (view == .all
+            ? "Mark every month from the top through this one reviewed"
+            : "Confirm every section from the top through this \(sectionUnit)") + (isCurrent(g) ? " (⇧Return)" : "")
     }
     public static let keepOnlyLabel = "Keep Only This"
     public func keepOnlyHelp(_ id: String) -> String {

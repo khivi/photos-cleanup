@@ -288,7 +288,7 @@ struct ReviewScreen: View {
                                         Text(model.header(group)).font(.headline)
                                         confirmButton(group)
                                         if model.isConfirmed(group) {
-                                            Label("Confirmed", systemImage: "checkmark.circle.fill")
+                                            Label("Reviewed", systemImage: "checkmark.circle.fill")
                                                 .foregroundStyle(.green)
                                         }
                                     }
@@ -373,7 +373,7 @@ struct ReviewScreen: View {
 
     /// Files the section as marked; the second button files every section from the top through this one.
     @ViewBuilder private func confirmButton(_ group: BurstGroup) -> some View {
-        Button(ReviewModel.confirmLabel) {
+        Button(model.confirmTitle) {
             focused = true
             Task { await model.confirm(group) }
         }
@@ -381,7 +381,7 @@ struct ReviewScreen: View {
         .controlSize(.small).focusable(false)
         .disabled(!model.canConfirm)
         .accessibilityIdentifier("confirm-\(group.best)")
-        Button(ReviewModel.confirmUpToHereLabel) {
+        Button(model.confirmUpToHereTitle) {
             focused = true
             Task { await model.confirmUpToHere(group) }
         }
@@ -505,10 +505,13 @@ struct ReviewCommands: Commands {
             }
             .disabled(model?.canMark != true)
             // No shortcut: a bare Return key equivalent would also catch Return in dialogs; the grid handles it.
-            Button(ReviewModel.confirmLabel) { Task { await model?.confirm() } }.disabled(model?.canConfirm != true)
-            Button(ReviewModel.confirmUpToHereLabel) { Task { await model?.confirmUpToHere() } }
-                .keyboardShortcut(.return, modifiers: .shift)
-                .disabled(model?.canConfirm != true)
+            Button(model?.confirmTitle ?? ReviewModel.confirmLabel) { Task { await model?.confirm() } }.disabled(
+                model?.canConfirm != true)
+            Button(model?.confirmUpToHereTitle ?? ReviewModel.confirmUpToHereLabel) {
+                Task { await model?.confirmUpToHere() }
+            }
+            .keyboardShortcut(.return, modifiers: .shift)
+            .disabled(model?.canConfirm != true)
             Divider()
             Group {
                 Button(ReviewModel.keepAllLabel) { model?.setAll(.keep) }

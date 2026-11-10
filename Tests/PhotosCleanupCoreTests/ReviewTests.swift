@@ -985,8 +985,11 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         let m = ReviewModel(cleanup: c, dir: dir, defaults: freshDefaults())
         await m.select(.all)
         let oct = try #require(m.groups.first { $0.photos.count == 2 })
+        #expect(m.confirmTitle == "Mark Reviewed" && m.confirmUpToHereTitle == "Mark Reviewed Up to Here")
+        #expect(m.confirmHelp(oct).hasPrefix("Mark this month reviewed"))
         m.mark(["a"], .delete)
         await m.confirm(oct)
+        #expect(m.undoName == "Mark Reviewed")
         #expect(
             m.pending == ["a": Pending(pass: Passes.allKey, keep: false)]
                 && m.album(m.pending["a"]!) == "All - Delete Me")
@@ -1013,7 +1016,7 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         #expect(m.groups.map { $0.photos.map(\.id) } == [["p2"], ["p3", "p1"]])  // worst first within a month
         #expect(m.photos.map(\.id) == ["p2", "p3", "p1"])
         let g = m.groups[0]
-        #expect(m.confirmHelp(g) == "Confirm this month (Return)" && !m.canKeepOnly)
+        #expect(m.confirmHelp(g) == "Confirm this month (Return)" && !m.canKeepOnly && m.confirmTitle == "Confirm")
         #expect(m.confirmHelp(m.groups[1]) == "Confirm this month")
     }
 
