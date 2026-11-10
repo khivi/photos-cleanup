@@ -13,11 +13,10 @@ Decided for the native app, starting 2026-10-29:
 - **Build:** SwiftPM, plus a script that assembles and signs the `.app` bundle. No Xcode project.
 - **Thumbnails:** the app owns a `PHCachingImageManager` (`.highQualityFormat`, caching ~30 rows ahead), as in the spike.
 - **Core types:** `Photo` is `Identifiable`, and `PassResult`'s tuples are gone (Phase 1).
-- **Distribution:** Homebrew ships a cask, not a formula. The app asks for its own Photos permission.
+- **Distribution:** Homebrew ships a cask, not a formula; the Mac App Store ships a sandboxed build of the same app. The app asks for its own Photos permission.
 
 Not pursuing:
 
-- **Mac App Store.** It needs a sandboxed app bundle.
 - **Edited copies** (from the old command-line tool). Photos keeps edits inside the same photo; exported copies saved back are exact or near duplicates, which Photos' own Duplicates album (Albums → Utilities) finds.
 - **HEIC savings estimate** (from the old command-line tool). Photos and iCloud already store new photos as HEIC, and converting goes through Photos' Export.
 - **Threshold settings** (the old tool's `--threshold`, `--window`). The constants in `Passes` are set by eye on the real library; add a setting only when a pass's picks are wrong in practice.
@@ -170,7 +169,16 @@ Homebrew reaches only developers who already know the app. Users search the App 
 - [ ] **Landing page:** one GitHub Pages page (headline, screenshots or a GIF, Download button to the latest release, requirements), set as the repo homepage.
 - [ ] **Listings:** posts on r/macapps and r/apple; Show HN (lead with the on-device Vision and Foundation Models work); pull requests to `serhii-londar/open-source-mac-os-apps` and `jaywcjlove/awesome-mac`; AlternativeTo (beside Gemini Photos, PhotoSweeper, CleanMy Phone) and MacUpdate; Product Hunt once the landing page is up. Claude drafts; the user posts.
 - [ ] **Official Homebrew cask** (`brew install --cask photos-cleanup` without the tap). Homebrew turns down repos that aren't yet well known, about 75 stars.
-- [ ] **Mac App Store**, if the above gets traction. Needs the App Sandbox: Photos access works in it; Import and Export need security-scoped bookmarks for their folders.
+- **Mac App Store**
+  - [x] App Sandbox; Import and Export folders kept as security-scoped bookmarks (`e6b4e88`, `362e71e`, 2026-11-09).
+  - [x] Show in Photos hidden in the store build: no Apple Events exception (`0bd5295`, 2026-11-10).
+  - [x] `scripts/app.sh store` builds the signed `.pkg`: Apple Distribution signing, `AppStore.provisionprofile` (expires 2027-11-10) (`0bd5295`, 2026-11-10).
+  - [x] App Store Connect record "Photos Cleanup: On-Device AI" (app ID 6833111040; "Photos Cleanup" was taken), 2026-11-10.
+  - [x] Build 0.11.0 (266) uploaded with Transporter, ready for internal testing, 2026-11-10.
+  - [ ] TestFlight check of the installed build: Photos access, Import and Export bookmarks across relaunch, sandbox denials.
+  - [ ] Store listing: privacy policy (PRIVACY.md), description, screenshots, review notes in `docs/app-store/`.
+  - [ ] Rename the App Store Connect version 1.0 to 0.11.0.
+  - [ ] CI job in `release.yml` to build and upload: App Store Connect API key with the App Manager role, and the two certificates as `.p12` secrets.
 - Say on every page: macOS 15 or later; Screenshots and Paperwork verdicts need macOS 27 with Apple Intelligence.
 
 ### Future (not next up)
