@@ -163,6 +163,7 @@ jobs:
             app "Photos Cleanup.app"
 
             zap trash: [
+              "~/Library/Containers/com.khivi.photos-cleanup",
               "~/Library/Application Support/photos-cleanup",
               "~/Library/Caches/photos-cleanup",
             ]
