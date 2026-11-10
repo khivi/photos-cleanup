@@ -7,6 +7,7 @@ public enum ReviewView: Hashable, Sendable {
     case deleted  // photos waiting in Delete Me albums
     case export  // the backup to a folder or disk
     case importFolders  // old photo folders sorted against the library
+    case pending  // confirmed photos not yet applied to Photos
 
     public var passKey: String? { if case .pass(let k) = self { k } else { nil } }
 }
@@ -30,8 +31,10 @@ public final class ReviewModel {
     public private(set) var decisions: [String: Decision] = [:]
     /// Decided explicitly by the user.
     public private(set) var touched: Set<String> = []
-    /// Grouped passes: photos in groups accepted this session, with Return or a number key.
-    public private(set) var accepted: Set<String> = []
+    /// Confirmed, not yet applied to Photos, by uuid. Saved in `pending`, so it survives relaunch.
+    public private(set) var pending: [String: Pending]
+    /// Every photo by uuid, read when Pending opens: it lists photos from every pass.
+    private var library: [String: Photo] = [:]
     /// Grouped passes: groups shown past their first row, by `best`.
     public private(set) var expanded: Set<String> = []
     /// Photos this session's commits moved to a Delete Me album, newest first.
@@ -90,7 +93,7 @@ public final class ReviewModel {
     private let importer: Importer?
     private let dir: URL
     private let defaults: UserDefaults
-    /// Months marked Done in All, by "2024-03" key, with the photo count when marked.
+    /// Months confirmed in All, by "2024-03" key, with the photo count when confirmed.
     public private(set) var reviewedMonths: [String: Int]
     /// Pass keys whose caption shows as one line.
     private var foldedCaptions: Set<String>
@@ -106,6 +109,7 @@ public final class ReviewModel {
         self.dir = dir
         self.defaults = defaults
         reviewedMonths = loadReviewedMonths(dir: dir)
+        pending = loadPending(dir: dir).mapValues { Pending(pass: $0.pass, keep: $0.keep) }
         foldedCaptions = Set(defaults.stringArray(forKey: foldedCaptionsKey) ?? [])
         importBookmarks = loadImportFolders(defaults: defaults)
         importFolder = importFolders.first
@@ -151,7 +155,13 @@ public final class ReviewModel {
     public func decision(_ uuid: String) -> Decision? { decisions[uuid] }
 
     /// Photos to show: the To be deleted list, or the loaded ones.
-    public var displayed: [Photo] { view == .deleted ? deleted : shownPhotos.map(\.photo) }
+    public var displayed: [Photo] {
+        switch view {
+        case .deleted: deleted
+        case .pending: pendingGroups.flatMap(\.photos)
+        default: shownPhotos.map(\.photo)
+        }
+    }
 
     public var doomed: [PassPhoto] { photos.filter { decisions[$0.id] == .delete } }
     public var keepers: [PassPhoto] {
@@ -184,6 +194,10 @@ public final class ReviewModel {
         ]
         + Passes.all.map { (.pass($0.key), $0.title, Passes.about[$0.key] ?? "") }
         + [
+            (
+                .pending, "Pending",
+                "Photos you confirmed, not yet in their albums. Apply to Photos… adds them; nothing changes in Photos before."
+            ),
             (.deleted, "To be deleted", "Photos waiting in a Delete Me album. Delete them there in Photos."),
             (
                 .export, "Export",
@@ -202,7 +216,7 @@ public final class ReviewModel {
         .all: "photo.on.rectangle.angled", .pass("screenshots"): "camera.viewfinder",
         .pass("paperwork"): "doc.text", .pass("bursts"): "square.stack.3d.down.right",
         .pass("similar"): "square.on.square", .pass("low-quality"): "camera.metering.unknown",
-        .pass("videos"): "video", .deleted: "trash", .export: "square.and.arrow.up",
+        .pass("videos"): "video", .deleted: "trash", .pending: "tray.full", .export: "square.and.arrow.up",
         .importFolders: "square.and.arrow.down",
     ]
 
@@ -225,7 +239,7 @@ public final class ReviewModel {
         public var id: String { title }
     }
 
-    /// Library (All), Cleanup (the passes), Review (To be deleted), Transfer (Export, Import), built from `tabs`.
+    /// Library (All), Cleanup (the passes), Review (Pending, To be deleted), Transfer (Export, Import), built from `tabs`.
     public var sidebar: [SidebarSection] {
         func item(_ t: (view: ReviewView, title: String, help: String)) -> SidebarItem {
             let n: Int? =
@@ -233,6 +247,7 @@ public final class ReviewModel {
                 case .all: counts["all"] ?? nil
                 case .pass(let k): counts[k] ?? nil
                 case .deleted: deleted.count
+                case .pending: pending.count
                 case .export: export.destination == nil ? nil : export.pending
                 case .importFolders: importScans.values.map(\.newCount).reduce(0, +)
                 }
@@ -254,7 +269,7 @@ public final class ReviewModel {
         return [
             SidebarSection(title: "Library", items: items { $0 == .all }),
             SidebarSection(title: "Cleanup", items: items { $0.passKey != nil }),
-            SidebarSection(title: "Review", items: items { $0 == .deleted }),
+            SidebarSection(title: "Review", items: items { $0 == .pending || $0 == .deleted }),
             SidebarSection(title: "Transfer", items: items { $0 == .export || $0 == .importFolders }),
         ]
     }
@@ -264,12 +279,13 @@ public final class ReviewModel {
     /// "N candidates · M to delete", "N photos" or "N queued for deletion".
     public var summary: String {
         if view == .deleted { return "\(deleted.count.formatted()) queued for deletion" }
+        if view == .pending { return "\(pending.count.formatted()) to apply to Photos" }
         if view == .export { return exportCountsLabel }
         if view == .importFolders { return importSummary }
         if inPass {
             let line =
                 "\(photos.count.formatted()) \(photos.count == 1 ? "candidate" : "candidates") · \(doomed.count.formatted()) to delete"
-            return acceptedLabel.map { "\(line) · \($0)" } ?? line
+            return isGrouped ? "\(line) · \(groups.count.formatted()) groups" : line
         }
         let n = "\(photos.count.formatted()) \(photos.count == 1 ? "photo" : "photos")"
         return doomed.isEmpty ? n : "\(n) · \(doomed.count.formatted()) to delete"
@@ -286,9 +302,8 @@ public final class ReviewModel {
 
     /// The line above a pass's grid; in a grouped pass, then its keys.
     public var passCaption: String? {
-        view.passKey.map { passNote($0) + (isGrouped ? " " + Self.groupKeysNote : "") }
+        view.passKey.map(passNote)
     }
-    public static let groupKeysNote = "Return accepts a group as marked. 1–9 keeps only that photo of the group."
     public var captionFolded: Bool { view.passKey.map(foldedCaptions.contains) ?? false }
     public var captionToggleLabel: String { captionFolded ? "Show More" : "Show Less" }
 
@@ -329,8 +344,12 @@ public final class ReviewModel {
             + unexported
     }
 
-    public var showsEmptyState: Bool { (inPass || onlyDelete) && !loading && displayed.isEmpty }
-    public var emptyStateLabel: String { onlyDelete ? "Nothing marked Delete." : Self.emptyState }
+    public var showsEmptyState: Bool { (inPass || onlyDelete || view == .pending) && !loading && displayed.isEmpty }
+    public var emptyStateLabel: String {
+        onlyDelete ? "Nothing marked Delete." : view == .pending ? Self.nothingPending : Self.emptyState
+    }
+    public static let nothingPending =
+        "Nothing pending. Confirm photos in a pass; they wait here until Apply to Photos…."
     public static let emptyState = "Nothing left to review. Photos already filed in this pass’s albums are hidden."
 
     // MARK: Commit preview (Phase 5 labels)
@@ -344,24 +363,13 @@ public final class ReviewModel {
     }
 
     /// Exactly what `commit()` sends: `doomed` to the Delete Me album, `keepers` to the Keep album.
-    public var commitPreview: [CommitLine] { commitPreview(.all) }
-
-    public func commitPreview(_ scope: MoveScope) -> [CommitLine] {
-        let (doomed, keepers) = (scoped(doomed, scope), scoped(keepers, scope))
+    public var commitPreview: [CommitLine] {
         if view == .all { return doomed.isEmpty ? [] : [CommitLine(count: doomed.count, album: Passes.allDeleteAlbum)] }
         guard let key = view.passKey, let del = Passes.deleteAlbum(key), let keep = Passes.keepAlbum(key) else {
             return []
         }
         return [CommitLine(count: doomed.count, album: del), CommitLine(count: keepers.count, album: keep)]
             .filter { $0.count > 0 }
-    }
-
-    /// The "Move to Albums?" dialog's text: with accepted groups, what each button moves.
-    public var moveMessage: String {
-        let all = commitPreview(.all).map(\.label).joined(separator: "\n")
-        guard canMoveAccepted else { return all }
-        let mine = commitPreview(.accepted).map(\.label).joined(separator: "\n")
-        return "\(moveAcceptedLabel):\n\(mine)\n\n\(Self.moveAllLabel), unchecked groups too:\n\(all)"
     }
 
     /// Window title: the sidebar item's title.
@@ -371,7 +379,8 @@ public final class ReviewModel {
     public var deleteInPhotosLabel: String { deleting ? "Deleting…" : "Delete in Photos…" }
     /// Delete in Photos can run now: the To be deleted view, not empty.
     public var canDeleteInPhotos: Bool { view == .deleted && !loading && !deleting && !deleted.isEmpty }
-    public var moveButtonLabel: String { committing ? "Moving…" : "Move to Albums…" }
+    public var moveButtonLabel: String { committing ? "Confirming…" : Self.confirmAllLabel }
+    public static let confirmAllLabel = "Confirm All…"
     public var inspectorToggleLabel: String { showsInspector ? "Hide Info" : "Show Info" }
     public static let keepAllLabel = "Keep All"
     public static let deleteAllLabel = "Delete All"
@@ -387,6 +396,14 @@ public final class ReviewModel {
             clearSelection()
             undoManager.removeAllActions()
             if v == .export { await refreshExport() }
+            return
+        }
+        await syncHeld()
+        if v == .pending {
+            library = Dictionary(await cleanup.photos.map { ($0.uuid, $0) }, uniquingKeysWith: { a, _ in a })
+            view = v
+            clearSelection()
+            undoManager.removeAllActions()
             return
         }
         if v == .deleted {
@@ -406,10 +423,13 @@ public final class ReviewModel {
             var prog = JobProgress()
             if let key = v.passKey {
                 let r = try await cleanup.pass(key)
-                gs = r.groups.map(\.bestFirst)
-                (items, sc, fc, prog) = (
-                    Passes.grouped.contains(key) ? Self.flat(gs) : r.photos, r.scores, r.faces, r.progress
-                )
+                (sc, fc, prog) = (r.scores, r.faces, r.progress)
+                if Passes.grouped.contains(key) {
+                    gs = r.groups.map(\.bestFirst)
+                    items = Self.flat(gs)
+                } else {
+                    (items, gs) = Self.byMonth(r.photos)
+                }
             } else {
                 let all = await cleanup.photos
                 gs = Self.monthGroups(all)
@@ -425,7 +445,6 @@ public final class ReviewModel {
             progress = prog
             decisions = [:]
             touched = []
-            accepted = []
             expanded = []
             if v != .all { for p in items { decisions[p.id] = initialDecision(p) } }
         } catch {
@@ -437,8 +456,16 @@ public final class ReviewModel {
         groups.flatMap { $0.photos.map { PassPhoto(photo: $0) } }
     }
 
+    /// A pass without groups in month sections; its own order (worst first, longest first) holds within a month.
+    static func byMonth(_ ps: [PassPhoto]) -> (items: [PassPhoto], groups: [BurstGroup]) {
+        let gs = monthGroups(ps.map(\.photo))
+        let byID = Dictionary(ps.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return (gs.flatMap { $0.photos.compactMap { byID[$0.id] } }, gs)
+    }
+
     /// One poll tick while Vision or verdicts run: new candidates merge in, touched choices stay.
     public func refresh() async {
+        await syncHeld()
         guard let key = view.passKey, let r = try? await cleanup.pass(key), view.passKey == key else { return }
         scores = r.scores
         faces = r.faces
@@ -448,9 +475,9 @@ public final class ReviewModel {
         } else {
             let fresh = Dictionary(r.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             let have = Set(photos.map(\.id))
-            photos =
+            (photos, groups) = Self.byMonth(
                 photos.map { p in fresh[p.id].map { PassPhoto(photo: p.photo, verdict: $0.verdict) } ?? p }
-                + r.photos.filter { !have.contains($0.id) }
+                    + r.photos.filter { !have.contains($0.id) })
         }
         for p in photos where !touched.contains(p.id) { decisions[p.id] = initialDecision(p) }
         progress = r.progress
@@ -470,6 +497,7 @@ public final class ReviewModel {
 
     /// The pass counts alone, cheap enough to poll while Vision runs.
     public func refreshPassCounts() async {
+        await syncHeld()
         counts = await cleanup.counts()
         vision = await cleanup.visionStatus()
         (verdictJob, verdictPasses) = await cleanup.verdictStatus()
@@ -718,10 +746,10 @@ public final class ReviewModel {
         anchor = id
     }
 
-    /// ⌥↓ / ⌥↑: selects the first photo of the next or previous section (a month in All, a group in a grouped pass).
+    /// ⌥↓ / ⌥↑: selects the first photo of the next or previous section (a group in Bursts and Similar, else a month).
     public func moveSection(by delta: Int) {
         let gs = shownGroups
-        guard view == .all || view.passKey.map(Passes.grouped.contains) == true, !gs.isEmpty else { return }
+        guard hasSections, !gs.isEmpty else { return }
         let at = anchor.flatMap { a in gs.firstIndex { $0.photos.contains { $0.id == a } } }
         let i = at.map { min(gs.count - 1, max(0, $0 + delta)) } ?? (delta > 0 ? 0 : gs.count - 1)
         let id = gs[i].photos[0].id
@@ -732,7 +760,7 @@ public final class ReviewModel {
     /// The last section jump: the section's key and the photo it selected. The grid scrolls that
     /// section's header to the top when the anchor lands on that photo.
     public private(set) var sectionJump: (key: String, photo: String)?
-    public var canMoveSection: Bool { view == .all || view.passKey.map(Passes.grouped.contains) == true }
+    public var canMoveSection: Bool { hasSections }
 
     public func clearSelection() {
         selected = []
@@ -766,6 +794,7 @@ public final class ReviewModel {
                 loadedAlbum[id] = nil
             }
             clearSelection()
+            undoManager.removeAllActions()  // a confirm's undo would bring back deleted photos
             counts = await cleanup.counts()
             deletedNotExported = await exporter?.missing(deleted.map(\.id)) ?? 0
             status =
@@ -775,40 +804,168 @@ public final class ReviewModel {
         }
     }
 
-    // MARK: Commit
+    // MARK: Confirm, Pending and Apply
 
-    public func commit(_ scope: MoveScope = .all) async {
-        guard let key = view.passKey ?? (view == .all ? Passes.allKey : nil) else { return }
-        let doomed = scoped(doomed, scope)
-        let keep = scoped(keepers, scope).map(\.id)
-        if doomed.isEmpty && keep.isEmpty { return }
+    /// Confirm All: `doomed` and `keepers` to Pending. Undoable.
+    public func commit() async {
+        _ = await send(doomed, keep: keepers.map(\.id), name: "Confirm All")
+    }
+
+    /// The state a confirm changes, for its undo.
+    struct Snapshot {
+        var photos: [PassPhoto], groups: [BurstGroup], decisions: [String: Decision], touched: Set<String>
+        var reviewedMonths: [String: Int], pending: [String: Pending]
+    }
+
+    var snapshot: Snapshot {
+        Snapshot(
+            photos: photos, groups: groups, decisions: decisions, touched: touched, reviewedMonths: reviewedMonths,
+            pending: pending)
+    }
+
+    /// Moves `doomed` and `keep` to Pending, then marks `months` confirmed. Nothing is written to Photos.
+    /// `undoTo` is the state before the caller changed marks for this confirm (a number key).
+    func send(
+        _ doomed: [PassPhoto], keep: [String], months: [String] = [], name: String, undoTo: Snapshot? = nil
+    ) async -> Bool {
+        guard let key = view.passKey ?? (view == .all ? Passes.allKey : nil) else { return false }
+        let keep = view == .all ? [] : keep  // All files only its Delete marks
+        if doomed.isEmpty && keep.isEmpty && months.isEmpty { return false }
+        let before = undoTo ?? snapshot
+        for p in doomed { pending[p.id] = Pending(pass: key, keep: false) }
+        for id in keep { pending[id] = Pending(pass: key, keep: true) }
+        let gone = Set(doomed.map(\.id) + keep)
+        if inPass {  // All keeps them, badged Delete
+            photos.removeAll { gone.contains($0.id) }
+            groups = groups.map { BurstGroup(photos: $0.photos.filter { !gone.contains($0.id) }, best: $0.best) }
+                .filter { !$0.photos.isEmpty }
+        }
+        for id in gone { decisions[id] = nil }
+        touched.subtract(gone)
+        for m in months { reviewedMonths[m] = groups.first { $0.best == m }?.photos.count ?? 0 }
+        status = nil
+        changed(before, name: name)
+        return true
+    }
+
+    /// Saves what changed since `before` and registers going back to it.
+    private func changed(_ before: Snapshot, name: String) {
+        saveState()
+        pruneSelection()
+        let grouping = !(undoManager.isUndoing || undoManager.isRedoing)
+        // After an await there is no event's undo group: registering outside one raises.
+        if grouping { undoManager.beginUndoGrouping() }
+        undoManager.registerUndo(withTarget: self) { m in MainActor.assumeIsolated { m.restore(before, name: name) } }
+        undoManager.setActionName(name)
+        if grouping { undoManager.endUndoGrouping() }
+    }
+
+    /// Undo and redo of a confirm or a send back: only the app's state, so it is instant.
+    private func restore(_ s: Snapshot, name: String) {
+        let now = snapshot
+        (photos, groups, decisions, touched) = (s.photos, s.groups, s.decisions, s.touched)
+        (reviewedMonths, pending) = (s.reviewedMonths, s.pending)
+        changed(now, name: name)
+    }
+
+    private func saveState() {
+        do {
+            try saveReviewedMonths(reviewedMonths, dir: dir)
+            try savePending(pending.mapValues { ($0.pass, $0.keep) }, dir: dir)
+        } catch {
+            self.error = "\(error)"
+        }
+    }
+
+    /// Pending photos stay out of every pass until applied.
+    private func syncHeld() async { await cleanup.hold(Set(pending.keys)) }
+
+    /// The album a pending photo goes to.
+    public func album(_ p: Pending) -> String {
+        p.pass == Passes.allKey
+            ? Passes.allDeleteAlbum : (p.keep ? Passes.keepAlbum(p.pass) : Passes.deleteAlbum(p.pass)) ?? p.pass
+    }
+
+    /// Pending, one section per album: "Bursts - Delete Me". Newest photo first.
+    public var pendingGroups: [BurstGroup] {
+        Dictionary(grouping: pending.keys) { album(pending[$0]!) }
+            .map { album, ids in
+                BurstGroup(
+                    photos: ids.compactMap { library[$0] }.sorted {
+                        ($0.date ?? .distantPast) > ($1.date ?? .distantPast)
+                    },
+                    best: album)
+            }
+            .filter { !$0.photos.isEmpty }
+            .sorted { $0.best < $1.best }
+    }
+
+    /// What Apply to Photos sends, per album.
+    public var applyPreview: [CommitLine] {
+        Dictionary(grouping: pending.values, by: album).map { CommitLine(count: $0.value.count, album: $0.key) }
+            .sorted { $0.album < $1.album }
+    }
+
+    public var canApply: Bool { !pending.isEmpty && !loading && !committing }
+    public var applyButtonLabel: String {
+        committing ? "Applying…" : "Apply \(pending.count.formatted()) to Photos…"
+    }
+    /// The "Apply to Photos?" dialog is open.
+    public var confirmingApply = false
+    public static let sendBackLabel = "Send Back to Review"
+    public var canSendBack: Bool { view == .pending && !selected.isEmpty && !committing }
+
+    /// Pending photos the user changed their mind about: back to their pass, unmarked.
+    public func sendBack() {
+        guard canSendBack else { return }
+        let before = snapshot
+        for id in selected { pending[id] = nil }
+        changed(before, name: Self.sendBackLabel)
+    }
+
+    /// Writes every pending photo into its album, one batch per pass. Not undoable: the albums are in
+    /// Photos now, and nothing is deleted until Delete in Photos….
+    public func apply() async {
+        guard canApply else { return }
         committing = true
         status = nil
         defer { committing = false }
-        do {
-            let r = try await cleanup.commit(key, delete: doomed.map(\.id), keep: keep)
-            let gone = Set(doomed.map(\.id) + keep)
-            let seen = Set(committed.map(\.id))
-            committed = doomed.map(\.photo).filter { !seen.contains($0.id) } + committed
-            for p in doomed { committedAlbum[p.id] = r.album }
-            if inPass {  // All keeps them, badged Delete Me
-                photos.removeAll { gone.contains($0.id) }
-                groups = groups.map { BurstGroup(photos: $0.photos.filter { !gone.contains($0.id) }, best: $0.best) }
-                    .filter { !$0.photos.isEmpty }
+        let all = Dictionary(await cleanup.photos.map { ($0.uuid, $0) }, uniquingKeysWith: { a, _ in a })
+        var added = 0
+        var failures: [String] = []
+        for (key, entries) in Dictionary(grouping: pending, by: \.value.pass).sorted(by: { $0.key < $1.key }) {
+            let del = entries.filter { !$0.value.keep }.map(\.key)
+            let keep = entries.filter { $0.value.keep }.map(\.key)
+            do {
+                let r = try await cleanup.commit(key, delete: del, keep: keep)
+                let seen = Set(committed.map(\.id))
+                committed = del.compactMap { all[$0] }.filter { !seen.contains($0.id) } + committed
+                for id in del { committedAlbum[id] = r.album }
+                added += r.added + r.kept
+            } catch CleanupError.noMatchingPhotos {
+                // Deleted in Photos since they were confirmed: nothing left to file.
+            } catch {
+                failures.append("\(error)")
+                continue
             }
-            for id in gone { decisions[id] = nil }
-            undoManager.removeAllActions()
-            touched.subtract(gone)
-            accepted.subtract(gone)
-            pruneSelection()
-            var parts: [String] = []
-            if r.added > 0 { parts.append("\(r.added) to “\(r.album)”") }
-            if r.kept > 0 { parts.append("\(r.kept) to “\(r.keepAlbum)”") }
-            status = "Moved \(parts.joined(separator: ", "))."
-        } catch {
-            status = "\(error)"
+            for id in del + keep { pending[id] = nil }
         }
+        saveState()
+        undoManager.removeAllActions()  // a confirm's undo can't take photos back out of the albums
+        await syncHeld()
+        counts = await cleanup.counts()
+        deletedNotExported = await exporter?.missing(deleted.map(\.id)) ?? 0
+        status =
+            failures.isEmpty
+            ? "Applied \(added.formatted()) \(added == 1 ? "photo" : "photos") to their albums in Photos."
+            : failures.joined(separator: " ")
     }
+}
+
+/// A confirmed photo waiting for Apply to Photos: its pass (or All) and its mark.
+public struct Pending: Sendable, Equatable {
+    public var pass: String
+    public var keep: Bool
 }
 
 extension Photo {
@@ -822,11 +979,7 @@ extension Photo {
     public var kindTag: String? { screenRecording ? "Screen recording" : live ? "Live" : nil }
 }
 
-// MARK: Group review
-
-public enum MoveScope: Sendable {
-    case all, accepted
-}
+// MARK: Sections and Confirm
 
 let foldedCaptionsKey = "foldedCaptions"
 
@@ -843,15 +996,8 @@ extension BurstGroup {
 extension ReviewModel {
     /// Bursts or Similar: one row per group.
     public var isGrouped: Bool { view.passKey.map(Passes.grouped.contains) == true }
-
-    /// Every photo accepted, so a photo that joins later reopens the group.
-    public func isAccepted(_ g: BurstGroup) -> Bool { g.photos.allSatisfy { accepted.contains($0.id) } }
-    public var acceptedGroups: Int { isGrouped ? groups.count(where: isAccepted) : 0 }
-    /// "240 of 4,180 groups accepted", or nil before the first. The grid shows it too: the subtitle is often cut off.
-    public var acceptedLabel: String? {
-        let n = acceptedGroups
-        return n == 0 ? nil : "\(n.formatted()) of \(groups.count.formatted()) groups accepted"
-    }
+    /// Sections to confirm one at a time: groups in Bursts and Similar, months in All and the other passes.
+    public var hasSections: Bool { view == .all || inPass }
 
     /// Shown in full: opened by hand, or holding the anchor, so arrow keys never select a hidden photo.
     public func isExpanded(_ g: BurstGroup) -> Bool {
@@ -862,51 +1008,77 @@ extension ReviewModel {
         if expanded.remove(g.best) == nil { expanded.insert(g.best) }
     }
 
-    /// The anchor's group, or the first one shown.
+    /// The anchor's section, or the first one shown: where Return and 1–9 act.
     private var currentGroup: BurstGroup? {
         let gs = shownGroups
         return anchor.flatMap { a in gs.first { $0.photos.contains { $0.id == a } } } ?? gs.first
     }
 
-    public var canAccept: Bool { isGrouped && !loading && !committing && currentGroup != nil }
-
-    /// Return accepts the current group as marked; a number key (`keeping` 0–8) keeps only that photo
-    /// of it and marks the rest Delete. Either way the group's marks count as the user's, and the
-    /// selection moves to the next group. One undo step.
-    public func accept(keeping place: Int? = nil) {
-        guard canAccept, let g = currentGroup else { return }
-        if let place, !g.photos.indices.contains(place) { return }
-        let marks = Dictionary(
-            uniqueKeysWithValues: g.photos.enumerated().map { i, p in
-                (p.id, (decision: place.map { $0 == i ? Decision.keep : .delete } ?? decisions[p.id], touched: true))
-            })
-        undoManager.beginUndoGrouping()
-        apply(marks)
-        setAccepted(accepted.union(g.photos.map(\.id)))
-        undoManager.setActionName(place == nil ? "Accept Group" : "Keep One")
-        undoManager.endUndoGrouping()
-        anchor = g.photos[0].id  // with no selection, `currentGroup` was the first group: move on from it
-        selected = [g.photos[0].id]
-        moveSection(by: 1)
+    public func isCurrent(_ g: BurstGroup) -> Bool { hasSections && currentGroup?.best == g.best }
+    /// The number key that keeps this photo: its place in the current group, 1–9.
+    public func keyNumber(_ id: String) -> Int? {
+        guard isGrouped, let i = currentGroup?.photos.firstIndex(where: { $0.id == id }), i < 9 else { return nil }
+        return i + 1
     }
 
-    private func setAccepted(_ new: Set<String>) {
-        let old = accepted
-        accepted = new
-        undoManager.registerUndo(withTarget: self) { m in MainActor.assumeIsolated { m.setAccepted(old) } }
+    /// The status bar's line, under every section rather than beside one.
+    public var keysHint: String? {
+        guard hasSections && !showsEmptyState else { return nil }
+        let unit = isGrouped ? "group" : "month"
+        return "Return: Confirm \(unit) · ⇧Return: Confirm everything above"
+            + (isGrouped ? " · 1–9: keep only that photo, then confirm" : "") + " · ⌘Z: Undo"
     }
 
-    func scoped(_ ps: [PassPhoto], _ scope: MoveScope) -> [PassPhoto] {
-        scope == .all ? ps : ps.filter { accepted.contains($0.id) }
+    /// A month in All already confirmed, and not grown since. A pass's confirmed sections leave it.
+    public func isConfirmed(_ g: BurstGroup) -> Bool {
+        view == .all && reviewedMonths[g.best].map { g.photos.count <= $0 } ?? false
     }
 
-    /// The dialog offers to move only the accepted groups.
-    public var canMoveAccepted: Bool { isGrouped && !commitPreview(.accepted).isEmpty }
-    public var moveAcceptedLabel: String {
-        let n = acceptedGroups
-        return "Move \(n.formatted()) Accepted \(n == 1 ? "Group" : "Groups")"
+    public var canConfirm: Bool { hasSections && !loading && !committing && currentGroup != nil }
+    public static let confirmLabel = "Confirm"
+    public static let confirmUpToHereLabel = "Confirm Up to Here"
+
+    /// Return, or a section's Confirm button: files the section as marked, then selects the next one.
+    /// A number key (`keeping` 0–8) first keeps only that photo of the group and marks the rest Delete.
+    public func confirm(_ section: BurstGroup? = nil, keeping place: Int? = nil) async {
+        guard canConfirm, let g = section ?? currentGroup else { return }
+        guard place.map(g.photos.indices.contains) ?? true else { return }
+        let keep = place.map { g.photos[$0].id }
+        await confirm([full(g)], keeping: keep, name: keep == nil ? Self.confirmLabel : "Keep One")
     }
-    public static let moveAllLabel = "Move All"
+
+    /// ⇧Return: confirms every section from the top through the current one, for a pass reviewed by scrolling.
+    public func confirmUpToHere() async {
+        guard canConfirm, let g = currentGroup else { return }
+        let gs = shownGroups
+        guard let i = gs.firstIndex(where: { $0.best == g.best }) else { return }
+        await confirm(gs[...i].map(full), keeping: nil, name: Self.confirmUpToHereLabel)
+    }
+
+    /// Confirming means the user looked: in a pass every photo goes to its album, Keep included.
+    private func confirm(_ sections: [BurstGroup], keeping keep: String?, name: String) async {
+        let gs = shownGroups
+        let last = sections.last.flatMap { s in gs.firstIndex { $0.best == s.best } }
+        let next = last.flatMap { $0 + 1 < gs.count ? gs[$0 + 1] : nil }
+        let ids = Set(sections.flatMap { $0.photos.map(\.id) })
+        let before = snapshot
+        if let keep { for id in ids { decisions[id] = id == keep ? .keep : .delete } }
+        let mine = photos.filter { ids.contains($0.id) }
+        let doomed = mine.filter { decisions[$0.id] == .delete }
+        let kept = inPass ? mine.filter { decisions[$0.id] == .keep }.map(\.id) : []
+        let months = view == .all ? sections.map(\.best) : []
+        guard await send(doomed, keep: kept, months: months, name: name, undoTo: before) else {
+            decisions = before.decisions
+            return
+        }
+        if let id = next?.photos.first?.id, order.contains(id) {
+            selected = [id]
+            anchor = id
+        }
+    }
+
+    /// The whole section: Show Only Delete hides its Keep photos, and Confirm covers them too.
+    private func full(_ g: BurstGroup) -> BurstGroup { groups.first { $0.best == g.best } ?? g }
 }
 
 // MARK: Month sections in All
@@ -914,8 +1086,8 @@ extension ReviewModel {
 extension ReviewModel {
     static let unknownMonth = "unknown"
 
-    /// All's sections as `BurstGroup`s whose `best` is the month key ("2024-03", or "unknown" for photos
-    /// without a date, last). Months and photos keep the order of `photos`.
+    /// Month sections as `BurstGroup`s whose `best` is the month key ("2024-03", or "unknown" for photos
+    /// without a date, last). Newest month first; photos keep the order of `photos`.
     static func monthGroups(_ photos: [Photo], timeZone: TimeZone = .current) -> [BurstGroup] {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = timeZone
@@ -930,25 +1102,20 @@ extension ReviewModel {
             if byMonth[key] == nil { order.append(key) }
             byMonth[key, default: []].append(p)
         }
-        order.sort { ($0 == unknownMonth ? 1 : 0) < ($1 == unknownMonth ? 1 : 0) }  // stable: keeps the rest in place
+        order.sort { a, b in (a == unknownMonth) != (b == unknownMonth) ? b == unknownMonth : a > b }
         return order.map { BurstGroup(photos: byMonth[$0]!, best: $0) }
     }
 
-    /// A section header: "October 2026 · 214" in All, the burst's date and count in Bursts.
+    /// A section header: "October 2026 · 214" for a month, the group's date and count in Bursts and Similar.
     public func header(_ g: BurstGroup, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
-        guard view == .all else { return g.headerLabel(locale: locale, timeZone: timeZone) }
+        if view == .pending { return "\(g.best) · \(g.photos.count.formatted(.number.locale(locale)))" }
+        guard !isGrouped else { return g.headerLabel(locale: locale, timeZone: timeZone) }
         let style = Date.FormatStyle(locale: locale, timeZone: timeZone).year().month(.wide)
         let month = g.photos.compactMap(\.date).first.map { $0.formatted(style) } ?? "Unknown date"
         return "\(month) · \(g.photos.count.formatted(.number.locale(locale)))"
     }
 
     /// Marked Done, and not grown since.
-    public func isDone(_ g: BurstGroup) -> Bool { reviewedMonths[g.best].map { g.photos.count <= $0 } ?? false }
-
-    public func toggleDone(_ g: BurstGroup) {
-        if isDone(g) { reviewedMonths[g.best] = nil } else { reviewedMonths[g.best] = g.photos.count }
-        do { try saveReviewedMonths(reviewedMonths, dir: dir) } catch { self.error = "\(error)" }
-    }
 }
 
 // MARK: Burst headers

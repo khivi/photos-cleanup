@@ -105,10 +105,14 @@ To change this later, open System Settings > Privacy & Security > Automation.
 ## Usage
 
 1. Pick a pass in the sidebar.
-2. Check the suggestions. Only photos to delete are marked.
+2. Check the suggestions, a section at a time. Only photos to delete are marked.
 3. Fix any mark: K keeps, ⌫ deletes.
-4. Click Move to Albums. Marked photos go to the pass's "Delete Me" album, the rest to its "Keep" album.
-5. Open To be deleted and click Delete in Photos…. macOS asks you to confirm.
+4. Click the section's Confirm, or press Return. The section leaves the pass and waits in Pending. Nothing changes in Photos yet, and ⌘Z undoes it.
+5. Click Apply to Photos…. Every pending photo goes to its album: marked ones to the pass's "Delete Me" album, the rest to its "Keep" album.
+6. Open To be deleted and click Delete in Photos…. macOS asks you to confirm.
+
+Pending, under Review, lists what you confirmed by album. Select photos there and click Send Back to Review to change your mind. Pending is saved, so it survives a quit.
+Confirm All… in the toolbar confirms every section at once, as marked; photos you haven't looked at, and left as Keep, stay in the pass.
 
 | Pass | Finds | Starts as delete |
 | --- | --- | --- |
@@ -123,20 +127,23 @@ In Bursts and Similar, the best shot is the one whose worst face Vision rates be
 
 A tile marks a Live Photo "Live" and a screen recording "Screen recording".
 
+Every pass is in sections: a group in Bursts and Similar, a month in the others, newest first.
 Bursts and Similar show one row per group: the best shot large, the others smaller beside it.
 A long group ends in "+N"; click it, or select a photo in the group, to see the rest.
-Press Return to accept a group as marked, or 1–9 to keep only that photo of it. Either way the next group is selected.
-Move to Albums… then offers to move only the groups you accepted, so you can review a big pass over several sittings.
-Accepted groups are kept until you quit; moving them is what saves your progress.
+In Bursts and Similar, press 1–9 to keep only that photo of the group and confirm it; the selected group's tiles show their numbers.
+If you review by scrolling, select a photo in the last section you looked at and press ⇧Return (Photo > Confirm Up to Here): every section from the top through that one is confirmed.
+What's left in a pass is what you haven't confirmed, so you can work through a big one over several sittings.
 
-All shows every photo by month. Mark any photo delete there; it goes to "All - Delete Me".
-Switch a month to Done to remember you reviewed it.
+All shows every photo by month. Mark any photo delete there and confirm the month: Apply to Photos… puts the marked photos in "All - Delete Me".
+A confirmed month stays in All, faded and marked Confirmed, until it gets new photos.
 
 | Key | Action |
 | --- | --- |
 | Click, ⇧-click, ⌘-click, ⌘A | Select |
 | Arrow keys | Move the selection; in Bursts and Similar, ↑ and ↓ move by group |
-| Return, 1–9 | Bursts and Similar: accept the group, or keep only photo N of it, and go to the next group |
+| Return | Confirm the selected section and go to the next |
+| 1–9 | Bursts and Similar: keep only photo N of the group, confirm it, and go to the next |
+| ⇧Return | Confirm every section from the top through the selected one |
 | K / ⌫ | Mark keep / delete; with one photo selected, move to the next |
 | Space, Esc | Show or close the large preview (videos play) |
 | ⌘I | Show the Info panel: date, albums, and why the photo was picked |

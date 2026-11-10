@@ -7,7 +7,7 @@ import Testing
     let burst = dated(["x": 0, "y": 1, "z": 2])
     let vision = ["x": vr(0.9, face: 0.2), "y": vr(0.3, face: 0.8), "z": vr(0.5, face: 0.4)]
     let (c, _) = try await makeCleanup(burst, vision: vision)
-    let m = ReviewModel(cleanup: c)
+    let m = ReviewModel(cleanup: c, dir: tempDir())
     await m.select(.pass("bursts"))
     #expect(m.groups.map(\.best) == ["y"])
     #expect(m.decisions == ["x": .delete, "y": .keep, "z": .delete])

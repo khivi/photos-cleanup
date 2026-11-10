@@ -66,6 +66,8 @@ public actor Cleanup {
     var byUUID: [String: Photo] = [:]
     /// The photo list is read once and never sees album changes, so commits are tracked here.
     var committed: Set<String> = []
+    /// Confirmed in the app and not yet applied to Photos: out of every pass, like `committed`.
+    var held: Set<String> = []
     /// The subset of `committed` filed into a Delete Me album.
     var filedDelete: Set<String> = []
 
@@ -146,7 +148,9 @@ public actor Cleanup {
         let owners = kind == "similar" ? ["similar", "bursts"] : [kind]
         let filed = Set(owners.flatMap { [Passes.deleteAlbum($0)!, Passes.keepAlbum($0)!] } + [Passes.allDeleteAlbum])
             .union(owners.flatMap { Passes.legacyAlbums[$0] ?? [] })
-        return found.filter { !committed.contains($0.uuid) && filed.isDisjoint(with: $0.albums) }
+        return found.filter {
+            !committed.contains($0.uuid) && !held.contains($0.uuid) && filed.isDisjoint(with: $0.albums)
+        }
     }
 
     /// Narrow Paperwork and Low Quality by the Vision analysis done so far, and its progress.
@@ -245,6 +249,12 @@ public actor Cleanup {
     }
 
     /// Photos per pass, or nil where knowing it needs work not done yet.
+    public func hold(_ ids: Set<String>) {
+        guard ids != held else { return }
+        held = ids
+        generation += 1
+    }
+
     public func counts() -> [String: Int?] {
         var out: [String: Int?] = ["all": photos.count]
         for (kind, _) in Passes.all {

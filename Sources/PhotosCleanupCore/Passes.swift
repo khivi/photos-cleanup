@@ -196,6 +196,24 @@ public func saveReviewedMonths(_ months: [String: Int], dir: URL = settingsDir) 
         .write(to: dir.appendingPathComponent("reviewed_months"), atomically: true, encoding: .utf8)
 }
 
+/// Confirmed photos not yet applied to Photos, from `pending` in `dir`: "bursts<TAB>uuid<TAB>keep" lines.
+public func loadPending(dir: URL = settingsDir) -> [String: (pass: String, keep: Bool)] {
+    guard let text = try? String(contentsOf: dir.appendingPathComponent("pending"), encoding: .utf8) else { return [:] }
+    var pending: [String: (pass: String, keep: Bool)] = [:]
+    for line in text.split(whereSeparator: \.isNewline) {
+        let f = line.split(separator: "\t").map(String.init)
+        if f.count == 3, f[2] == "keep" || f[2] == "delete" { pending[f[1]] = (f[0], f[2] == "keep") }
+    }
+    return pending
+}
+
+public func savePending(_ pending: [String: (pass: String, keep: Bool)], dir: URL = settingsDir) throws {
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try pending.sorted { ($0.value.pass, $0.key) < ($1.value.pass, $1.key) }
+        .map { "\($0.value.pass)\t\($0.key)\t\($0.value.keep ? "keep" : "delete")\n" }.joined()
+        .write(to: dir.appendingPathComponent("pending"), atomically: true, encoding: .utf8)
+}
+
 private let minDate = ISO8601DateFormatter().date(from: "2000-01-01T00:00:00Z")!
 
 /// Photos of one `kind` a pass may suggest: not favorited, and (with `keepAlbumPhotos`, the default)

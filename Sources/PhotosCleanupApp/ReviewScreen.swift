@@ -16,7 +16,9 @@ struct ReviewScreen: View {
     private let gridPadding: CGFloat = 12
 
     private var pollKey: String { "\(model.view.passKey ?? "")\(model.progress.pending > 0)" }
-    private var countsKey: [Bool] { [model.loading, model.committing, model.progress.pending == 0] }
+    private var countsKey: [Int] {
+        [model.loading ? 1 : 0, model.committing ? 1 : 0, model.progress.pending == 0 ? 1 : 0, model.pending.count]
+    }
 
     private var items: [PassPhoto] {
         model.view == .deleted ? model.deleted.map { PassPhoto(photo: $0) } : model.shownPhotos
@@ -64,19 +66,20 @@ struct ReviewScreen: View {
                         .inspectorColumnWidth(min: 220, ideal: 260, max: 400)
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
-                .confirmationDialog("Move to Albums?", isPresented: $model.confirmingMove) {
-                    if model.canMoveAccepted {
-                        Button(model.moveAcceptedLabel) { Task { await model.commit(.accepted) } }
-                            .keyboardShortcut(.defaultAction)
-                            .accessibilityIdentifier("commit-accepted")
-                        Button(ReviewModel.moveAllLabel, role: .destructive) { Task { await model.commit() } }
-                            .accessibilityIdentifier("commit-confirm")
-                    } else {
-                        Button("Move", role: .destructive) { Task { await model.commit() } }
-                            .accessibilityIdentifier("commit-confirm")
-                    }
+                .confirmationDialog("Confirm All?", isPresented: $model.confirmingMove) {
+                    Button("Confirm All", role: .destructive) { Task { await model.commit() } }
+                        .accessibilityIdentifier("commit-confirm")
                 } message: {
-                    Text(model.moveMessage)
+                    Text(
+                        (["To Pending, for these albums:"] + model.commitPreview.map(\.label)).joined(separator: "\n"))
+                }
+                .confirmationDialog("Apply to Photos?", isPresented: $model.confirmingApply) {
+                    Button("Apply") { Task { await model.apply() } }
+                        .accessibilityIdentifier("apply-confirm")
+                } message: {
+                    Text(
+                        (model.applyPreview.map(\.label) + ["Nothing is deleted: Delete in Photos… does that."])
+                            .joined(separator: "\n"))
                 }
         }
         .focusedSceneValue(\.reviewModel, model)
@@ -178,11 +181,27 @@ struct ReviewScreen: View {
                     .accessibilityIdentifier("delete-in-photos")
             }
         }
-        if model.canMark {  // Keep All / Delete All stay pass-only; All has just the move
+        if model.view == .pending {
+            ToolbarItem {
+                Button(ReviewModel.sendBackLabel, systemImage: "arrow.uturn.backward") { model.sendBack() }
+                    .labelStyle(.titleAndIcon)
+                    .disabled(!model.canSendBack)
+                    .accessibilityIdentifier("send-back")
+            }
+        }
+        if model.canMark {  // Keep All / Delete All stay pass-only; All has just Confirm All
             ToolbarItem {
                 Button(model.moveButtonLabel) { model.confirmingMove = true }
                     .disabled(!model.canMove)
                     .accessibilityIdentifier("commit")
+            }
+        }
+        if !model.pending.isEmpty {
+            ToolbarItem {
+                Button(model.applyButtonLabel) { model.confirmingApply = true }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!model.canApply)
+                    .accessibilityIdentifier("apply")
             }
         }
     }
@@ -191,6 +210,7 @@ struct ReviewScreen: View {
     @ViewBuilder private var statusBar: some View {
         let lines = [
             model.banner, model.error, model.progressError, model.verdictsOff.map { "\($0). Everything else works." },
+            model.keysHint,
         ]
         .compactMap { $0 }
         if !lines.isEmpty {
@@ -229,12 +249,6 @@ struct ReviewScreen: View {
                     .font(.callout).foregroundStyle(.secondary)
                     .padding(.horizontal, gridPadding).padding(.top, 8)
                 }
-                if let accepted = model.acceptedLabel {
-                    Label(accepted, systemImage: "checkmark.circle.fill").font(.callout.weight(.semibold))
-                        .foregroundStyle(.green)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, gridPadding).padding(.top, 4)
-                }
                 if model.isGrouped {
                     LazyVStack(alignment: .leading, spacing: 4) {
                         ForEach(model.shownGroups, id: \.best) { groupRow($0) }
@@ -247,20 +261,30 @@ struct ReviewScreen: View {
                                 .adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
                         ], spacing: 4
                     ) {
-                        if model.view == .all {
-                            ForEach(model.shownGroups, id: \.best) { group in
+                        if model.view == .pending {
+                            ForEach(model.pendingGroups, id: \.best) { group in
                                 Section {
                                     ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
                                 } header: {
+                                    Text(model.header(group)).font(.headline)
+                                        .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                                }
+                            }
+                        } else if model.hasSections {
+                            let verdicts = Dictionary(model.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                            ForEach(model.shownGroups, id: \.best) { group in
+                                Section {
+                                    ForEach(group.photos) { photo in
+                                        cell(verdicts[photo.id] ?? PassPhoto(photo: photo))
+                                            .opacity(model.isConfirmed(group) && !model.isCurrent(group) ? 0.5 : 1)
+                                    }
+                                } header: {
                                     HStack {
                                         Text(model.header(group)).font(.headline)
-                                        if model.view == .all {
-                                            Toggle(
-                                                "Done",
-                                                isOn: Binding(
-                                                    get: { model.isDone(group) }, set: { _ in model.toggleDone(group) })
-                                            )
-                                            .accessibilityIdentifier("done-\(group.best)")
+                                        confirmButton(group)
+                                        if model.isConfirmed(group) {
+                                            Label("Confirmed", systemImage: "checkmark.circle.fill")
+                                                .foregroundStyle(.green)
                                         }
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
@@ -311,9 +335,7 @@ struct ReviewScreen: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(model.header(group)).font(.headline)
-                if model.isAccepted(group) {
-                    Label("Accepted", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                }
+                confirmButton(group)
                 if model.expanded.contains(group.best) {
                     Button("Show Less") { model.toggleExpanded(group) }.buttonStyle(.link).focusable(false)
                 }
@@ -344,17 +366,32 @@ struct ReviewScreen: View {
         .id(sectionID(group.best))
     }
 
+    /// Files the section as marked. The selected section's button also says it takes Return.
+    private func confirmButton(_ group: BurstGroup) -> some View {
+        Button(model.isCurrent(group) ? "\(ReviewModel.confirmLabel) ↩" : ReviewModel.confirmLabel) {
+            focused = true
+            Task { await model.confirm(group) }
+        }
+        .controlSize(.small).focusable(false)
+        .disabled(!model.canConfirm)
+        .accessibilityIdentifier("confirm-\(group.best)")
+    }
+
     private func cell(_ p: PassPhoto, compact: Bool = false) -> some View {
         let mark: PhotoCell.Mark =
             switch model.view {
             case .all:
-                model.decision(p.id).map { .decision($0) } ?? (model.deletedAlbum[p.id] != nil ? .deleteMe : .none)
+                model.decision(p.id).map { .decision($0) }
+                    ?? (model.pending[p.id] != nil
+                        ? .decision(.delete) : model.deletedAlbum[p.id] != nil ? .deleteMe : .none)
             case .deleted: .deleteMe
+            case .pending: model.pending[p.id]?.keep == true ? .none : .decision(.delete)
             case .pass: model.decision(p.id).map { .decision($0) } ?? .none
             case .export, .importFolders: .none
             }
         return PhotoCell(
             photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id), compact: compact,
+            number: model.keyNumber(p.id),
             label: model.accessibilityLabel(p), thumbnails: thumbnails, aspectFit: model.aspectFit,
             onTap: {
                 focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
@@ -368,7 +405,7 @@ struct ReviewScreen: View {
 
 extension View {
     /// The grid takes keyboard focus: arrows move the selection, Space toggles the preview, ⌘A selects all,
-    /// and in a grouped pass Return and 1–9 accept the group. K and ⌫ are menu commands.
+    /// Return confirms the selected section, and 1–9 in Bursts and Similar keep one photo of it. K and ⌫ are menu commands.
     fileprivate func keyboardSelection(
         model: ReviewModel, focused: FocusState<Bool>.Binding, width: Binding<CGFloat>,
         move: @escaping (KeyEquivalent) -> Void
@@ -392,13 +429,15 @@ extension View {
                 return .handled
             }
             .onKeyPress(.return) {
-                guard model.canAccept && !model.previewing else { return .ignored }
-                model.accept()
+                guard model.canConfirm && !model.previewing else { return .ignored }
+                Task { await model.confirm() }
                 return .handled
             }
             .onKeyPress(characters: CharacterSet(charactersIn: "123456789")) { press in
-                guard model.canAccept && !model.previewing, let n = Int(press.characters) else { return .ignored }
-                model.accept(keeping: n - 1)
+                guard model.isGrouped && model.canConfirm && !model.previewing, let n = Int(press.characters) else {
+                    return .ignored
+                }
+                Task { await model.confirm(keeping: n - 1) }
                 return .handled
             }
             .onKeyPress(.escape) {
@@ -420,6 +459,7 @@ extension ReviewView {
         case .deleted: "tab-deleted"
         case .export: "tab-export"
         case .importFolders: "tab-import"
+        case .pending: "tab-pending"
         }
     }
 }
@@ -446,7 +486,10 @@ struct ReviewCommands: Commands {
             }
             .disabled(model?.canMark != true)
             // No shortcut: a bare Return key equivalent would also catch Return in dialogs; the grid handles it.
-            Button("Accept Group") { model?.accept() }.disabled(model?.canAccept != true)
+            Button(ReviewModel.confirmLabel) { Task { await model?.confirm() } }.disabled(model?.canConfirm != true)
+            Button(ReviewModel.confirmUpToHereLabel) { Task { await model?.confirmUpToHere() } }
+                .keyboardShortcut(.return, modifiers: .shift)
+                .disabled(model?.canConfirm != true)
             Divider()
             Group {
                 Button(ReviewModel.keepAllLabel) { model?.setAll(.keep) }
@@ -460,8 +503,11 @@ struct ReviewCommands: Commands {
             Button("Preview") { model?.togglePreview() }.disabled(model == nil)
             Button(model?.deleteInPhotosLabel ?? "Delete in Photos…") { Task { await model?.deleteInPhotos() } }
                 .disabled(model?.canDeleteInPhotos != true)
-            Button("Move to Albums…") { model?.confirmingMove = true }
+            Button(ReviewModel.confirmAllLabel) { model?.confirmingMove = true }
                 .disabled(model?.canMove != true)
+            Button(model?.applyButtonLabel ?? "Apply to Photos…") { model?.confirmingApply = true }
+                .disabled(model?.canApply != true)
+            Button(ReviewModel.sendBackLabel) { model?.sendBack() }.disabled(model?.canSendBack != true)
                 .accessibilityIdentifier("commit-menu")
             if canShowInPhotos {
                 Button(ReviewModel.showInPhotosLabel) { Task { await model?.showInPhotos(run: runAppleScript) } }
