@@ -113,7 +113,7 @@ To change this later, open System Settings > Privacy & Security > Automation.
 6. Open To be deleted and click Delete in Photos…. macOS asks you to confirm.
 
 Pending, under Review, lists what you confirmed by album. Select photos there and click Send Back to Review to change your mind. Pending is saved, so it survives a quit.
-Confirm All… in the toolbar confirms every section at once, as marked; photos you haven't looked at, and left as Keep, stay in the pass.
+Confirm All in the toolbar confirms every section at once, as marked; photos you haven't looked at, and left as Keep, stay in the pass.
 
 | Pass | Finds | Starts as delete |
 | --- | --- | --- |
@@ -137,7 +137,7 @@ What's left in a pass is what you haven't confirmed, so you can work through a b
 
 All shows every photo by month, for photos no pass suggests.
 Its sections have no Confirm buttons.
-Mark a photo Delete there, then click Confirm All… and Apply to Photos…. The photo goes to "All - Delete Me".
+Mark a photo Delete there, then click Confirm All and Apply to Photos…. The photo goes to "All - Delete Me".
 
 | Key | Action |
 | --- | --- |

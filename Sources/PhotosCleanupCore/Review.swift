@@ -187,8 +187,6 @@ public final class ReviewModel {
                     || editsKeep && $0.photo.edited)
         }
     }
-    /// The "Move to Albums?" dialog is open. The toolbar button and Photo > Move to Albums both set it.
-    public var confirmingMove = false
     /// Move to Albums can run now: the toolbar button and the menu item share this.
     public var canMove: Bool { !loading && !committing && canCommit }
     /// Keep All and Delete All can run now.
@@ -394,7 +392,12 @@ public final class ReviewModel {
     /// Delete in Photos can run now: the To be deleted view, not empty.
     public var canDeleteInPhotos: Bool { view == .deleted && !loading && !deleting && !deleted.isEmpty }
     public var moveButtonLabel: String { committing ? "Confirming…" : Self.confirmAllLabel }
-    public static let confirmAllLabel = "Confirm All…"
+    public static let confirmAllLabel = "Confirm All"
+    /// No dialog: Confirm All only moves photos to Pending, and ⌘Z brings them back.
+    public var confirmAllHelp: String {
+        commitPreview.isEmpty
+            ? "Nothing to confirm" : (["To Pending:"] + commitPreview.map(\.label)).joined(separator: "\n")
+    }
     public var inspectorToggleLabel: String { showsInspector ? "Hide Info" : "Show Info" }
     public static let keepAllLabel = "Keep All"
     public static let deleteAllLabel = "Delete All"

@@ -313,17 +313,15 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.selected == [ids[2]])
     }
 
-    @Test func moveDialogOpensOnlyWhenThereIsSomethingToMove() async throws {
+    @Test func confirmAllIsEnabledOnlyWhenThereIsSomethingToMove() async throws {
         let (c, _) = try await makeCleanup(shots("a", "b"), verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c, dir: tempDir())
         await m.select(.all)
-        #expect(!m.canMove && !m.canSetAll && !m.confirmingMove)
+        #expect(!m.canMove && !m.canSetAll && m.confirmAllHelp == "Nothing to confirm")
         await m.select(.pass("screenshots"))
         #expect(m.canSetAll)
         m.setAll(.delete)
-        #expect(m.canMove)
-        m.confirmingMove = true
-        #expect(m.confirmingMove)
+        #expect(m.canMove && m.confirmAllHelp == "To Pending:\n2 → Screenshots - Delete Me")
     }
 
     @Test func previewOpensForOnePhotoAndClosesWithTheSelection() async throws {
@@ -522,7 +520,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         #expect(m.windowTitle == "Screenshots")
         m.setAll(.delete)
         #expect(m.commitPreview == [.init(count: 1, album: "Screenshots - Delete Me")])
-        #expect(m.moveButtonLabel == "Confirm All…")
+        #expect(m.moveButtonLabel == "Confirm All")
         #expect(ReviewModel.keepAllLabel == "Keep All" && ReviewModel.deleteAllLabel == "Delete All")
     }
 }

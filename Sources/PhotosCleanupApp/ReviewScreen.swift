@@ -66,13 +66,6 @@ struct ReviewScreen: View {
                         .inspectorColumnWidth(min: 220, ideal: 260, max: 400)
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
-                .confirmationDialog("Confirm All?", isPresented: $model.confirmingMove) {
-                    Button("Confirm All", role: .destructive) { Task { await model.commit() } }
-                        .accessibilityIdentifier("commit-confirm")
-                } message: {
-                    Text(
-                        (["To Pending, for these albums:"] + model.commitPreview.map(\.label)).joined(separator: "\n"))
-                }
                 .confirmationDialog("Apply to Photos?", isPresented: $model.confirmingApply) {
                     Button("Apply") { Task { await model.apply() } }
                         .accessibilityIdentifier("apply-confirm")
@@ -197,7 +190,8 @@ struct ReviewScreen: View {
         }
         if model.canMark {  // Keep All / Delete All stay pass-only; All has just Confirm All
             ToolbarItem {
-                Button(model.moveButtonLabel) { model.confirmingMove = true }
+                Button(model.moveButtonLabel) { Task { await model.commit() } }
+                    .help(model.confirmAllHelp)
                     .disabled(!model.canMove)
                     .accessibilityIdentifier("commit")
             }
@@ -522,7 +516,7 @@ struct ReviewCommands: Commands {
             Button("Preview") { model?.togglePreview() }.disabled(model == nil)
             Button(model?.deleteInPhotosLabel ?? "Delete in Photos…") { Task { await model?.deleteInPhotos() } }
                 .disabled(model?.canDeleteInPhotos != true)
-            Button(ReviewModel.confirmAllLabel) { model?.confirmingMove = true }
+            Button(ReviewModel.confirmAllLabel) { Task { await model?.commit() } }
                 .disabled(model?.canMove != true)
             Button(model?.applyButtonLabel ?? "Apply to Photos…") { model?.confirmingApply = true }
                 .disabled(model?.canApply != true)
