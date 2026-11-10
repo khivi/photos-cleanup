@@ -92,6 +92,19 @@ Before you start, run the [sandbox check](#sandbox-check): `/run-app sandbox che
 
 The hardened runtime denies Photos access without the `com.apple.security.personal-information.photos-library` entitlement, even when System Settings allows the app. `scripts/app.sh` always signs with it, and with `com.apple.security.app-sandbox`.
 
+### App Store build
+
+No CI job builds it yet. Run this on a Mac with the Apple Distribution and installer certificates in the keychain:
+
+```bash
+SIGN_IDENTITY="Apple Distribution: Amit Khivesara (3WD7XPJ5M5)" \
+INSTALLER_IDENTITY="3rd Party Mac Developer Installer: Amit Khivesara (3WD7XPJ5M5)" \
+BUILD_NUMBER=<above the last upload> scripts/app.sh store --universal
+scripts/check-sandbox.sh entitlements --store
+```
+
+It writes `.build/Photos Cleanup.pkg`. The provisioning profile is `Sources/PhotosCleanupApp/AppStore.provisionprofile`; it expires 2027-11-10. Renew it in the developer portal (Profiles, "Photos Cleanup App Store") and replace the file. `PROFILE` overrides the path. The build leaves out the Apple Events exception, so Show in Photos is hidden. Upload the package with Transporter or `xcrun altool --upload-app`.
+
 ### Sandbox check
 
 Do this before each release. It has two parts. Both run `scripts/check-sandbox.sh watch` in a second terminal, and pass when it prints no `deny` line. Each `deny(1) <operation> <path>` names something the sandbox blocked. `vfs.disk-space`, `AppleNVMeEANUC` and `syspolicy.exec` come from system frameworks and are expected. The `run-app` skill's sandbox check does both parts with Claude driving the app.

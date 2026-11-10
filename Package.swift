@@ -15,7 +15,7 @@ let package = Package(
         .executableTarget(
             name: "PhotosCleanupApp",
             dependencies: ["PhotosCleanupCore"],
-            exclude: ["Info.plist", "PhotosCleanup.entitlements", "AppIcon.svg"]
+            exclude: ["Info.plist", "PhotosCleanup.entitlements", "AppIcon.svg", "AppStore.provisionprofile"]
         ),
         // Dev tool, not shipped: the app's Import from a terminal, plus --skip.
         .executableTarget(name: "photos-import", dependencies: ["PhotosCleanupCore"]),

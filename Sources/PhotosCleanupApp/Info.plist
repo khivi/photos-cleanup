@@ -18,6 +18,8 @@
 	<string>0.11.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.photography</string>
 	<key>LSMinimumSystemVersion</key>
@@ -25,7 +27,7 @@
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Show in Photos asks Photos to select the photo you're looking at.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>photos-cleanup reads your library to find photos to review and files them into review albums. It never deletes.</string>
+	<string>Photos Cleanup reads your library to find photos to review and files them into review albums. It deletes only the photos you confirm with Delete in Photos…, and Photos keeps them in Recently Deleted for 30 days.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

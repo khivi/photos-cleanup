@@ -15,13 +15,15 @@ allowed=(
 )
 # The App Store rejects temporary exceptions; Show in Photos hides itself without this one.
 homebrew_only=(com.apple.security.temporary-exception.apple-events)
+# From the provisioning profile; `scripts/app.sh store` adds them.
+store_only=(com.apple.application-identifier com.apple.developer.team-identifier)
 # Denials from system frameworks the app loads, seen with every feature still working.
 expected='vfs.disk-space|AppleNVMeEANUC|syspolicy.exec'
 predicate='sender == "Sandbox" AND eventMessage CONTAINS "PhotosCleanupApp"'
 
 case ${1:-} in
   entitlements)
-    [ "${2:-}" = --store ] || allowed+=("${homebrew_only[@]}")
+    if [ "${2:-}" = --store ]; then allowed+=("${store_only[@]}"); else allowed+=("${homebrew_only[@]}"); fi
     keys=$(codesign -d --entitlements - --xml "$app" 2>/dev/null | plutil -convert xml1 -o - - | sed -n 's/^\t<key>\(.*\)<\/key>$/\1/p')
     grep -qx com.apple.security.app-sandbox <<<"$keys" || { echo "not sandboxed: $app" >&2; exit 1; }
     bad=$(grep -vxF -f <(printf '%s\n' "${allowed[@]}") <<<"$keys" || true)
