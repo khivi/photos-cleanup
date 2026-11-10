@@ -376,9 +376,11 @@ struct ReviewScreen: View {
         .controlSize(.small).focusable(false)
         .disabled(!model.canConfirm)
         .accessibilityIdentifier("confirm-\(group.best)")
-        Button(ReviewModel.confirmUpToHereLabel) {
+        Button {
             focused = true
             Task { await model.confirmUpToHere(group) }
+        } label: {
+            Label(ReviewModel.confirmUpToHereLabel, systemImage: "arrow.up").labelStyle(.titleAndIcon)
         }
         .help(model.confirmUpToHereHelp(group))
         .controlSize(.small).focusable(false)
