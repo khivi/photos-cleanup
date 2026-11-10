@@ -281,16 +281,11 @@ struct ReviewScreen: View {
                                 Section {
                                     ForEach(group.photos) { photo in
                                         cell(verdicts[photo.id] ?? PassPhoto(photo: photo))
-                                            .opacity(model.isConfirmed(group) && !model.isCurrent(group) ? 0.5 : 1)
                                     }
                                 } header: {
                                     HStack {
                                         Text(model.header(group)).font(.headline)
-                                        confirmButton(group)
-                                        if model.isConfirmed(group) {
-                                            Label("Reviewed", systemImage: "checkmark.circle.fill")
-                                                .foregroundStyle(.green)
-                                        }
+                                        if model.inPass { confirmButton(group) }
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
                                     .id(sectionID(group.best))
@@ -373,7 +368,7 @@ struct ReviewScreen: View {
 
     /// Files the section as marked; the second button files every section from the top through this one.
     @ViewBuilder private func confirmButton(_ group: BurstGroup) -> some View {
-        Button(model.confirmTitle) {
+        Button(ReviewModel.confirmLabel) {
             focused = true
             Task { await model.confirm(group) }
         }
@@ -381,7 +376,7 @@ struct ReviewScreen: View {
         .controlSize(.small).focusable(false)
         .disabled(!model.canConfirm)
         .accessibilityIdentifier("confirm-\(group.best)")
-        Button(model.confirmUpToHereTitle) {
+        Button(ReviewModel.confirmUpToHereLabel) {
             focused = true
             Task { await model.confirmUpToHere(group) }
         }
@@ -505,9 +500,9 @@ struct ReviewCommands: Commands {
             }
             .disabled(model?.canMark != true)
             // No shortcut: a bare Return key equivalent would also catch Return in dialogs; the grid handles it.
-            Button(model?.confirmTitle ?? ReviewModel.confirmLabel) { Task { await model?.confirm() } }.disabled(
+            Button(ReviewModel.confirmLabel) { Task { await model?.confirm() } }.disabled(
                 model?.canConfirm != true)
-            Button(model?.confirmUpToHereTitle ?? ReviewModel.confirmUpToHereLabel) {
+            Button(ReviewModel.confirmUpToHereLabel) {
                 Task { await model?.confirmUpToHere() }
             }
             .keyboardShortcut(.return, modifiers: .shift)

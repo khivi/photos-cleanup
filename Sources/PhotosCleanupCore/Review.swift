@@ -98,8 +98,6 @@ public final class ReviewModel {
     private let importer: Importer?
     private let dir: URL
     private let defaults: UserDefaults
-    /// Months confirmed in All, by "2024-03" key, with the photo count when confirmed.
-    public private(set) var reviewedMonths: [String: Int]
     /// Pass keys whose caption shows as one line.
     private var foldedCaptions: Set<String>
 
@@ -113,7 +111,6 @@ public final class ReviewModel {
         self.importer = importer
         self.dir = dir
         self.defaults = defaults
-        reviewedMonths = loadReviewedMonths(dir: dir)
         pending = loadPending(dir: dir).mapValues { Pending(pass: $0.pass, keep: $0.keep) }
         foldedCaptions = Set(defaults.stringArray(forKey: foldedCaptionsKey) ?? [])
         importBookmarks = loadImportFolders(defaults: defaults)
@@ -832,23 +829,21 @@ public final class ReviewModel {
     /// The state a confirm changes, for its undo.
     struct Snapshot {
         var photos: [PassPhoto], groups: [BurstGroup], decisions: [String: Decision], touched: Set<String>
-        var reviewedMonths: [String: Int], pending: [String: Pending]
+        var pending: [String: Pending]
     }
 
     var snapshot: Snapshot {
-        Snapshot(
-            photos: photos, groups: groups, decisions: decisions, touched: touched, reviewedMonths: reviewedMonths,
-            pending: pending)
+        Snapshot(photos: photos, groups: groups, decisions: decisions, touched: touched, pending: pending)
     }
 
-    /// Moves `doomed` and `keep` to Pending, then marks `months` confirmed. Nothing is written to Photos.
+    /// Moves `doomed` and `keep` to Pending. Nothing is written to Photos.
     /// `undoTo` is the state before the caller changed marks for this confirm (a number key).
     func send(
-        _ doomed: [PassPhoto], keep: [String], months: [String] = [], name: String, undoTo: Snapshot? = nil
+        _ doomed: [PassPhoto], keep: [String], name: String, undoTo: Snapshot? = nil
     ) async -> Bool {
         guard let key = view.passKey ?? (view == .all ? Passes.allKey : nil) else { return false }
         let keep = view == .all ? [] : keep  // All files only its Delete marks
-        if doomed.isEmpty && keep.isEmpty && months.isEmpty { return false }
+        if doomed.isEmpty && keep.isEmpty { return false }
         let before = undoTo ?? snapshot
         for p in doomed { pending[p.id] = Pending(pass: key, keep: false) }
         for id in keep { pending[id] = Pending(pass: key, keep: true) }
@@ -860,7 +855,6 @@ public final class ReviewModel {
         }
         for id in gone { decisions[id] = nil }
         touched.subtract(gone)
-        for m in months { reviewedMonths[m] = groups.first { $0.best == m }?.photos.count ?? 0 }
         status = nil
         changed(before, name: name)
         return true
@@ -883,13 +877,12 @@ public final class ReviewModel {
     private func restore(_ s: Snapshot, name: String) {
         let now = snapshot
         (photos, groups, decisions, touched) = (s.photos, s.groups, s.decisions, s.touched)
-        (reviewedMonths, pending) = (s.reviewedMonths, s.pending)
+        pending = s.pending
         changed(now, name: name)
     }
 
     private func saveState() {
         do {
-            try saveReviewedMonths(reviewedMonths, dir: dir)
             try savePending(pending.mapValues { ($0.pass, $0.keep) }, dir: dir)
         } catch {
             self.error = "\(error)"
@@ -1040,19 +1033,10 @@ extension ReviewModel {
         return i + 1
     }
 
-    /// A month in All already confirmed, and not grown since. A pass's confirmed sections leave it.
-    public func isConfirmed(_ g: BurstGroup) -> Bool {
-        view == .all && reviewedMonths[g.best].map { g.photos.count <= $0 } ?? false
-    }
-
-    public var canConfirm: Bool { hasSections && !loading && !committing && currentGroup != nil }
+    /// All only browses: its Delete marks go to Pending through Confirm All.
+    public var canConfirm: Bool { inPass && !loading && !committing && currentGroup != nil }
     public static let confirmLabel = "Confirm"
     public static let confirmUpToHereLabel = "Confirm Up to Here"
-    public static let reviewedLabel = "Mark Reviewed"
-    public static let reviewedUpToHereLabel = "Mark Reviewed Up to Here"
-    /// All has no suggestions to accept: its Confirm records the month as looked at.
-    public var confirmTitle: String { view == .all ? Self.reviewedLabel : Self.confirmLabel }
-    public var confirmUpToHereTitle: String { view == .all ? Self.reviewedUpToHereLabel : Self.confirmUpToHereLabel }
 
     /// Return, or a section's Confirm button: files the section as marked, then selects the next one.
     /// A number key (`keeping` 0–8) first keeps only that photo of the group and marks the rest Delete.
@@ -1060,7 +1044,7 @@ extension ReviewModel {
         guard canConfirm, let g = section ?? currentGroup else { return }
         guard place.map(g.photos.indices.contains) ?? true else { return }
         let keep = place.map { g.photos[$0].id }
-        await confirm([full(g)], keeping: keep, name: keep == nil ? confirmTitle : "Keep One")
+        await confirm([full(g)], keeping: keep, name: keep == nil ? Self.confirmLabel : "Keep One")
     }
 
     /// ⇧Return, or a section's Confirm Up to Here button: confirms every section from the top through
@@ -1069,7 +1053,7 @@ extension ReviewModel {
         guard canConfirm, let g = section ?? currentGroup else { return }
         let gs = shownGroups
         guard let i = gs.firstIndex(where: { $0.best == g.best }) else { return }
-        await confirm(gs[...i].map(full), keeping: nil, name: confirmUpToHereTitle)
+        await confirm(gs[...i].map(full), keeping: nil, name: Self.confirmUpToHereLabel)
     }
 
     /// A number key, or a photo's Keep Only This button: keeps this photo of its group, marks the rest Delete, confirms.
@@ -1083,13 +1067,10 @@ extension ReviewModel {
     private var sectionUnit: String { isGrouped ? "group" : "month" }
     /// A section's tooltips name the key only on the current section, where the key acts.
     public func confirmHelp(_ g: BurstGroup) -> String {
-        (view == .all ? "Mark this month reviewed; its Delete marks wait in Pending" : "Confirm this \(sectionUnit)")
-            + (isCurrent(g) ? " (Return)" : "")
+        "Confirm this \(sectionUnit)" + (isCurrent(g) ? " (Return)" : "")
     }
     public func confirmUpToHereHelp(_ g: BurstGroup) -> String {
-        (view == .all
-            ? "Mark every month from the top through this one reviewed"
-            : "Confirm every section from the top through this \(sectionUnit)") + (isCurrent(g) ? " (⇧Return)" : "")
+        "Confirm every section from the top through this \(sectionUnit)" + (isCurrent(g) ? " (⇧Return)" : "")
     }
     public static let keepOnlyLabel = "Keep Only This"
     public func keepOnlyHelp(_ id: String) -> String {
@@ -1108,8 +1089,7 @@ extension ReviewModel {
         let mine = photos.filter { ids.contains($0.id) }
         let doomed = mine.filter { decisions[$0.id] == .delete }
         let kept = inPass ? mine.filter { decisions[$0.id] == .keep }.map(\.id) : []
-        let months = view == .all ? sections.map(\.best) : []
-        guard await send(doomed, keep: kept, months: months, name: name, undoTo: before) else {
+        guard await send(doomed, keep: kept, name: name, undoTo: before) else {
             decisions = before.decisions
             return
         }
@@ -1156,8 +1136,6 @@ extension ReviewModel {
         let month = g.photos.compactMap(\.date).first.map { $0.formatted(style) } ?? "Unknown date"
         return "\(month) · \(g.photos.count.formatted(.number.locale(locale)))"
     }
-
-    /// Marked Done, and not grown since.
 }
 
 // MARK: Burst headers

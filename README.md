@@ -135,9 +135,9 @@ In Bursts and Similar, hover a photo and click Keep Only This (or right-click it
 If you review by scrolling, click Confirm Up to Here beside the last section you looked at (shortcut: ⇧Return). Every section from the top through that one is confirmed.
 What's left in a pass is what you haven't confirmed, so you can work through a big one over several sittings.
 
-All shows every photo by month, for photos no pass suggests. Mark any photo delete there, then click the month's Mark Reviewed.
-Its Delete marks go to Pending, and Apply to Photos… puts them in "All - Delete Me".
-A reviewed month stays in All, faded and marked Reviewed, until it gets new photos.
+All shows every photo by month, for photos no pass suggests.
+Its sections have no Confirm buttons.
+Mark a photo Delete there, then click Confirm All… and Apply to Photos…. The photo goes to "All - Delete Me".
 
 | Key | Action |
 | --- | --- |

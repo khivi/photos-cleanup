@@ -178,24 +178,6 @@ public func saveIgnoreAlbums(_ names: [String], dir: URL = settingsDir) throws {
     try (comments + names).joined(separator: "\n").appending("\n").write(to: file, atomically: true, encoding: .utf8)
 }
 
-/// The months marked Done in `reviewed_months` in `dir`: "2024-03 312" lines, the month and its photo count when marked.
-public func loadReviewedMonths(dir: URL = settingsDir) -> [String: Int] {
-    guard let text = try? String(contentsOf: dir.appendingPathComponent("reviewed_months"), encoding: .utf8)
-    else { return [:] }
-    var months: [String: Int] = [:]
-    for line in text.split(whereSeparator: \.isNewline) {
-        let parts = line.split(separator: " ")
-        if parts.count == 2, let n = Int(parts[1]) { months[String(parts[0])] = n }
-    }
-    return months
-}
-
-public func saveReviewedMonths(_ months: [String: Int], dir: URL = settingsDir) throws {
-    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    try months.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)\n" }.joined()
-        .write(to: dir.appendingPathComponent("reviewed_months"), atomically: true, encoding: .utf8)
-}
-
 /// Confirmed photos not yet applied to Photos, from `pending` in `dir`: "bursts<TAB>uuid<TAB>keep" lines.
 public func loadPending(dir: URL = settingsDir) -> [String: (pass: String, keep: Bool)] {
     guard let text = try? String(contentsOf: dir.appendingPathComponent("pending"), encoding: .utf8) else { return [:] }

@@ -974,38 +974,27 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         #expect(m.groups.count == 3 && m.pending.isEmpty)
     }
 
-    @Test func aMonthInAllIsConfirmedAndRemembered() async throws {
+    @Test func allBrowsesAndItsDeleteMarksGoThroughConfirmAll() async throws {
         func at(_ iso: String) -> Date { ISO8601DateFormatter().date(from: iso)! }
         let photos = [
             Photo(uuid: "a", date: at("2026-10-20T12:00:00Z")), Photo(uuid: "b", date: at("2026-10-15T12:00:00Z")),
             Photo(uuid: "c", date: at("2024-03-05T12:00:00Z")),
         ]
         let (c, lib) = try await makeCleanup(photos, judge: FakeJudge(off: "off"))
-        let dir = tempDir()
-        let m = ReviewModel(cleanup: c, dir: dir, defaults: freshDefaults())
+        let m = ReviewModel(cleanup: c, dir: tempDir(), defaults: freshDefaults())
         await m.select(.all)
+        #expect(m.groups.count == 2 && !m.canConfirm)
         let oct = try #require(m.groups.first { $0.photos.count == 2 })
-        #expect(m.confirmTitle == "Mark Reviewed" && m.confirmUpToHereTitle == "Mark Reviewed Up to Here")
-        #expect(m.confirmHelp(oct).hasPrefix("Mark this month reviewed"))
         m.mark(["a"], .delete)
         await m.confirm(oct)
-        #expect(m.undoName == "Mark Reviewed")
+        await m.confirmUpToHere(oct)
+        #expect(m.pending.isEmpty && m.decisions["a"] == .delete && m.groups.count == 2)
+        await m.commit()
         #expect(
             m.pending == ["a": Pending(pass: Passes.allKey, keep: false)]
                 && m.album(m.pending["a"]!) == "All - Delete Me")
-        #expect(m.isConfirmed(oct) && loadReviewedMonths(dir: dir)[oct.best] == 2 && m.groups.count == 2)
-        let reopened = ReviewModel(cleanup: c, dir: dir)
-        await reopened.select(.all)
-        #expect(reopened.isConfirmed(oct))
-        #expect(!m.isConfirmed(BurstGroup(photos: oct.photos + [Photo(uuid: "n")], best: oct.best)))  // grown since
-
-        let mar = try #require(m.groups.first { $0.best != oct.best })
-        await m.confirm(mar)  // nothing marked: the month is confirmed, nothing is pending
-        #expect(m.isConfirmed(mar) && m.pending.count == 1)
-        m.undoManager.undo()
-        #expect(!m.isConfirmed(mar) && m.isConfirmed(oct))
         await m.apply()
-        #expect(sent(lib) == ["All - Delete Me": ["a"]] && m.isConfirmed(oct))
+        #expect(sent(lib) == ["All - Delete Me": ["a"]])
     }
 
     @Test func passesWithoutGroupsShowMonthsNewestFirstInTheirOwnOrder() async throws {
@@ -1016,7 +1005,7 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         #expect(m.groups.map { $0.photos.map(\.id) } == [["p2"], ["p3", "p1"]])  // worst first within a month
         #expect(m.photos.map(\.id) == ["p2", "p3", "p1"])
         let g = m.groups[0]
-        #expect(m.confirmHelp(g) == "Confirm this month (Return)" && !m.canKeepOnly && m.confirmTitle == "Confirm")
+        #expect(m.confirmHelp(g) == "Confirm this month (Return)" && !m.canKeepOnly)
         #expect(m.confirmHelp(m.groups[1]) == "Confirm this month")
     }
 
