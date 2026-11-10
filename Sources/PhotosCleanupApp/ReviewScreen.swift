@@ -147,6 +147,12 @@ struct ReviewScreen: View {
             }
         }
         ToolbarItem {
+            Button("Undo", systemImage: "arrow.uturn.backward") { model.undoManager.undo() }
+                .disabled(!model.canUndo)
+                .help(model.undoHelp)
+                .accessibilityIdentifier("undo")
+        }
+        ToolbarItem {
             Button(model.inspectorToggleLabel, systemImage: "info.circle") { model.showsInspector.toggle() }
                 .accessibilityIdentifier("inspector-toggle")
         }
@@ -210,7 +216,6 @@ struct ReviewScreen: View {
     @ViewBuilder private var statusBar: some View {
         let lines = [
             model.banner, model.error, model.progressError, model.verdictsOff.map { "\($0). Everything else works." },
-            model.keysHint,
         ]
         .compactMap { $0 }
         if !lines.isEmpty {
@@ -366,15 +371,24 @@ struct ReviewScreen: View {
         .id(sectionID(group.best))
     }
 
-    /// Files the section as marked. The selected section's button also says it takes Return.
-    private func confirmButton(_ group: BurstGroup) -> some View {
-        Button(model.isCurrent(group) ? "\(ReviewModel.confirmLabel) ↩" : ReviewModel.confirmLabel) {
+    /// Files the section as marked; the second button files every section from the top through this one.
+    @ViewBuilder private func confirmButton(_ group: BurstGroup) -> some View {
+        Button(ReviewModel.confirmLabel) {
             focused = true
             Task { await model.confirm(group) }
         }
+        .help(model.confirmHelp(group))
         .controlSize(.small).focusable(false)
         .disabled(!model.canConfirm)
         .accessibilityIdentifier("confirm-\(group.best)")
+        Button(ReviewModel.confirmUpToHereLabel) {
+            focused = true
+            Task { await model.confirmUpToHere(group) }
+        }
+        .help(model.confirmUpToHereHelp(group))
+        .controlSize(.small).focusable(false)
+        .disabled(!model.canConfirm)
+        .accessibilityIdentifier("confirm-through-\(group.best)")
     }
 
     private func cell(_ p: PassPhoto, compact: Bool = false) -> some View {
@@ -391,7 +405,12 @@ struct ReviewScreen: View {
             }
         return PhotoCell(
             photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id), compact: compact,
-            number: model.keyNumber(p.id),
+            keepOnly: model.canKeepOnly
+                ? {
+                    focused = true
+                    Task { await model.keepOnly(p.id) }
+                } : nil,
+            keepOnlyHelp: model.keepOnlyHelp(p.id),
             label: model.accessibilityLabel(p), thumbnails: thumbnails, aspectFit: model.aspectFit,
             onTap: {
                 focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling

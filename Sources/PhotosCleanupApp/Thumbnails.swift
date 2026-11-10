@@ -149,13 +149,15 @@ struct PhotoCell: View {
     var best = false
     /// A small cell in a group's row: the Delete badge is just ✗, and no kind or duration pill.
     var compact = false
-    /// The number key that keeps this photo, shown on the selected group's tiles.
-    var number: Int?
+    /// Keep Only This: set in Bursts and Similar. Shown on hover, and in the context menu.
+    var keepOnly: (() -> Void)?
+    var keepOnlyHelp = ""
     var label = ""
     let thumbnails: Thumbnails
     /// The whole photo, fitted in the square cell, instead of a square crop.
     var aspectFit = false
     var onTap: (() -> Void)?
+    @State private var hovering = false
     @State private var image: NSImage?
     @State private var requestID: PHImageRequestID?
 
@@ -197,11 +199,15 @@ struct PhotoCell: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {  // bottom left holds the Live pill
-                if let number {
-                    Text("\(number)").font(.caption.weight(.bold).monospacedDigit()).foregroundStyle(.white)
-                        .frame(minWidth: 18, minHeight: 18)
-                        .background(Color.accentColor, in: .circle).padding(compact ? 4 : 6)
+                if hovering, let keepOnly {
+                    Button(ReviewModel.keepOnlyLabel, action: keepOnly)
+                        .controlSize(.small).help(keepOnlyHelp).padding(compact ? 4 : 6)
+                        .accessibilityIdentifier("keep-only-\(photo.id)")
                 }
+            }
+            .onHover { hovering = $0 }
+            .contextMenu {
+                if let keepOnly { Button(ReviewModel.keepOnlyLabel, action: keepOnly) }
             }
             .clipped()
             .overlay { if selected { Rectangle().strokeBorder(Color.accentColor, lineWidth: 4) } }

@@ -87,6 +87,11 @@ public final class ReviewModel {
 
     /// Marks register their undo here; Edit > Undo and Redo drive it.
     public let undoManager = UndoManager()
+    /// What Undo would undo: UndoManager isn't observable, so the toolbar button reads these.
+    public private(set) var undoName: String?
+    public var canUndo: Bool { undoName != nil }
+    public var undoHelp: String { undoName.map { "Undo \($0) (⌘Z)" } ?? "Nothing to undo" }
+    @ObservationIgnored private var undoObservers: [any NSObjectProtocol] = []
 
     private let cleanup: Cleanup
     private let exporter: Exporter?
@@ -113,7 +118,19 @@ public final class ReviewModel {
         foldedCaptions = Set(defaults.stringArray(forKey: foldedCaptionsKey) ?? [])
         importBookmarks = loadImportFolders(defaults: defaults)
         importFolder = importFolders.first
+        undoObservers = [Notification.Name.NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange].map {
+            NotificationCenter.default.addObserver(forName: $0, object: undoManager, queue: nil) { [weak self] _ in
+                MainActor.assumeIsolated { self?.syncUndo() }
+            }
+        }
     }
+
+    private func forgetUndo() {
+        undoManager.removeAllActions()
+        undoName = nil
+    }
+
+    private func syncUndo() { undoName = undoManager.canUndo ? undoManager.undoActionName : nil }
 
     public var best: Set<String> { Set(groups.map(\.best)) }
 
@@ -394,7 +411,7 @@ public final class ReviewModel {
         if v == .export || v == .importFolders {
             view = v
             clearSelection()
-            undoManager.removeAllActions()
+            forgetUndo()
             if v == .export { await refreshExport() }
             return
         }
@@ -403,14 +420,14 @@ public final class ReviewModel {
             library = Dictionary(await cleanup.photos.map { ($0.uuid, $0) }, uniquingKeysWith: { a, _ in a })
             view = v
             clearSelection()
-            undoManager.removeAllActions()
+            forgetUndo()
             return
         }
         if v == .deleted {
             await loadWaiting()
             view = v
             clearSelection()
-            undoManager.removeAllActions()
+            forgetUndo()
             return
         }
         loading = true
@@ -437,7 +454,7 @@ public final class ReviewModel {
             }
             view = v
             clearSelection()
-            undoManager.removeAllActions()  // another list: the marks belong to the old one
+            forgetUndo()  // another list: the marks belong to the old one
             photos = items
             groups = gs
             scores = sc
@@ -545,6 +562,7 @@ public final class ReviewModel {
         undoManager.registerUndo(withTarget: self) { m in MainActor.assumeIsolated { m.apply(old) } }
         if let name { undoManager.setActionName(name) }
         if grouping { undoManager.endUndoGrouping() }
+        if grouping { undoName = name ?? "" }
     }
 
     /// Marks the selected photos; only a pass and All have marks. One selected photo: moves on to the next.
@@ -794,7 +812,7 @@ public final class ReviewModel {
                 loadedAlbum[id] = nil
             }
             clearSelection()
-            undoManager.removeAllActions()  // a confirm's undo would bring back deleted photos
+            forgetUndo()  // a confirm's undo would bring back deleted photos
             counts = await cleanup.counts()
             deletedNotExported = await exporter?.missing(deleted.map(\.id)) ?? 0
             status =
@@ -858,6 +876,7 @@ public final class ReviewModel {
         undoManager.registerUndo(withTarget: self) { m in MainActor.assumeIsolated { m.restore(before, name: name) } }
         undoManager.setActionName(name)
         if grouping { undoManager.endUndoGrouping() }
+        if grouping { undoName = name }
     }
 
     /// Undo and redo of a confirm or a send back: only the app's state, so it is instant.
@@ -951,7 +970,7 @@ public final class ReviewModel {
             for id in del + keep { pending[id] = nil }
         }
         saveState()
-        undoManager.removeAllActions()  // a confirm's undo can't take photos back out of the albums
+        forgetUndo()  // a confirm's undo can't take photos back out of the albums
         await syncHeld()
         counts = await cleanup.counts()
         deletedNotExported = await exporter?.missing(deleted.map(\.id)) ?? 0
@@ -1021,14 +1040,6 @@ extension ReviewModel {
         return i + 1
     }
 
-    /// The status bar's line, under every section rather than beside one.
-    public var keysHint: String? {
-        guard hasSections && !showsEmptyState else { return nil }
-        let unit = isGrouped ? "group" : "month"
-        return "Return: Confirm \(unit) · ⇧Return: Confirm everything above"
-            + (isGrouped ? " · 1–9: keep only that photo, then confirm" : "") + " · ⌘Z: Undo"
-    }
-
     /// A month in All already confirmed, and not grown since. A pass's confirmed sections leave it.
     public func isConfirmed(_ g: BurstGroup) -> Bool {
         view == .all && reviewedMonths[g.best].map { g.photos.count <= $0 } ?? false
@@ -1047,13 +1058,36 @@ extension ReviewModel {
         await confirm([full(g)], keeping: keep, name: keep == nil ? Self.confirmLabel : "Keep One")
     }
 
-    /// ⇧Return: confirms every section from the top through the current one, for a pass reviewed by scrolling.
-    public func confirmUpToHere() async {
-        guard canConfirm, let g = currentGroup else { return }
+    /// ⇧Return, or a section's Confirm Up to Here button: confirms every section from the top through
+    /// `section` (default the current one), for a pass reviewed by scrolling.
+    public func confirmUpToHere(_ section: BurstGroup? = nil) async {
+        guard canConfirm, let g = section ?? currentGroup else { return }
         let gs = shownGroups
         guard let i = gs.firstIndex(where: { $0.best == g.best }) else { return }
         await confirm(gs[...i].map(full), keeping: nil, name: Self.confirmUpToHereLabel)
     }
+
+    /// A number key, or a photo's Keep Only This button: keeps this photo of its group, marks the rest Delete, confirms.
+    public func keepOnly(_ id: String) async {
+        guard isGrouped, let g = shownGroups.first(where: { $0.photos.contains { $0.id == id } }),
+            let i = g.photos.firstIndex(where: { $0.id == id })
+        else { return }
+        await confirm(g, keeping: i)
+    }
+
+    private var sectionUnit: String { isGrouped ? "group" : "month" }
+    /// A section's tooltips name the key only on the current section, where the key acts.
+    public func confirmHelp(_ g: BurstGroup) -> String {
+        "Confirm this \(sectionUnit)" + (isCurrent(g) ? " (Return)" : "")
+    }
+    public func confirmUpToHereHelp(_ g: BurstGroup) -> String {
+        "Confirm every section from the top through this \(sectionUnit)" + (isCurrent(g) ? " (⇧Return)" : "")
+    }
+    public static let keepOnlyLabel = "Keep Only This"
+    public func keepOnlyHelp(_ id: String) -> String {
+        "Keep only this photo, mark the rest Delete, then confirm" + (keyNumber(id).map { " (\($0))" } ?? "")
+    }
+    public var canKeepOnly: Bool { isGrouped && canConfirm }
 
     /// Confirming means the user looked: in a pass every photo goes to its album, Keep included.
     private func confirm(_ sections: [BurstGroup], keeping keep: String?, name: String) async {

@@ -1012,7 +1012,9 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         await m.select(.pass("low-quality"))
         #expect(m.groups.map { $0.photos.map(\.id) } == [["p2"], ["p3", "p1"]])  // worst first within a month
         #expect(m.photos.map(\.id) == ["p2", "p3", "p1"])
-        #expect(m.keysHint?.contains("Confirm month") == true && m.keysHint?.contains("1–9") == false)
+        let g = m.groups[0]
+        #expect(m.confirmHelp(g) == "Confirm this month (Return)" && !m.canKeepOnly)
+        #expect(m.confirmHelp(m.groups[1]) == "Confirm this month")
     }
 
     @Test func aGroupHoldingTheAnchorIsExpanded() async throws {
@@ -1033,7 +1035,39 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         #expect(b.photos.allSatisfy { m.keyNumber($0.id) == nil })
         m.click(b.photos[1].id)
         #expect(m.isCurrent(b) && m.keyNumber(b.photos[1].id) == 2 && m.keyNumber(a.photos[0].id) == nil)
-        #expect(m.keysHint?.contains("1–9") == true)
+        #expect(m.confirmHelp(a) == "Confirm this group" && m.confirmHelp(b) == "Confirm this group (Return)")
+        #expect(m.keepOnlyHelp(b.photos[1].id).hasSuffix("(2)") && m.canKeepOnly)
+        #expect(m.confirmUpToHereHelp(b).hasSuffix("(⇧Return)"))
+    }
+
+    @Test func confirmUpToHereOnASectionNeedsNoSelection() async throws {
+        let (m, _, _) = try await twoBursts()
+        let gs = m.groups
+        m.clearSelection()
+        await m.confirmUpToHere(gs[0])
+        #expect(Set(m.pending.keys) == Set(gs[0].photos.map(\.id)) && m.groups.map(\.best) == [gs[1].best])
+    }
+
+    @Test func keepOnlyConfirmsItsGroupWithOnlyThatPhotoKept() async throws {
+        let (m, _, _) = try await twoBursts()
+        let gs = m.groups
+        let pick = gs[1].photos[1].id
+        await m.keepOnly(pick)
+        #expect(Set(m.pending.keys) == Set(gs[1].photos.map(\.id)))
+        #expect(gs[1].photos.allSatisfy { m.pending[$0.id]?.keep == ($0.id == pick) })
+        #expect(m.groups.map(\.best) == [gs[0].best])
+    }
+
+    @Test func undoStateFollowsTheLastActionAndClearsAfterUndo() async throws {
+        let (m, _, _) = try await twoBursts()
+        m.undoManager.groupsByEvent = false  // no run loop here to close the groups
+        #expect(!m.canUndo && m.undoHelp == "Nothing to undo")
+        await m.confirm()
+        #expect(m.canUndo && m.undoName == ReviewModel.confirmLabel && m.undoHelp == "Undo Confirm (⌘Z)")
+        m.undoManager.undo()
+        #expect(!m.canUndo && m.undoHelp == "Nothing to undo")
+        m.undoManager.redo()
+        #expect(m.canUndo)
     }
 
     @Test func theCaptionFoldsPerPassAndStaysFolded() async throws {
