@@ -49,7 +49,7 @@ private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().dele
     #expect(judge.unavailableReason() == nil)
     let v = await judge.judge(Photo(uuid: "demo-screenshot-4"))
     #expect(
-        v == Verdict(keep: true, kind: "document", reason: "Wi-Fi password for the cabin"))
+        v == Verdict(keep: true, kind: "document", reason: "Warranty for the fridge"))
     #expect(await judge.judge(Photo(uuid: "demo-screenshot-1"))?.keep == false)
     #expect(await judge.judge(Photo(uuid: "demo-photo-1")) == nil)
 }

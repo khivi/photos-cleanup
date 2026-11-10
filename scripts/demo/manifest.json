@@ -75,9 +75,9 @@
    "scene": {
     "hue": 0.58,
     "lines": [
-     "Cabin Wi-Fi",
-     "Password:",
-     "pine-lake-2025"
+     "Fridge warranty",
+     "Serial no.",
+     "until Apr 2028"
     ],
     "kind": "screenshot"
    },
@@ -85,7 +85,7 @@
    "verdict": {
     "keep": true,
     "kind": "document",
-    "reason": "Wi-Fi password for the cabin"
+    "reason": "Warranty for the fridge"
    }
   },
   {
