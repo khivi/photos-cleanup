@@ -17,7 +17,7 @@ public enum Decision: Sendable, Equatable {
 }
 
 /// The review screen's state over a `Cleanup`: the current view, per-photo decisions, commits and
-/// the "To be deleted" list. No timers: the view calls `refresh()` while `progress.pending > 0`.
+/// the "In Delete Me Albums" list. No timers: the view calls `refresh()` while `progress.pending > 0`.
 @MainActor @Observable
 public final class ReviewModel {
     public private(set) var view = ReviewView.all
@@ -207,10 +207,10 @@ public final class ReviewModel {
         + Passes.all.map { (.pass($0.key), $0.title, Passes.about[$0.key] ?? "") }
         + [
             (
-                .pending, "Pending",
+                .pending, "Not in Photos Yet",
                 "Photos you confirmed, not yet in their albums. Apply to Photos… adds them; nothing changes in Photos before."
             ),
-            (.deleted, "To be deleted", "Photos waiting in a Delete Me album. Delete them there in Photos."),
+            (.deleted, "In Delete Me Albums", "Photos waiting in a Delete Me album. Delete them there in Photos."),
             (
                 .export, "Export",
                 "Copies every photo and video to a folder or disk. Each run copies only what’s new or changed."
@@ -288,9 +288,9 @@ public final class ReviewModel {
 
     public var inPass: Bool { view.passKey != nil }
 
-    /// "N candidates · M to delete", "N photos" or "N queued for deletion".
+    /// "N candidates · M to delete", "N photos" or "N in Delete Me albums".
     public var summary: String {
-        if view == .deleted { return "\(deleted.count.formatted()) queued for deletion" }
+        if view == .deleted { return "\(deleted.count.formatted()) in Delete Me albums" }
         if view == .pending { return "\(pending.count.formatted()) to apply to Photos" }
         if view == .export { return exportCountsLabel }
         if view == .importFolders { return importSummary }
@@ -361,7 +361,7 @@ public final class ReviewModel {
         onlyDelete ? "Nothing marked Delete." : view == .pending ? Self.nothingPending : Self.emptyState
     }
     public static let nothingPending =
-        "Nothing pending. Confirm photos in a pass; they wait here until Apply to Photos…."
+        "Nothing here. Confirm photos in a pass; they wait here until Apply to Photos…."
     public static let emptyState = "Nothing left to review. Photos already filed in this pass’s albums are hidden."
 
     // MARK: Commit preview (Phase 5 labels)
@@ -386,9 +386,11 @@ public final class ReviewModel {
 
     /// Window title: the sidebar item's title.
     public var windowTitle: String { Self.tabs.first { $0.view == view }?.title ?? "" }
-    /// Window subtitle: "41 candidates · 12 to delete", "N photos" or "N queued for deletion".
+    /// Window subtitle: "41 candidates · 12 to delete", "N photos" or "N in Delete Me albums".
     public var windowSubtitle: String { loading ? "Loading…" : summary }
-    public var deleteInPhotosLabel: String { deleting ? "Deleting…" : "Delete in Photos…" }
+    public var deleteInPhotosLabel: String { deleting ? "Deleting…" : "Delete \(deleted.count.formatted()) in Photos…" }
+    /// Apply counts what waits in Not in Photos Yet; beside the Delete Me albums that number reads as theirs.
+    public var showsApply: Bool { !pending.isEmpty && view != .deleted }
     /// Delete in Photos can run now: the To be deleted view, not empty.
     public var canDeleteInPhotos: Bool { view == .deleted && !loading && !deleting && !deleted.isEmpty }
     public var moveButtonLabel: String { committing ? "Confirming…" : Self.confirmAllLabel }
@@ -396,7 +398,7 @@ public final class ReviewModel {
     /// No dialog: Confirm All only moves photos to Pending, and ⌘Z brings them back.
     public var confirmAllHelp: String {
         commitPreview.isEmpty
-            ? "Nothing to confirm" : (["To Pending:"] + commitPreview.map(\.label)).joined(separator: "\n")
+            ? "Nothing to confirm" : (["To Not in Photos Yet:"] + commitPreview.map(\.label)).joined(separator: "\n")
     }
     public var inspectorToggleLabel: String { showsInspector ? "Hide Info" : "Show Info" }
     public static let keepAllLabel = "Keep All"
@@ -901,7 +903,7 @@ public final class ReviewModel {
             ? Passes.allDeleteAlbum : (p.keep ? Passes.keepAlbum(p.pass) : Passes.deleteAlbum(p.pass)) ?? p.pass
     }
 
-    /// Pending, one section per album: "Bursts - Delete Me". Newest photo first.
+    /// Not in Photos Yet, one section per album: "Bursts - Delete Me". Newest photo first.
     public var pendingGroups: [BurstGroup] {
         Dictionary(grouping: pending.keys) { album(pending[$0]!) }
             .map { album, ids in

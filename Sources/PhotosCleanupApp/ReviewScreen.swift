@@ -196,7 +196,7 @@ struct ReviewScreen: View {
                     .accessibilityIdentifier("commit")
             }
         }
-        if !model.pending.isEmpty {
+        if model.showsApply {
             ToolbarItem {
                 Button(model.applyButtonLabel) { model.confirmingApply = true }
                     .buttonStyle(.borderedProminent)

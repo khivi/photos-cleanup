@@ -108,11 +108,11 @@ To change this later, open System Settings > Privacy & Security > Automation.
 1. Pick a pass in the sidebar.
 2. Check the suggestions, a section at a time. Only photos to delete are marked.
 3. Fix any mark: K keeps, ⌫ deletes.
-4. Click the section's Confirm (shortcut: Return). The section leaves the pass and waits in Pending. Nothing changes in Photos yet, and Undo (toolbar, ⌘Z) reverses it.
+4. Click the section's Confirm (shortcut: Return). The section leaves the pass and waits in Not in Photos Yet. Nothing changes in Photos yet, and Undo (toolbar, ⌘Z) reverses it.
 5. Click Apply to Photos…. Every pending photo goes to its album: marked ones to the pass's "Delete Me" album, the rest to its "Keep" album.
-6. Open To be deleted and click Delete in Photos…. macOS asks you to confirm.
+6. Open In Delete Me Albums and click Delete in Photos…. macOS asks you to confirm.
 
-Pending, under Review, lists what you confirmed by album. Select photos there and click Send Back to Review to change your mind. Pending is saved, so it survives a quit.
+Not in Photos Yet, under Review, lists what you confirmed by album. Select photos there and click Send Back to Review to change your mind. The list is saved, so it survives a quit.
 Confirm All in the toolbar confirms every section at once, as marked; photos you haven't looked at, and left as Keep, stay in the pass.
 
 | Pass | Finds | Starts as delete |
@@ -186,7 +186,7 @@ Photos that are stored only in iCloud download first, so a first run can take ho
 Export runs 4 downloads at a time.
 If a photo fails, Export lists it. The next run tries it again.
 
-To be deleted warns you when photos in it are not in your export yet.
+In Delete Me Albums warns you when photos in it are not in your export yet.
 Run Export before Delete in Photos… to keep a copy.
 
 ## Import: bring old photos into Photos

@@ -204,8 +204,8 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c, dir: tempDir())
         #expect(
             ReviewModel.tabs.map(\.title) == [
-                "All", "Screenshots", "Paperwork", "Bursts", "Similar", "Low Quality", "Videos", "Pending",
-                "To be deleted", "Export", "Import",
+                "All", "Screenshots", "Paperwork", "Bursts", "Similar", "Low Quality", "Videos", "Not in Photos Yet",
+                "In Delete Me Albums", "Export", "Import",
             ])
         await m.refreshCounts()
         await m.select(.all)
@@ -224,7 +224,9 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         await m.apply()
         #expect(m.showsEmptyState)
         await m.select(.deleted)
-        #expect(m.summary == "2 queued for deletion" && m.banner?.hasPrefix("Nothing is deleted yet") == true)
+        #expect(
+            m.summary == "2 in Delete Me albums" && m.deleteInPhotosLabel == "Delete 2 in Photos…" && !m.showsApply
+                && m.banner?.hasPrefix("Nothing is deleted yet") == true)
         #expect(m.banner?.contains("“Screenshots - Delete Me” (2)") == true)
         #expect("\(LibraryError.accessDenied)".hasPrefix("Photos access not granted"))
     }
@@ -234,7 +236,10 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         let m = ReviewModel(cleanup: c, dir: tempDir())
         let titles = m.sidebar.map { $0.items.map(\.title) }
         #expect(m.sidebar.map(\.title) == ["Library", "Cleanup", "Review", "Transfer"])
-        #expect(titles == [["All"], Passes.all.map(\.title), ["Pending", "To be deleted"], ["Export", "Import"]])
+        #expect(
+            titles == [
+                ["All"], Passes.all.map(\.title), ["Not in Photos Yet", "In Delete Me Albums"], ["Export", "Import"],
+            ])
         #expect(m.sidebar.flatMap(\.items).allSatisfy { $0.badge == nil && !$0.help.isEmpty })  // nothing counted yet
         await m.refreshCounts()
         var badges: [String: Int?] {
@@ -242,11 +247,11 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         }
         #expect(badges["All"] == 2 && badges["Screenshots"] == 2)
         // A pass that found nothing says 0; an empty queue shows no badge.
-        #expect(badges["Bursts"] == 0 && badges["To be deleted"] == .some(nil))
+        #expect(badges["Bursts"] == 0 && badges["In Delete Me Albums"] == .some(nil))
         await m.select(.pass("screenshots"))
         await m.commit()
         await m.apply()
-        #expect(badges["To be deleted"] == 1)
+        #expect(badges["In Delete Me Albums"] == 1)
     }
 
     @Test func selectExtendAndMark() async throws {
@@ -321,7 +326,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         await m.select(.pass("screenshots"))
         #expect(m.canSetAll)
         m.setAll(.delete)
-        #expect(m.canMove && m.confirmAllHelp == "To Pending:\n2 → Screenshots - Delete Me")
+        #expect(m.canMove && m.confirmAllHelp == "To Not in Photos Yet:\n2 → Screenshots - Delete Me")
     }
 
     @Test func previewOpensForOnePhotoAndClosesWithTheSelection() async throws {
@@ -438,7 +443,7 @@ private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
         await m.deleteInPhotos()
         #expect(lib.deletes.withLock { $0 }.flatMap { $0 }.sorted() == ["n", "s", "u"])
         #expect(m.deleted.isEmpty && m.displayed.isEmpty && !m.canDeleteInPhotos)
-        #expect(m.summary == "0 queued for deletion")
+        #expect(m.summary == "0 in Delete Me albums")
         #expect(m.status?.hasPrefix("Deleted 3 photos.") == true && m.error == nil)
         await m.refreshCounts()
         #expect(m.deleted.isEmpty)
