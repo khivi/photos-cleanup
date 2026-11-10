@@ -53,12 +53,13 @@ It uses only Apple's on-device tools:
 
 Photos itself may download from iCloud: a photo stored only in iCloud downloads when you preview or export it.
 
-What the app saves:
+What the app saves, all inside its sandbox container `~/Library/Containers/com.khivi.photos-cleanup/Data/Library`:
 
 | What | Where | To clear it |
 | --- | --- | --- |
-| Analysis and suggestions | `~/Library/Caches/photos-cleanup` | Delete the folder |
-| Your Import folder list | `~/Library/Application Support/photos-cleanup/import_folders` | Remove the folders in Import |
+| Analysis and suggestions | `Caches/photos-cleanup` | Delete the folder |
+| Your decisions, pending photos and album settings | `Application Support/photos-cleanup` | Delete the folder |
+| Your Import and Export folders | the app's preferences | Remove the folders in Import, or choose another Export folder |
 
 ## Requirements
 

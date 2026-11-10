@@ -14,7 +14,7 @@ flowchart LR
         core["Cleanup actor, passes,<br/>PhotoKit, Vision,<br/>Foundation Models"]
     end
     photos[("Photos library")]
-    cache[("~/Library/Caches/<br/>photos-cleanup")]
+    cache[("Caches/<br/>photos-cleanup")]
 
     ui --> model
     model --> core
@@ -116,7 +116,7 @@ Blocking PhotoKit and Vision calls run off the actor, so the screen never waits 
 
 ## Caches
 
-All caches are in `~/Library/Caches/photos-cleanup/`. Delete the folder to reset them.
+The app is sandboxed, so its files live in `~/Library/Containers/com.khivi.photos-cleanup/Data/Library`. All caches are in `Caches/photos-cleanup/` there. Delete the folder to reset them.
 
 | File | Contents | Reset when |
 | --- | --- | --- |
@@ -128,9 +128,9 @@ The cache names are fixed constants in `Cleanup.swift`. Earlier versions derived
 The app does not detect a change in the Vision requests or the verdict prompt.
 After such a change, rename the constant to force a recompute. Old files stay in the folder.
 
-`~/Library/Application Support/photos-cleanup/albums_ignore` lists albums whose membership doesn't protect a photo.
+`Application Support/photos-cleanup/albums_ignore` lists albums whose membership doesn't protect a photo.
 
-`~/Library/Application Support/photos-cleanup/reviewed_months` lists the months confirmed in All, as `2024-03 312` (month and photo count when confirmed). A month with more photos than that shows as not confirmed.
+`Application Support/photos-cleanup/reviewed_months` lists the months confirmed in All, as `2024-03 312` (month and photo count when confirmed). A month with more photos than that shows as not confirmed.
 `pending` in the same folder lists confirmed photos not yet applied, as `bursts<TAB>uuid<TAB>keep`.
 
 ## Security
