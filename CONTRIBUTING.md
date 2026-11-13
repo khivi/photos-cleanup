@@ -123,3 +123,7 @@ Do this before each release. It has two parts. Both run `scripts/check-sandbox.s
 2. Run `scripts/app.sh run`. Allow Photos access if macOS asks.
 3. Let the Vision and AI passes give verdicts. Don't click Delete in Photos….
 4. Click Show in Photos. Photos selects the photo. macOS asks once for Automation access.
+
+## License of contributions
+
+The project is GPL-3.0-only. By opening a pull request, you license your contribution under GPL-3.0-only, and also to khivi under MIT. The MIT grant lets khivi ship the app in the Mac App Store, whose terms GPL-3.0 does not allow.
