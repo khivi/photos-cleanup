@@ -37,7 +37,7 @@ struct SettingsView: View {
             }
             Section("Ignored albums") {
                 Text(
-                    "Photos in these albums are not protected by being in them (Apple’s smart albums, the Delete Me albums and “\(Passes.keepAlbum)” already are)."
+                    "Photos in these albums are not protected by being in them (Apple’s smart albums and “\(Passes.keepAlbum)” already are)."
                 )
                 .font(.caption).foregroundStyle(.secondary)
                 List(ignored, id: \.self, selection: $selection) { Text($0) }
