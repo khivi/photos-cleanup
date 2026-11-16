@@ -19,12 +19,76 @@ brew install --cask khivi/photos-cleanup/photos-cleanup
 
 Or download the zip from the [latest release](https://github.com/khivi/photos-cleanup/releases/latest), unzip it and move "Photos Cleanup" to Applications.
 
-It also does two jobs around the library:
-
-- **Export** backs up every photo and video to a folder or disk. Each run copies only what is new or changed.
-- **Import** checks folders of old photos against your library. It sorts the files you already have from the ones to bring into Photos.
-
 ![The Videos pass: videos in a grid, longest first, with the pass list in the sidebar](docs/screenshot.jpg)
+
+## Clean up your library
+
+1. The app opens on Overview: how many photos each pass has to review. Click Start Cleanup, or pick a pass in the sidebar.
+   Start Cleanup goes through the passes in order, with "step 3 of 7" and one bar across the top that fills as you accept. An empty pass offers Continue to the next. Picking a pass yourself hides the bar.
+2. Check the recommendations. A pass shows one section at a time, with its place in the header ("Burst 12 of 847"). The ★ in Bursts and Similar is the best shot; photos to remove are dimmed and tagged Remove.
+3. Fix any mark: ⌫ switches a photo between Keep and Remove. Can't decide? Press ? to mark it Unsure: accepting its section moves it to Unsure, under Cleanup, for later.
+4. Click Accept (shortcut: Return), or Keep All (shortcut: K) to keep every photo in the section and accept it. The section leaves the pass and waits in Not in Photos Yet, and the next one opens. Nothing changes in Photos yet, and Undo (toolbar, ⌘Z) reverses it.
+5. Click Apply to Photos…. The dialog counts what will be deleted per pass. macOS then asks you to confirm the deletion. The rest go to "Photos Cleanup - Keep".
+6. Come back after your next import. The passes show only photos you haven't reviewed.
+
+Not in Photos Yet, under Review, lists what you accepted by album. Select photos there and click Send Back to Review to change your mind. The list is saved, so it survives a quit.
+The header above the grid counts the photos you keep and remove, and says what the pass recommends; hover it for how. Marks stay when you switch to another view.
+
+| Pass | Finds | Starts as Remove |
+| --- | --- | --- |
+| Screenshots | Screenshots | The ones the on-device model calls junk |
+| Paperwork | Receipts, tickets, documents, labels | The ones the model calls junk |
+| Bursts | Repeated shots of one scene, within a minute | All but the best of each group |
+| Similar | The same scene on one day | All but the best of each group |
+| Low Quality | Blurry, dark or accidental shots, worst first | All |
+| Videos | Videos, longest first | Clips under 2 seconds |
+
+In Bursts and Similar, the best shot is the one whose worst face Vision rates best: sharp, well lit, facing the camera. Without faces, it's the one Vision scores highest.
+
+A tile marks a Live Photo "Live" and a screen recording "Screen recording".
+
+Every pass is in sections: a group in Bursts and Similar, a month, quarter or year in the others, newest first.
+Settings (⌘,), Sections, sets the period: Auto (the default) picks the finest one that keeps a pass to 25 sections or fewer.
+The change applies at once.
+A pass shows one section at a time. Bursts and Similar show the best shot (★ Best shot) large, with the other shots below it. The other passes show the section's photos as a grid.
+Select the ★, or select nothing, and the Info panel's "Why this photo?" lists what the app measured: its Vision score against the group's, its face quality where faces counted, an edit, or your pick.
+In Bursts and Similar, hover a photo and click its ☆ (or right-click it and pick Pick as Best; shortcut: 1–9). That photo becomes the group's ★ and is kept; the rest are marked Remove. Nothing is accepted until you press Return or click the group's Accept.
+What's left in a pass is what you haven't accepted, so you can work through a big one over several sittings.
+
+Mark a photo Unsure (?) when you can't decide. Accepting its section moves it to Unsure, so the pass still empties.
+Unsure lists those photos by the pass they came from. Mark each Keep (K) or Remove (⌫), then click the section's Accept: they go to Not in Photos Yet with the pass they came from.
+Unsure is saved, so it survives a relaunch.
+When every pass and Unsure are empty, the app says "Cleanup complete".
+
+| Key | Action |
+| --- | --- |
+| Click, ⇧-click, ⌘-click, ⌘A | Select |
+| Arrow keys | Move the selection within the section |
+| Return | Same as Accept: accept the section and go to the next |
+| 1–9 | In Bursts and Similar: pick photo N of the group as best (★); the rest are marked Remove |
+| K | In a pass: same as Keep All, keep every photo in the section and accept it. In Unsure: mark Keep |
+| ⌫ | Switch between Keep and Remove |
+| ? | Mark unsure: it moves to Unsure when its section is accepted |
+| Space, Esc | Show or close the large preview (videos play) |
+| ⌘I | Show the Info panel: date, albums, and why the photo was picked |
+| ⌘R | Show the photo in Photos |
+| ⌘Z / ⇧⌘Z | Same as the toolbar Undo button / redo |
+| ⌥⌘D | Show only photos marked delete |
+| ⌘+ / ⌘− | Larger / smaller thumbnails |
+| ⌥↓ / ⌥↑ | Next / previous section |
+
+With VoiceOver on, each photo reads its kind, date and mark.
+
+## Albums that protect photos
+
+Passes skip favorites and photos in your own albums.
+To change this, open Settings (⌘,):
+
+- Albums that keep photos safe: All my albums, except these (the default), or Only these albums.
+- With All my albums, list the albums whose photos can still be suggested.
+- With Only these albums, list the albums that protect their photos. Photos in your other albums can be suggested. Photos Cleanup - Keep is always on the list.
+
+Changes apply the next time the app opens.
 
 ## Safety
 
@@ -107,65 +171,11 @@ Show in Photos (⌘R) needs a second, optional permission: Automation for Photos
 The first time you use it, macOS asks if Photos Cleanup may control Photos. Click OK.
 To change this later, open System Settings > Privacy & Security > Automation.
 
-## Usage
+## Back up and bring in old photos
 
-1. The app opens on Overview: how many photos each pass has to review. Click Start Cleanup, or pick a pass in the sidebar.
-   Start Cleanup goes through the passes in order, with "step 3 of 7" and one bar across the top that fills as you accept. An empty pass offers Continue to the next. Picking a pass yourself hides the bar.
-2. Check the recommendations. A pass shows one section at a time, with its place in the header ("Burst 12 of 847"). The ★ in Bursts and Similar is the best shot; photos to remove are dimmed and tagged Remove.
-3. Fix any mark: ⌫ switches a photo between Keep and Remove. Can't decide? Press ? to mark it Unsure: accepting its section moves it to Unsure, under Cleanup, for later.
-4. Click Accept (shortcut: Return), or Keep All (shortcut: K) to keep every photo in the section and accept it. The section leaves the pass and waits in Not in Photos Yet, and the next one opens. Nothing changes in Photos yet, and Undo (toolbar, ⌘Z) reverses it.
-5. Click Apply to Photos…. The dialog counts what will be deleted per pass. macOS then asks you to confirm the deletion. The rest go to "Photos Cleanup - Keep".
-6. Come back after your next import. The passes show only photos you haven't reviewed.
+Two tools sit apart from cleanup, under Transfer in the sidebar. Most people need them rarely: before a big Apply, or when they find an old drive of photos.
 
-Not in Photos Yet, under Review, lists what you accepted by album. Select photos there and click Send Back to Review to change your mind. The list is saved, so it survives a quit.
-The header above the grid counts the photos you keep and remove, and says what the pass recommends; hover it for how. Marks stay when you switch to another view.
-
-| Pass | Finds | Starts as Remove |
-| --- | --- | --- |
-| Screenshots | Screenshots | The ones the on-device model calls junk |
-| Paperwork | Receipts, tickets, documents, labels | The ones the model calls junk |
-| Bursts | Repeated shots of one scene, within a minute | All but the best of each group |
-| Similar | The same scene on one day | All but the best of each group |
-| Low Quality | Blurry, dark or accidental shots, worst first | All |
-| Videos | Videos, longest first | Clips under 2 seconds |
-
-In Bursts and Similar, the best shot is the one whose worst face Vision rates best: sharp, well lit, facing the camera. Without faces, it's the one Vision scores highest.
-
-A tile marks a Live Photo "Live" and a screen recording "Screen recording".
-
-Every pass is in sections: a group in Bursts and Similar, a month, quarter or year in the others, newest first.
-Settings (⌘,), Sections, sets the period: Auto (the default) picks the finest one that keeps a pass to 25 sections or fewer.
-The change applies at once.
-A pass shows one section at a time. Bursts and Similar show the best shot (★ Best shot) large, with the other shots below it. The other passes show the section's photos as a grid.
-Select the ★, or select nothing, and the Info panel's "Why this photo?" lists what the app measured: its Vision score against the group's, its face quality where faces counted, an edit, or your pick.
-In Bursts and Similar, hover a photo and click its ☆ (or right-click it and pick Pick as Best; shortcut: 1–9). That photo becomes the group's ★ and is kept; the rest are marked Remove. Nothing is accepted until you press Return or click the group's Accept.
-What's left in a pass is what you haven't accepted, so you can work through a big one over several sittings.
-
-Mark a photo Unsure (?) when you can't decide. Accepting its section moves it to Unsure, so the pass still empties.
-Unsure lists those photos by the pass they came from. Mark each Keep (K) or Remove (⌫), then click the section's Accept: they go to Not in Photos Yet with the pass they came from.
-Unsure is saved, so it survives a relaunch.
-When every pass and Unsure are empty, the app says "Cleanup complete".
-
-| Key | Action |
-| --- | --- |
-| Click, ⇧-click, ⌘-click, ⌘A | Select |
-| Arrow keys | Move the selection within the section |
-| Return | Same as Accept: accept the section and go to the next |
-| 1–9 | In Bursts and Similar: pick photo N of the group as best (★); the rest are marked Remove |
-| K | In a pass: same as Keep All, keep every photo in the section and accept it. In Unsure: mark Keep |
-| ⌫ | Switch between Keep and Remove |
-| ? | Mark unsure: it moves to Unsure when its section is accepted |
-| Space, Esc | Show or close the large preview (videos play) |
-| ⌘I | Show the Info panel: date, albums, and why the photo was picked |
-| ⌘R | Show the photo in Photos |
-| ⌘Z / ⇧⌘Z | Same as the toolbar Undo button / redo |
-| ⌥⌘D | Show only photos marked delete |
-| ⌘+ / ⌘− | Larger / smaller thumbnails |
-| ⌥↓ / ⌥↑ | Next / previous section |
-
-With VoiceOver on, each photo reads its kind, date and mark.
-
-## Export: back up your library
+### Export: back up your library
 
 Export copies every photo and video in your library to a folder or disk.
 It includes hidden photos and every frame of a burst.
@@ -197,7 +207,7 @@ If a photo fails, Export lists it. The next run tries it again.
 The Apply dialog warns you when photos it will delete are not in your export yet.
 Run Export before Apply to keep a copy.
 
-## Import: bring old photos into Photos
+### Import: bring old photos into Photos
 
 Import checks a folder of old photos (backups, old laptops, scans, downloads) against your library.
 It finds the files you already have, so you import only the rest.
@@ -251,7 +261,7 @@ If you deleted it on purpose, delete the file.
 Import checks one folder at a time.
 The app remembers your folders, and checks a folder the first time you open it.
 
-## Duplicates
+### Duplicates
 
 The cleanup passes do not look for duplicate copies of a photo in your library. The Photos app does this better: it can merge copies.
 Import keeps most duplicates out of your library before you import (see Import). Photos merges the ones that get through, such as resized copies.
@@ -259,17 +269,6 @@ Import keeps most duplicates out of your library before you import (see Import).
 1. In Photos, open Utilities > Duplicates in the sidebar. The album appears only after Photos finds duplicates.
 2. Click Merge on a set, or select all and merge them at once.
 3. Photos keeps the best copy and combines the keywords, captions, favorites and albums of the copies into it. The other copies go to Recently Deleted.
-
-## Albums that protect photos
-
-Passes skip favorites and photos in your own albums.
-To change this, open Settings (⌘,):
-
-- Albums that keep photos safe: All my albums, except these (the default), or Only these albums.
-- With All my albums, list the albums whose photos can still be suggested.
-- With Only these albums, list the albums that protect their photos. Photos in your other albums can be suggested. Photos Cleanup - Keep is always on the list.
-
-Changes apply the next time the app opens.
 
 ## Troubleshooting
 

@@ -60,6 +60,8 @@ Proposed 2026-11-16 (product review): make cleanup a routine, not a one-off. Not
 - [ ] **Richer "Why this photo?":** reasons as a checklist (eyes open, largest face, screenshot, not in an album, not edited), for Remove marks too, not only the ★.
 - [ ] **Insights:** name a section by its story ("17 near-identical photos from one trip", "24 screenshots of directions or receipts") with Foundation Models.
 
+- [ ] **Sidebar holds only cleanup queues:** move Export and Import out of Transfer into the File menu (Export…, Import Folder…). Keep the Apply dialog's not-exported warning and a way to Export from it. Later, weigh folding Not in Photos Yet into the Apply dialog.
+
 Out of scope: search, filtering, browsing, album management, metadata views. Photos does those.
 
 ## photos-import
