@@ -89,6 +89,8 @@ public final class ReviewModel {
     public private(set) var inRun = false
     /// The open step's section count when the run reached it, for its share done.
     @ObservationIgnored private var runStart = 0
+    /// The steps that had photos when the run started, and Unsure: what the run's one bar averages.
+    @ObservationIgnored private var runCounted: Set<ReviewView> = []
     /// The open pass's own order (worst first, longest first), kept within a section.
     @ObservationIgnored private var passOrder: [String: Int] = [:]
     /// The background Vision analysis and verdict queue, refreshed with `counts`.
@@ -394,7 +396,7 @@ public final class ReviewModel {
     public var canDeleteInPhotos: Bool { view == .deleted && !loading && !deleting && !deleted.isEmpty }
     public var inspectorToggleLabel: String { showsInspector ? "Hide Info" : "Show Info" }
     public static let keepAllLabel = "Keep All"
-    public static let focusNote = "Nothing is deleted until you confirm in Photos."
+    public static let focusNote = "Nothing is deleted until you confirm in Apply to Photos…"
     public static let safetyNote = "\(focusNote) Deleted photos stay in Recently Deleted for 30 days."
     public static let deleteMeBadge = "✗ Delete Me"
     public static let bestBadge = "★ Best shot"
@@ -1330,6 +1332,8 @@ extension ReviewModel {
     /// Start Cleanup and Continue: the next pass with photos, as a step of a cleanup run.
     public func advance() async {
         guard let next = nextToReview else { return }
+        let starting = !inRun
+        if starting { runCounted = Set(overviewRows.filter { $0.view == .unsure || $0.count != 0 }.map(\.view)) }
         await select(next)
         inRun = true
         runStart = groups.count
@@ -1356,9 +1360,10 @@ extension ReviewModel {
         }
     }
 
-    /// The whole run's share done, for the strip's one bar.
+    /// The whole run's share done, for the strip's one bar. Passes empty from the start don't count,
+    /// so a run starts at 0.
     public var runProgress: Double {
-        let steps = runSteps
+        let steps = runSteps.filter { runCounted.contains($0.view) }
         return steps.isEmpty ? 0 : steps.map(\.progress).reduce(0, +) / Double(steps.count)
     }
 

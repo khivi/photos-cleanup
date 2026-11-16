@@ -13,7 +13,7 @@ Clear screenshots and bursts
 ## Promotional text (170 max, 146 used)
 
 ```text
-Review screenshots, paperwork, bursts and blurry shots in one grid. Analysis runs on your Mac, and nothing is deleted until you confirm in Photos.
+Review screenshots, paperwork, bursts and blurry shots in one grid. Analysis runs on your Mac, and nothing is deleted until you confirm it.
 ```
 
 ## Description (4000 max, 2662 used)
