@@ -818,7 +818,7 @@ extension ReviewModel {
         await m.select(.pass("low-quality"))
         #expect(m.groups.count == 3)
 
-        let gs = ReviewModel.monthGroups(photos, timeZone: utc)
+        let gs = Period.month.sections(photos, timeZone: utc)
         #expect(gs.map(\.best) == ["2026-10", "2024-03", "unknown"])
         #expect(
             gs.map { m.header($0, locale: en, timeZone: utc) } == [
@@ -826,6 +826,78 @@ extension ReviewModel {
             ])
         #expect(m.photos.map(\.id) == m.groups.flatMap(\.photos).map(\.id))  // arrow order is the display order
 
+    }
+
+    @Test func autoSplitsByTheFinestPeriodWithAtMost25Sections() async throws {
+        let utc = TimeZone(identifier: "UTC")!
+        let en = Locale(identifier: "en_US")
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = utc
+        func months(_ n: Int) -> [Date] {
+            (0..<n).map { cal.date(from: DateComponents(year: 2000, month: 1 + $0, day: 15))! }
+        }
+        #expect(Period.auto.resolved(months(25), timeZone: utc) == .month)
+        #expect(Period.auto.resolved(months(26), timeZone: utc) == .quarter)
+        #expect(Period.auto.resolved(months(75), timeZone: utc) == .quarter)  // 25 quarters
+        #expect(Period.auto.resolved(months(76), timeZone: utc) == .year)
+        #expect(Period.month.resolved(months(76), timeZone: utc) == .month)
+
+        let photos = months(14).enumerated().map { Photo(uuid: "p\($0)", date: $1) } + [Photo(uuid: "u")]
+        let q = Period.quarter.sections(photos, timeZone: utc)
+        #expect(q.map(\.best) == ["2001-Q1", "2000-Q4", "2000-Q3", "2000-Q2", "2000-Q1", "unknown"])
+        #expect(q[0].photos.map(\.uuid) == ["p12", "p13"])  // the order given holds within a section
+        let y = Period.year.sections(photos, timeZone: utc)
+        #expect(y.map(\.best) == ["2001", "2000", "unknown"] && y[1].photos.count == 12)
+
+        let m = ReviewModel(cleanup: try await makeCleanup([]).0, dir: tempDir())
+        #expect(m.header(q[0], locale: en, timeZone: utc) == "Q1 2001 · 2")
+        #expect(m.header(y[1], locale: en, timeZone: utc) == "2000 · 12")
+    }
+
+    @Test func changingSectionsRegroupsTheOpenPassInItsOwnOrder() async throws {
+        func at(_ iso: String) -> Date { ISO8601DateFormatter().date(from: iso)! }
+        let photos = [
+            Photo(uuid: "p1", date: at("2026-10-20T12:00:00Z")), Photo(uuid: "p2", date: at("2026-08-05T12:00:00Z")),
+            Photo(uuid: "p3", date: at("2026-07-01T12:00:00Z")), Photo(uuid: "p4", date: at("2024-03-05T12:00:00Z")),
+        ]
+        let (c, _) = try await makeCleanup(
+            photos, vision: ["p1": vr(-0.9), "p2": vr(-0.95), "p3": vr(-0.99), "p4": vr(-0.8)])
+        let m = ReviewModel(cleanup: c, dir: tempDir(), defaults: freshDefaults())
+        m.undoManager.groupsByEvent = false
+        await m.select(.pass("low-quality"))
+        #expect(m.groups.count == 4 && m.focusPosition == "Month 1 of 4")
+
+        m.period = .quarter
+        #expect(m.groups.map { $0.photos.map(\.id) } == [["p1"], ["p3", "p2"], ["p4"]])  // worst first
+        #expect(m.photos.map(\.id) == ["p1", "p3", "p2", "p4"])
+        #expect(m.focusPosition == "Quarter 1 of 3" && m.confirmHelp(m.groups[1]) == "Accept this quarter")
+        m.period = .year
+        #expect(m.groups.map { $0.photos.map(\.id) } == [["p3", "p2", "p1"], ["p4"]])
+        #expect(m.focusPosition == "Year 1 of 2")
+
+        await m.confirm(m.groups[0])
+        m.period = .month
+        m.undoManager.undo()  // the photos come back in the sections now set
+        #expect(m.groups.map { $0.photos.map(\.id) } == [["p1"], ["p2"], ["p3"], ["p4"]])
+    }
+
+    @Test func theOverviewSaysHowEachPassSplits() async throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .current
+        let shots = (0..<30).map {
+            Photo(
+                uuid: "s\($0)", date: cal.date(from: DateComponents(year: 2020, month: 1 + $0, day: 15)),
+                screenshot: true)
+        }
+        let few = [Photo(uuid: "v", date: t0, isMovie: true)]
+        let (c, _) = try await makeCleanup(shots + few, vision: [:])
+        let m = ReviewModel(cleanup: c, dir: tempDir(), defaults: freshDefaults())
+        await m.refreshCounts()
+        let row = { (k: String) in m.overviewRows.first { $0.view == .pass(k) }?.sections }
+        #expect(row("screenshots") == "By quarter" && row("videos") == "By month" && row("bursts") == nil)
+        #expect(m.overviewNotes.contains(ReviewModel.sectionsNote))
+        m.period = .month  // set by hand: no note
+        #expect(row("screenshots") == "By month" && !m.overviewNotes.contains(ReviewModel.sectionsNote))
     }
 }
 

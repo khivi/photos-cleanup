@@ -10,6 +10,7 @@ struct ReviewScreen: View {
     @State private var position = ScrollPosition(edge: .top)
     @State private var size = CGSize(width: 800, height: 600)
     @FocusState private var focused: Bool
+    @AppStorage(sectionsKey) private var sections = Period.auto
 
     /// The adaptive grid fits as many columns as the width allows.
     private var columns: Int { max(1, Int((size.width - 2 * gridPadding + 4) / (model.cellSize + 4))) }
@@ -94,6 +95,7 @@ struct ReviewScreen: View {
             thumbnails.setCell(model.cellSize)
         }
         .onChange(of: model.aspectFit) { UserDefaults.standard.set(model.aspectFit, forKey: aspectFitKey) }
+        .onChange(of: sections, initial: true) { model.period = sections }
         .task(id: pollKey) {
             while model.inPass && model.progress.pending > 0 {
                 try? await Task.sleep(for: .seconds(2))

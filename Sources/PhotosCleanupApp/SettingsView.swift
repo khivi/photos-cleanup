@@ -3,10 +3,13 @@ import SwiftUI
 
 /// UserDefaults key of the "Keep photos in albums" toggle; ContentView reads it at launch.
 let keepAlbumPhotosKey = "keepAlbumPhotos"
+/// UserDefaults key of Sections; ReviewScreen applies it as it changes.
+let sectionsKey = "sections"
 
-/// The Settings window (⌘,). Both settings are read when the library loads, so they apply the next time the app opens.
+/// The Settings window (⌘,). Sections applies at once; the album settings are read when the library loads.
 struct SettingsView: View {
     @AppStorage(keepAlbumPhotosKey) private var keepAlbumPhotos = true
+    @AppStorage(sectionsKey) private var sections = Period.auto
     @State private var ignored = userIgnoreAlbums()
     @State private var selection: String?
     @State private var newName = ""
@@ -14,6 +17,16 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                Picker("Sections", selection: $sections) {
+                    ForEach(Period.allCases, id: \.self) { Text($0.title) }
+                }
+                .accessibilityIdentifier("settings-sections")
+                Text(
+                    "How \(ungrouped) split into sections to accept. Auto picks month, quarter or year per pass, so a pass has at most \(Period.maxSections) sections."
+                )
+                .font(.caption).foregroundStyle(.secondary)
+            }
             Section {
                 Toggle("Keep photos in albums", isOn: $keepAlbumPhotos)
                     .accessibilityIdentifier("settings-keep-album-photos")
@@ -47,12 +60,16 @@ struct SettingsView: View {
             if let saveError {
                 Text("Could not save the ignored albums: \(saveError)").font(.caption).foregroundStyle(.red)
             }
-            Text("Changes apply the next time Photos Cleanup opens.")
+            Text("Album changes apply the next time Photos Cleanup opens.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var ungrouped: String {
+        Passes.all.filter { !Passes.grouped.contains($0.key) }.map(\.title).formatted(.list(type: .and))
     }
 
     private var trimmed: String { newName.trimmingCharacters(in: .whitespaces) }

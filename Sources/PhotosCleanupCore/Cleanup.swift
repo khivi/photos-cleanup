@@ -248,12 +248,16 @@ public actor Cleanup {
         generation += 1
     }
 
-    public func counts() -> [String: Int?] {
-        var out: [String: Int?] = [:]
+    public func counts() -> [String: Int?] { toReview().mapValues { $0?.count } }
+
+    /// Each pass's photos left to review, nil while Vision or verdicts still run; in Bursts and
+    /// Similar only the photos in a group.
+    public func toReview() -> [String: [Photo]?] {
+        var out: [String: [Photo]?] = [:]
         for (kind, _) in Passes.all {
             guard let found = try? candidates(kind) else { continue }
             if kind == "screenshots" || Passes.plain.contains(kind) {
-                out[kind] = found.count
+                out[kind] = found
                 continue
             }
             let done = found.allSatisfy { vision.keys.contains($0.uuid) }
@@ -261,12 +265,12 @@ public actor Cleanup {
             if !done {
                 out[kind] = .some(nil)  // the background Vision analysis is still running
             } else if kind == "paperwork" {
-                let judged = narrowed.compactMap { verdicts[$0.uuid] }
-                out[kind] = judged.count == narrowed.count ? judged.filter { $0.kind != "picture" }.count : nil
+                let judged = narrowed.allSatisfy { verdicts[$0.uuid] != nil }
+                out[kind] = judged ? narrowed.filter { verdicts[$0.uuid]?.kind != "picture" } : .some(nil)
             } else if Passes.grouped.contains(kind) {
-                out[kind] = groups(kind, narrowed).reduce(0) { $0 + $1.count }
+                out[kind] = groups(kind, narrowed).flatMap { $0 }
             } else {
-                out[kind] = narrowed.count
+                out[kind] = narrowed
             }
         }
         return out

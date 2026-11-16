@@ -338,3 +338,54 @@ public func passVerdict(_ kind: String, _ v: Verdict?) -> Verdict? {
     if kind == "paperwork", v.kind == "screenshot", !v.keep { v.keep = true }
     return v
 }
+
+/// How a pass without groups splits into sections (Settings, Sections). Auto picks per pass.
+public enum Period: String, CaseIterable, Sendable {
+    case auto, month, quarter, year
+
+    public var title: String { rawValue.capitalized }
+    /// Auto takes the finest period that keeps a pass to this many sections.
+    public static let maxSections = 25
+    public static let unknown = "unknown"
+
+    /// Month, quarter or year: Auto's pick for these dates, else self.
+    public func resolved(_ dates: [Date], timeZone: TimeZone = .current) -> Period {
+        guard self == .auto else { return self }
+        return [.month, .quarter].first { p in Set(dates.map { p.key($0, timeZone) }).count <= Self.maxSections }
+            ?? .year
+    }
+
+    /// "2024-03", "2024-Q3" or "2024": sorts newest first as a string.
+    func key(_ d: Date, _ timeZone: TimeZone) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        let c = cal.dateComponents([.year, .month], from: d)
+        let (y, m) = (c.year!, c.month!)
+        return switch self {
+        case .auto, .month: String(format: "%04d-%02d", y, m)
+        case .quarter: String(format: "%04d-Q%d", y, (m - 1) / 3 + 1)
+        case .year: String(format: "%04d", y)
+        }
+    }
+
+    /// The period a section key was made with; nil for undated photos.
+    init?(key: String) {
+        if key == Self.unknown { return nil }
+        self = key.contains("-Q") ? .quarter : key.contains("-") ? .month : .year
+    }
+
+    /// Sections as `BurstGroup`s whose `best` is the key, newest first, undated photos ("unknown")
+    /// last. Photos keep the order of `photos`.
+    public func sections(_ photos: [Photo], timeZone: TimeZone = .current) -> [BurstGroup] {
+        let p = resolved(photos.compactMap(\.date), timeZone: timeZone)
+        var order: [String] = []
+        var by: [String: [Photo]] = [:]
+        for ph in photos {
+            let k = ph.date.map { p.key($0, timeZone) } ?? Self.unknown
+            if by[k] == nil { order.append(k) }
+            by[k, default: []].append(ph)
+        }
+        order.sort { a, b in (a == Self.unknown) != (b == Self.unknown) ? b == Self.unknown : a > b }
+        return order.map { BurstGroup(photos: by[$0]!, best: $0) }
+    }
+}

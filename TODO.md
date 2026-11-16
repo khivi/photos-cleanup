@@ -253,6 +253,12 @@ Phase 4: Apply deletes; one Keep album (branch `khivi/apply-deletes`, on #21).
 - [x] No Delete Me albums are written. In Delete Me Albums shows only while older versions' albums still hold photos.
 - [x] Album names no longer come from pass titles, so renaming a pass needs no migration.
 
+Phase 5: Sections (branch `khivi/sections`, on #22).
+
+- [x] Passes without groups split by month, quarter or year: Settings, Sections (Auto, Month, Quarter, Year), applied at once. Auto takes the finest period with at most 25 sections, per pass.
+- [x] Overview rows say "By quarter"; a note points to Settings when Auto split a pass coarser than by month.
+- [ ] A single section with hundreds of photos (a trip in Videos) could split by week.
+
 Open naming questions:
 
 - "Low Quality" → "Likely Missed Shots". Albums no longer use the title; only an old `Low Quality - Delete Me` album would be stranded.

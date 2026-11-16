@@ -24,7 +24,12 @@ struct OverviewView: View {
                         Task { await model.select(row.view) }
                     } label: {
                         LabeledContent {
-                            if let n = row.count { Text(n.formatted()) } else { ProgressView().controlSize(.small) }
+                            if let n = row.count {
+                                Text(n.formatted())
+                                if let s = row.sections { Text(s) }
+                            } else {
+                                ProgressView().controlSize(.small)
+                            }
                         } label: {
                             Text(row.title)
                             if let c = row.caption { Text(c) }

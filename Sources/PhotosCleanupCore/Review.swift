@@ -81,6 +81,12 @@ public final class ReviewModel {
     /// The last sort's moves that failed, "from: why".
     public private(set) var importFailures: [String] = []
     public private(set) var counts: [String: Int?] = [:]
+    /// Auto's period for each pass's photos left, refreshed with `counts`.
+    public private(set) var autoPeriods: [String: Period] = [:]
+    /// Settings, Sections: how the passes without groups split. A change regroups the open pass.
+    public var period: Period = .auto { didSet { if period != oldValue { regroup() } } }
+    /// The open pass's own order (worst first, longest first), kept within a section.
+    @ObservationIgnored private var passOrder: [String: Int] = [:]
     /// The background Vision analysis and verdict queue, refreshed with `counts`.
     public private(set) var vision = JobProgress()
     public private(set) var verdictJob = JobProgress()
@@ -438,7 +444,8 @@ public final class ReviewModel {
                     gs = r.groups.map(\.bestFirst)
                     items = Self.flat(gs)
                 } else {
-                    (items, gs) = Self.byMonth(r.photos)
+                    passOrder = Self.ranks(r.photos)
+                    (items, gs) = bySection(r.photos)
                 }
             } else {
                 gs = unsureGroups(await cleanup.photos)
@@ -470,9 +477,14 @@ public final class ReviewModel {
         groups.flatMap { $0.photos.map { PassPhoto(photo: $0) } }
     }
 
-    /// A pass without groups in month sections; its own order (worst first, longest first) holds within a month.
-    static func byMonth(_ ps: [PassPhoto]) -> (items: [PassPhoto], groups: [BurstGroup]) {
-        let gs = monthGroups(ps.map(\.photo))
+    static func ranks(_ ps: [PassPhoto]) -> [String: Int] {
+        Dictionary(ps.enumerated().map { ($1.id, $0) }, uniquingKeysWith: min)
+    }
+
+    /// A pass without groups in sections by `period`, the pass's own order within each.
+    func bySection(_ ps: [PassPhoto]) -> (items: [PassPhoto], groups: [BurstGroup]) {
+        let ordered = ps.sorted { (passOrder[$0.id] ?? .max) < (passOrder[$1.id] ?? .max) }
+        let gs = period.sections(ordered.map(\.photo))
         let byID = Dictionary(ps.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         return (gs.flatMap { $0.photos.compactMap { byID[$0.id] } }, gs)
     }
@@ -489,13 +501,25 @@ public final class ReviewModel {
         } else {
             let fresh = Dictionary(r.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             let have = Set(photos.map(\.id))
-            (photos, groups) = Self.byMonth(
+            passOrder = Self.ranks(r.photos)
+            (photos, groups) = bySection(
                 photos.map { p in fresh[p.id].map { PassPhoto(photo: p.photo, verdict: $0.verdict) } ?? p }
                     + r.photos.filter { !have.contains($0.id) })
         }
         for p in photos where !touched.contains(p.id) { decisions[p.id] = initialDecision(p) }
         progress = r.progress
         pruneSelection()
+    }
+
+    private func loadCounts() async {
+        let left = await cleanup.toReview()
+        counts = left.mapValues { $0?.count }
+        autoPeriods = left.compactMapValues { $0.map { Period.auto.resolved($0.compactMap(\.date)) } }
+    }
+
+    private func regroup() {
+        guard let key = view.passKey, !Passes.grouped.contains(key) else { return }
+        (photos, groups) = bySection(photos)
     }
 
     public func refreshCounts() async {
@@ -512,7 +536,7 @@ public final class ReviewModel {
     /// The pass counts alone, cheap enough to poll while Vision runs.
     public func refreshPassCounts() async {
         await syncHeld()
-        counts = await cleanup.counts()
+        await loadCounts()
         vision = await cleanup.visionStatus()
         (verdictJob, verdictPasses) = await cleanup.verdictStatus()
     }
@@ -868,7 +892,7 @@ public final class ReviewModel {
             for id in gone { deletedAlbum[id] = nil }
             clearSelection()
             forgetUndo()  // a confirm's undo would bring back deleted photos
-            counts = await cleanup.counts()
+            await loadCounts()
             deletedNotExported = await exporter?.missing(deleted.map(\.id)) ?? 0
             status =
                 "Deleted \(gone.count) \(gone.count == 1 ? "photo" : "photos"). Photos keeps them in Recently Deleted for 30 days."
@@ -933,6 +957,7 @@ public final class ReviewModel {
         let now = snapshot
         (photos, groups, decisions, touched) = (s.photos, s.groups, s.decisions, s.touched)
         (pending, unsure) = (s.pending, s.unsure)
+        regroup()  // Sections may have changed since
         changed(now, name: name)
     }
 
@@ -1059,7 +1084,7 @@ public final class ReviewModel {
         saveState()
         forgetUndo()  // a confirm's undo can't bring back deleted photos
         await syncHeld()
-        counts = await cleanup.counts()
+        await loadCounts()
     }
 }
 
@@ -1114,7 +1139,7 @@ extension ReviewModel {
             switch view.passKey {
             case "bursts": "Burst"
             case "similar": "Moment"
-            default: "Month"
+            default: (sectionPeriod ?? .month).title
             }
         guard let i = gs.firstIndex(where: { $0.best == g.best }) else {
             return "\(unit) · \(gs.count.formatted()) left"
@@ -1185,7 +1210,14 @@ extension ReviewModel {
         undoManager.registerUndo(withTarget: self) { m in MainActor.assumeIsolated { m.setStar(key, old) } }
     }
 
-    private var sectionUnit: String { isGrouped ? "group" : view == .unsure ? "pass" : "month" }
+    private var sectionUnit: String {
+        isGrouped ? "group" : view == .unsure ? "pass" : (sectionPeriod ?? .month).rawValue
+    }
+    /// The period the open pass's sections use; nil in Bursts, Similar, the other views, or with no dates.
+    public var sectionPeriod: Period? {
+        guard inPass, !isGrouped else { return nil }
+        return groups.lazy.compactMap { Period(key: $0.best) }.first
+    }
     /// A section's tooltips name the key only on the current section, where the key acts.
     public func confirmHelp(_ g: BurstGroup) -> String {
         "Accept this \(sectionUnit)" + (inPass ? "" : ": files its Keep and Remove marks; Unsure photos stay")
@@ -1241,13 +1273,16 @@ extension ReviewModel {
         public let title: String
         public let count: Int?
         public let caption: String?
+        /// "By quarter": how a pass without groups splits, once its photos are known.
+        public var sections: String? = nil
         public var id: ReviewView { view }
     }
 
     public var overviewRows: [OverviewRow] {
         Passes.all.map {
             OverviewRow(
-                view: .pass($0.key), title: $0.title, count: counts[$0.key] ?? nil, caption: Passes.captions[$0.key])
+                view: .pass($0.key), title: $0.title, count: counts[$0.key] ?? nil, caption: Passes.captions[$0.key],
+                sections: sections($0.key).map { "By \($0.rawValue)" })
         }
             + [
                 OverviewRow(
@@ -1265,7 +1300,15 @@ extension ReviewModel {
         return "\(n.formatted()) \(n == 1 ? "photo" : "photos") to review"
     }
 
-    /// The other steps waiting: photos to apply, then photos an older version left in Delete Me albums.
+    private func sections(_ key: String) -> Period? {
+        guard !Passes.grouped.contains(key), (counts[key] ?? nil) ?? 0 > 0 else { return nil }
+        return period == .auto ? autoPeriods[key] : period
+    }
+
+    public static let sectionsNote = "Long passes split by quarter or year. Change it in Settings (⌘,), Sections."
+
+    /// The other steps waiting: photos to apply, then photos an older version left in Delete Me albums;
+    /// and the Sections setting, once Auto splits a pass coarser than by month.
     public var overviewNotes: [String] {
         [
             pending.isEmpty
@@ -1273,6 +1316,7 @@ extension ReviewModel {
                 : "\(pending.count.formatted()) accepted, not in Photos yet: Apply to Photos… deletes the Remove ones, after macOS asks, and keeps the rest.",
             deleted.isEmpty
                 ? nil : "\(deleted.count.formatted()) waiting in Delete Me albums: Delete in Photos… deletes them.",
+            period == .auto && Passes.all.contains { (sections($0.key) ?? .month) != .month } ? Self.sectionsNote : nil,
         ].compactMap { $0 }
     }
 
@@ -1289,32 +1333,10 @@ extension ReviewModel {
     }
 }
 
-// MARK: Month sections
+// MARK: Section headers
 
 extension ReviewModel {
-    static let unknownMonth = "unknown"
-
-    /// Month sections as `BurstGroup`s whose `best` is the month key ("2024-03", or "unknown" for photos
-    /// without a date, last). Newest month first; photos keep the order of `photos`.
-    static func monthGroups(_ photos: [Photo], timeZone: TimeZone = .current) -> [BurstGroup] {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = timeZone
-        var order: [String] = []
-        var byMonth: [String: [Photo]] = [:]
-        for p in photos {
-            let key =
-                p.date.map { d in
-                    let c = cal.dateComponents([.year, .month], from: d)
-                    return String(format: "%04d-%02d", c.year!, c.month!)
-                } ?? unknownMonth
-            if byMonth[key] == nil { order.append(key) }
-            byMonth[key, default: []].append(p)
-        }
-        order.sort { a, b in (a == unknownMonth) != (b == unknownMonth) ? b == unknownMonth : a > b }
-        return order.map { BurstGroup(photos: byMonth[$0]!, best: $0) }
-    }
-
-    /// A section header: "October 2026 · 214" for a month; in Bursts and Similar
+    /// A section header: "October 2026 · 214" for a month, "Q3 2024" or "2024" for a quarter or year; in Bursts and Similar
     /// "Jan 1, 2024 · keeping 1 · removing 5 similar photos", counted over the whole group.
     public func header(_ g: BurstGroup, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
         if view == .pending { return "\(g.best) · \(g.photos.count.formatted(.number.locale(locale)))" }
@@ -1331,9 +1353,15 @@ extension ReviewModel {
                 n(.unsure) > 0 ? "\(fmt(n(.unsure))) unsure" : nil,
             ].compactMap { $0 }.joined(separator: " · ")
         }
-        let style = Date.FormatStyle(locale: locale, timeZone: timeZone).year().month(.wide)
-        let month = g.photos.compactMap(\.date).first.map { $0.formatted(style) } ?? "Unknown date"
-        return "\(month) · \(g.photos.count.formatted(.number.locale(locale)))"
+        let base = Date.FormatStyle(locale: locale, timeZone: timeZone)
+        let style =
+            switch Period(key: g.best) {
+            case .quarter: base.quarter().year()
+            case .year: base.year()
+            default: base.year().month(.wide)
+            }
+        let when = g.photos.compactMap(\.date).first.map { $0.formatted(style) } ?? "Unknown date"
+        return "\(when) · \(g.photos.count.formatted(.number.locale(locale)))"
     }
 }
 
