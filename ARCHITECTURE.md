@@ -2,7 +2,7 @@
 
 Photos Cleanup is a native macOS app, written in Swift and SwiftUI.
 It reads the Photos library, suggests photos to clear, and files your choices into albums.
-Everything runs on your Mac. The app deletes only photos in Delete Me albums, only when you click Delete in Photos…, and only after macOS asks you to confirm. Otherwise it only adds photos to albums.
+Everything runs on your Mac. The app deletes only photos you accepted as Remove, only when you click Apply to Photos…, and only after macOS asks you to confirm. Otherwise it only adds photos to one album, "Photos Cleanup - Keep".
 
 ## Overview
 
@@ -42,26 +42,26 @@ The Swift package has no dependencies.
 | `Cleanup.swift` | The `Cleanup` actor. It holds the photo list, the Vision job, the verdict queue, commits and the caches. |
 | `Export.swift` | The `Exporter` actor and `ExportManifest`. Export copies originals, edits and Live Photo videos to `<destination>/YYYY/MM`. `.photos-export.tsv` there records what each run wrote, so the next run copies only new or changed photos. It never deletes from the destination. |
 | `Import.swift` | The `Importer` actor and `ImportScan`. Import checks a folder of old photos against the library by pixel size and capture time, and plans moves into `Done/` (in the library, or a copy) and `Import/` (to bring into Photos). It never writes to the library. |
-| `Review.swift` | `ReviewModel` (`@Observable`, main actor). The sidebar and its counts, keep/delete marks with undo, the selection, the preview, what Confirm sends, Delete in Photos…, progress, the In Delete Me Albums list (read from the Delete Me albums), and every label the window shows. |
+| `Review.swift` | `ReviewModel` (`@Observable`, main actor). The sidebar and its counts, keep/delete marks with undo, the selection, the preview, what Accept sends, Apply and Delete in Photos…, progress, the In Delete Me Albums list (photos older versions left in Delete Me albums; the tab shows only while there are any), and every label the window shows. |
 
 `PhotosCleanupApp` has these files:
 
 | File | Role |
 | --- | --- |
 | `PhotosCleanupApp.swift` | The app, its window and the Settings window. It calls Core's `launch(...)` with PhotoKit and the saved settings, then shows the review screen. |
-| `ReviewScreen.swift` | The sidebar, the toolbar, the grid, the Info panel (an `.inspector`, ⌘I) and the menu commands. Bursts and Similar show one row per group: the ★ full size, the others smaller, "+N" past one row. The other passes and All show month sections. Each section in a pass has Confirm and Confirm Up to Here buttons, each photo in Bursts and Similar has a Keep Only This button on hover, and the toolbar has Undo. The keys (Return, ⇧Return, 1–9, ⌘Z) are shortcuts for these buttons. The grid takes the arrow keys, Space, Return and 1–9; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
+| `ReviewScreen.swift` | The sidebar, the toolbar, the grid, the Info panel (an `.inspector`, ⌘I) and the menu commands. A pass shows one section (`ReviewModel.currentGroup`) at a time, with "Burst 12 of 847" (`focusPosition`), Keep All and Accept in the header. Start Cleanup and Continue (`advance`) start a cleanup run, shown as a strip with a bar per pass (`runSteps`); choosing a view ends it. Bursts and Similar show the ★ as a hero that fills the window, the other shots in a grid below; the other passes show the section's grid, by month, quarter or year (`Period`, Settings, Sections). All, Not in Photos Yet and In Delete Me Albums scroll every section; All has an Accept per section. Each photo in Bursts and Similar has a ☆ on hover that picks it as the ★ (`pickBest`), and the toolbar has Undo. The keys (Return, K, 1–9, ⌘Z) are shortcuts for these buttons. The grid takes the arrow keys, Space, Return and 1–9; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
 | `Thumbnails.swift` | One `PHCachingImageManager`: high-quality thumbnails, cached about 30 rows ahead of the visible ones, and the large preview. The settings come from the grid spike (`feea7cb`). |
 | `ExportView.swift` | The Export screen: destination, counts, progress and failures. |
 | `ImportView.swift` | The Import screen: the checked folders, their counts, Sort into Done and Import…, and Open Import in Photos. |
-| `SettingsView.swift` | The Settings window: Keep photos in albums, and the ignored albums. |
+| `SettingsView.swift` | The Settings window: Sections (applied at once), and Albums that keep photos safe: All my albums except a list (`albums_ignore`), or Only these albums (`albums_safe`, with Photos Cleanup - Keep always on it). |
 
 The tests fake `PhotoLibrary` and `Judge`, so they need no library and no Apple Intelligence. Launch is in Core too: `launch(...)` authorizes, loads, starts Vision and builds the `ReviewModel`. The app only supplies PhotoKit, the judge and the saved settings.
 
 ## The passes
 
 `Passes.all` gives each pass one key and one title.
-The key names the view and the pass in `decisions.jsonl`. The title is the tab label and the album prefix.
-Albums are always `<Title> - Delete Me` and `<Title> - Keep`.
+The key names the view and the pass in `decisions.jsonl`. The title is the tab label.
+Every pass keeps into one album, `Passes.keepAlbum` ("Photos Cleanup - Keep"). `<Title> - Delete Me` albums are only read: older versions filed Remove photos there.
 
 | Pass | Candidates | Signal | Default |
 | --- | --- | --- | --- |
@@ -98,19 +98,19 @@ sequenceDiagram
     L--)C: kind, keep/delete, summary → disk cache
     V->>M: refresh() every 2 s while work runs
 
-    Note over V,P: Commit
-    V->>M: commit()
-    M->>C: commit
-    C->>L: add to "<Title> - Delete Me" and "<Title> - Keep"
-    L->>P: one change per album
+    Note over V,P: Apply
+    V->>M: apply()
+    M->>C: apply(delete, keep)
+    C->>L: delete (macOS confirms), then add to "Photos Cleanup - Keep"
+    L->>P: one change each
 ```
 
 1. **Launch.** The app asks for Photos access. `Cleanup.load()` reads the photo list once.
 2. **Vision analysis.** A background job sends all still photos to `PhotoKitLibrary.vision` in batches of 20. Results go to a disk cache. Bursts, Similar, Low Quality and Paperwork read this cache.
 3. **Verdicts.** When you open Screenshots or Paperwork, the classifier queues the photos with no verdict. It renders each as a 1024 px image and asks Foundation Models. Verdicts go to a disk cache. A photo the model cannot judge is not queued again until the next launch.
 4. **Thumbnails and preview.** The views ask `PHCachingImageManager` directly. Nothing is written to disk. The preview shows the local copy first. If the full photo is only in iCloud, Photos downloads it.
-5. **Confirm, then Apply.** A section's Confirm, or Confirm All, moves its photos to Not in Photos Yet: `ReviewModel.pending`, saved in `pending`, and held out of every pass by `Cleanup.hold`. Nothing is written to Photos, so ⌘Z restores the app's state alone. Apply to Photos… calls `Cleanup.commit` once per pass, which adds the photos to each album and logs your decision against the model's verdict. Apply is not undoable; nothing is deleted until Delete in Photos…. In All, only the Delete marks move, to one album ("All - Delete Me"); nothing is logged, because All has no verdicts.
-6. **Delete in Photos.** In In Delete Me Albums, `Cleanup.delete` keeps only photos in a Delete Me album and calls `PhotoLibrary.delete`. macOS shows its own confirmation. If you cancel, PhotoKit reports a user cancel, the library returns 0 and nothing changes. Otherwise the photos leave the model's lists. Photos keeps them in Recently Deleted for 30 days.
+5. **Accept, then Apply.** A section's Accept (or Keep All, which first marks every photo Keep) moves the section's Keep and Remove photos to Not in Photos Yet, and its Unsure photos to Unsure (`ReviewModel.unsure`, saved in `unsure`; also held). Not in Photos Yet is `ReviewModel.pending`, saved in `pending`, and held out of every pass by `Cleanup.hold`. Nothing is written to Photos, so ⌘Z restores the app's state alone. Apply to Photos… shows what it deletes per pass, and how many of those the export lacks. `Cleanup.apply` then deletes every Remove photo in one `PhotoLibrary.delete`, behind one macOS confirmation. If you cancel, nothing changes and everything stays pending. Otherwise it adds the Keeps to "Photos Cleanup - Keep" and logs your decisions against the model's verdicts. Apply is not undoable; Photos keeps deleted photos in Recently Deleted for 30 days. Accepting in Unsure sends each photo on with the pass it came from. A pending photo saved under `all`, from the removed All view, still applies.
+6. **Delete in Photos.** Only for Delete Me albums older versions left. In In Delete Me Albums, `Cleanup.delete` keeps only photos in a Delete Me album and calls `PhotoLibrary.delete`. macOS shows its own confirmation. If you cancel, PhotoKit reports a user cancel, the library returns 0 and nothing changes. Otherwise the photos leave the model's lists. Photos keeps them in Recently Deleted for 30 days.
 
 Blocking PhotoKit and Vision calls run off the actor, so the screen never waits behind a batch.
 
@@ -130,7 +130,7 @@ After such a change, rename the constant to force a recompute. Old files stay in
 
 `Application Support/photos-cleanup/albums_ignore` lists albums whose membership doesn't protect a photo.
 
-`pending` in the same folder lists confirmed photos not yet applied, as `bursts<TAB>uuid<TAB>keep`.
+`pending` in the same folder lists accepted photos not yet applied, as `bursts<TAB>uuid<TAB>keep`. `unsure` lists photos accepted as Unsure, as `bursts<TAB>uuid`; a photo no longer in the library drops out at launch.
 
 ## Security
 

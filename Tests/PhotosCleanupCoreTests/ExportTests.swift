@@ -79,8 +79,8 @@ let utc = TimeZone(identifier: "UTC")!
 
 @MainActor @Test func exportSidebarLabelsAndDeleteWarning() async throws {
     let photos = [
-        Photo(uuid: "a", date: t0, albums: [Passes.allDeleteAlbum]),
-        Photo(uuid: "b", date: t0, albums: [Passes.allDeleteAlbum]),
+        Photo(uuid: "a", date: t0, albums: ["All - Delete Me"]),
+        Photo(uuid: "b", date: t0, albums: ["All - Delete Me"]),
         Photo(uuid: "c", date: t0),
     ]
     let (cleanup, lib) = try await makeCleanup(photos)

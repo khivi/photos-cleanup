@@ -8,11 +8,12 @@ struct ReviewScreen: View {
     let model: ReviewModel
     let thumbnails: Thumbnails
     @State private var position = ScrollPosition(edge: .top)
-    @State private var width: CGFloat = 800
+    @State private var size = CGSize(width: 800, height: 600)
     @FocusState private var focused: Bool
+    @AppStorage(sectionsKey) private var sections = Period.auto
 
     /// The adaptive grid fits as many columns as the width allows.
-    private var columns: Int { max(1, Int((width - 2 * gridPadding + 4) / (model.cellSize + 4))) }
+    private var columns: Int { max(1, Int((size.width - 2 * gridPadding + 4) / (model.cellSize + 4))) }
     private let gridPadding: CGFloat = 12
 
     private var pollKey: String { "\(model.view.passKey ?? "")\(model.progress.pending > 0)" }
@@ -65,13 +66,14 @@ struct ReviewScreen: View {
                     InspectorView(model: model, thumbnails: thumbnails) { focused = true }
                         .inspectorColumnWidth(min: 220, ideal: 260, max: 400)
                 }
+                .safeAreaInset(edge: .top, spacing: 0) { if !model.runSteps.isEmpty { runStrip } }
                 .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
                 .confirmationDialog("Apply to Photos?", isPresented: $model.confirmingApply) {
                     Button("Apply") { Task { await model.apply() } }
                         .accessibilityIdentifier("apply-confirm")
                 } message: {
                     Text(
-                        (model.applyPreview.map(\.label) + ["Nothing is deleted: Delete in Photos… does that."])
+                        model.applyPreview
                             .joined(separator: "\n"))
                 }
         }
@@ -84,6 +86,7 @@ struct ReviewScreen: View {
                 position.scrollTo(id: a)
             }
         }
+        .onChange(of: model.currentGroup?.best) { if model.inPass { position.scrollTo(edge: .top) } }
         .onChange(of: model.view) { model.showsInspector = savedInspector(model.view) }
         .onChange(of: model.showsInspector) {
             UserDefaults.standard.set(model.showsInspector, forKey: inspectorKey(model.view))
@@ -93,6 +96,7 @@ struct ReviewScreen: View {
             thumbnails.setCell(model.cellSize)
         }
         .onChange(of: model.aspectFit) { UserDefaults.standard.set(model.aspectFit, forKey: aspectFitKey) }
+        .onChange(of: sections, initial: true) { model.period = sections }
         .task(id: pollKey) {
             while model.inPass && model.progress.pending > 0 {
                 try? await Task.sleep(for: .seconds(2))
@@ -160,18 +164,6 @@ struct ReviewScreen: View {
                 .accessibilityIdentifier("only-delete-toggle")
             }
         }
-        if model.inPass {
-            ToolbarItemGroup {
-                Group {
-                    Button(ReviewModel.keepAllLabel, systemImage: "checkmark") { model.setAll(.keep) }
-                        .accessibilityIdentifier("keep-all")
-                    Button(ReviewModel.deleteAllLabel, systemImage: "trash") { model.setAll(.delete) }
-                        .accessibilityIdentifier("delete-all")
-                }
-                .labelStyle(.titleAndIcon)
-                .disabled(!model.canSetAll)
-            }
-        }
         if model.view == .deleted {
             ToolbarItem {
                 Button(model.deleteInPhotosLabel, systemImage: "trash") { Task { await model.deleteInPhotos() } }
@@ -188,17 +180,9 @@ struct ReviewScreen: View {
                     .accessibilityIdentifier("send-back")
             }
         }
-        if model.canMark {  // Keep All / Delete All stay pass-only; All has just Confirm All
-            ToolbarItem {
-                Button(model.moveButtonLabel) { Task { await model.commit() } }
-                    .help(model.confirmAllHelp)
-                    .disabled(!model.canMove)
-                    .accessibilityIdentifier("commit")
-            }
-        }
         if model.showsApply {
             ToolbarItem {
-                Button(model.applyButtonLabel) { model.confirmingApply = true }
+                Button(model.applyButtonLabel) { Task { await model.askApply() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(!model.canApply)
                     .accessibilityIdentifier("apply")
@@ -224,80 +208,147 @@ struct ReviewScreen: View {
     }
 
     /// The window shows a photo grid: not Export, Import or an empty state.
-    private var showsGrid: Bool { model.view != .export && model.view != .importFolders && !model.showsEmptyState }
+    private var showsGrid: Bool {
+        ![.export, .importFolders, .overview].contains(model.view) && !model.showsEmptyState
+    }
 
     @ViewBuilder private var content: some View {
-        if model.view == .export {
+        if model.view == .overview {
+            OverviewView(model: model)
+        } else if model.view == .export {
             ExportView(model: model)
         } else if model.view == .importFolders {
             ImportView(model: model)
         } else if model.showsEmptyState {
-            ContentUnavailableView(model.emptyStateLabel, systemImage: "checkmark.circle")
-        } else {
-            // One ScrollView for every list: a second one would leave keyboard focus on the old one.
-            ScrollView {
-                if let caption = model.passCaption {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(caption).lineLimit(model.captionFolded ? 1 : nil)
-                            .help(model.captionFolded ? caption : "")
-                        Spacer()
-                        Button(model.captionToggleLabel) { model.toggleCaption() }
-                            .buttonStyle(.link).focusable(false)
-                            .accessibilityIdentifier("caption-toggle")
-                    }
-                    .font(.callout).foregroundStyle(.secondary)
-                    .padding(.horizontal, gridPadding).padding(.top, 8)
-                }
-                if model.isGrouped {
-                    LazyVStack(alignment: .leading, spacing: 4) {
-                        ForEach(model.shownGroups, id: \.best) { groupRow($0) }
-                    }
-                    .padding(.horizontal, gridPadding)
-                } else {
-                    LazyVGrid(
-                        columns: [
-                            GridItem(
-                                .adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
-                        ], spacing: 4
-                    ) {
-                        if model.view == .pending {
-                            ForEach(model.pendingGroups, id: \.best) { group in
-                                Section {
-                                    ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
-                                } header: {
-                                    Text(model.header(group)).font(.headline)
-                                        .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
-                                }
-                            }
-                        } else if model.hasSections {
-                            let verdicts = Dictionary(model.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-                            ForEach(model.shownGroups, id: \.best) { group in
-                                Section {
-                                    ForEach(group.photos) { photo in
-                                        cell(verdicts[photo.id] ?? PassPhoto(photo: photo))
-                                    }
-                                } header: {
-                                    HStack {
-                                        Text(model.header(group)).font(.headline)
-                                        if model.inPass { confirmButton(group) }
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
-                                    .id(sectionID(group.best))
-                                }
-                            }
-                        } else {
-                            ForEach(items) { cell($0) }
-                        }
-                    }
-                    .padding(.horizontal, gridPadding)
+            ContentUnavailableView {
+                Label(model.emptyStateLabel, systemImage: "checkmark.circle")
+            } actions: {
+                if model.canMark, let label = model.continueLabel {
+                    Button(label) { Task { await model.advance() } }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                        .accessibilityIdentifier("continue")
                 }
             }
-            .scrollPosition($position)
-            .keyboardSelection(model: model, focused: $focused, width: $width) { move($0) }
-            .overlay {  // an overlay, not a swap: the grid stays in the hierarchy and keeps keyboard focus
-                if let p = model.preview {
-                    PhotoPreview(preview: p, thumbnails: thumbnails).onTapGesture { model.closePreview() }
+        } else {
+            VStack(spacing: 0) {
+                if model.showsHeader { header }
+                grid
+            }
+        }
+    }
+
+    /// During a cleanup run: a bar per pass and Unsure, filled as it empties; the open one's title in bold.
+    private var runStrip: some View {
+        HStack(spacing: 6) {
+            ForEach(model.runSteps) { step in
+                VStack(alignment: .leading, spacing: 2) {
+                    ProgressView(value: step.progress)
+                    Text(step.title).font(.caption2).lineLimit(1)
+                        .fontWeight(step.view == model.view ? .semibold : .regular)
+                        .foregroundStyle(step.view == model.view ? .primary : .secondary)
                 }
+            }
+        }
+        .padding(.horizontal, gridPadding).padding(.vertical, 6)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(model.runLabel)
+        .accessibilityIdentifier("cleanup-progress")
+    }
+
+    /// Above the grid, outside its ScrollView so it stays put: the counts and the pass's caption; in a
+    /// pass also where the section on screen is, and its Keep All and Accept.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(model.summary).font(.headline).accessibilityIdentifier("pass-summary")
+            if let caption = model.passCaption {
+                Text(caption).help(model.captionHelp ?? "")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            if let g = model.currentGroup, let at = model.focusPosition {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(at).font(.subheadline.weight(.semibold)).accessibilityIdentifier("focus-position")
+                        Text(ReviewModel.focusNote).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button(ReviewModel.keepAllLabel, systemImage: "checkmark") {
+                        focused = true
+                        Task { await model.keepAll() }
+                    }
+                    .labelStyle(.titleAndIcon)
+                    .help(model.keepAllHelp)
+                    .disabled(!model.canKeepKey)
+                    .accessibilityIdentifier("keep-all")
+                    Button(ReviewModel.confirmLabel) {
+                        focused = true
+                        Task { await model.confirm(g) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .help(model.confirmHelp(g))
+                    .disabled(!model.canConfirm)
+                    .accessibilityIdentifier("confirm-\(g.best)")
+                }
+            }
+        }
+        .focusable(false)  // keys stay with the grid
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, gridPadding).padding(.vertical, 8)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    private var grid: some View {
+        // One ScrollView for every list: a second one would leave keyboard focus on the old one.
+        ScrollView {
+            if model.inPass {
+                if let g = model.currentGroup { focusSection(g) }
+            } else {
+                LazyVGrid(
+                    columns: [
+                        GridItem(
+                            .adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
+                    ], spacing: 4
+                ) {
+                    if model.view == .pending {
+                        ForEach(model.pendingGroups, id: \.best) { group in
+                            Section {
+                                ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
+                            } header: {
+                                Text(model.header(group)).font(.headline)
+                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                            }
+                        }
+                    } else if model.hasSections {
+                        let verdicts = Dictionary(model.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                        ForEach(model.shownGroups, id: \.best) { group in
+                            Section {
+                                ForEach(group.photos) { photo in
+                                    cell(verdicts[photo.id] ?? PassPhoto(photo: photo))
+                                }
+                            } header: {
+                                HStack {
+                                    Text(model.header(group)).font(.headline)
+                                    confirmButton(group)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                                .id(sectionID(group.best))
+                            }
+                        }
+                    } else {
+                        ForEach(items) { cell($0) }
+                    }
+                }
+                .padding(.horizontal, gridPadding)
+            }
+        }
+        .scrollPosition($position)
+        .keyboardSelection(model: model, focused: $focused, size: $size) { move($0) }
+        .overlay {  // an overlay, not a swap: the grid stays in the hierarchy and keeps keyboard focus
+            if let p = model.preview {
+                PhotoPreview(preview: p, thumbnails: thumbnails).onTapGesture { model.closePreview() }
             }
         }
     }
@@ -316,52 +367,51 @@ struct ReviewScreen: View {
         }
     }
 
-    /// A grouped pass's row: the ★ at full size, the others smaller beside it. Collapsed, the row
-    /// ends in "+N"; expanded, the others wrap onto more rows beside the ★.
-    private func groupRow(_ group: BurstGroup) -> some View {
-        let big = model.cellSize
-        let small = (big * 0.6).rounded()
-        let perRow = max(1, Int((width - 2 * gridPadding - big) / (small + 4)))
-        let rest = group.photos.dropFirst().map { PassPhoto(photo: $0) }
-        let open = model.isExpanded(group)
-        let shown = open || rest.count <= perRow ? rest : Array(rest.prefix(perRow - 1))
-        let rows = stride(from: 0, to: shown.count, by: perRow).map { Array(shown[$0..<min($0 + perRow, shown.count)]) }
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(model.header(group)).font(.headline)
-                confirmButton(group)
-                if model.expanded.contains(group.best) {
-                    Button("Show Less") { model.toggleExpanded(group) }.buttonStyle(.link).focusable(false)
-                }
-            }
-            .padding(.top, 8)
-            HStack(alignment: .top, spacing: 4) {
-                cell(PassPhoto(photo: group.photos[0])).frame(width: big, height: big)
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(rows.indices, id: \.self) { r in
-                        HStack(spacing: 4) {
-                            ForEach(rows[r]) { cell($0, compact: true).frame(width: small, height: small) }
-                            if r == rows.count - 1 && shown.count < rest.count {
-                                Button {
-                                    model.toggleExpanded(group)
-                                } label: {
-                                    Text("+\(rest.count - shown.count)").font(.title3.weight(.semibold))
-                                        .frame(width: small, height: small)
-                                        .background(.gray.opacity(0.15), in: .rect(cornerRadius: 4))
+    /// A pass's one section on screen. Bursts and Similar: the ★ as the hero, 1.8× the cell (capped so the
+    /// row fits), the other shots smaller beside it, wrapping. The other passes: the month's photos.
+    private func focusSection(_ group: BurstGroup) -> some View {
+        let star = model.isGrouped ? group.photos.first { model.isBest($0.id) } ?? group.photos[0] : nil
+        let rest = group.photos.filter { $0.id != star?.id }.map { PassPhoto(photo: $0) }
+        let verdicts = Dictionary(model.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let width = size.width - 2 * gridPadding
+        let small = (model.cellSize * 0.6).rounded()
+        let big = max(model.cellSize, min((model.cellSize * 1.8).rounded(), 420, width - small - 8))
+        let perRow = max(1, Int((width - big) / (small + 4)))
+        let rows = stride(from: 0, to: rest.count, by: perRow).map { Array(rest[$0..<min($0 + perRow, rest.count)]) }
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(model.header(group)).font(.headline).padding(.top, 8)
+            if let star {
+                HStack(alignment: .top, spacing: 4) {
+                    cell(PassPhoto(photo: star), large: big).frame(width: big, height: big).id(star.id)
+                    VStack(alignment: .leading, spacing: 4) {
+                        if !rest.isEmpty, let others = model.othersLabel {
+                            Text(others).font(.caption).foregroundStyle(.secondary).frame(height: 16)
+                        }
+                        ForEach(rows.indices, id: \.self) { r in
+                            HStack(spacing: 4) {
+                                ForEach(rows[r]) {
+                                    cell(verdicts[$0.id] ?? $0, compact: true).frame(width: small, height: small)
                                 }
-                                .buttonStyle(.plain).focusable(false)
-                                .accessibilityIdentifier("expand-\(group.best)")
                             }
                         }
                     }
                 }
+            } else {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
+                    ],
+                    spacing: 4
+                ) {
+                    ForEach(rest) { p in cell(verdicts[p.id] ?? p) }
+                }
             }
         }
-        .id(sectionID(group.best))
+        .padding(.horizontal, gridPadding)
     }
 
-    /// Files the section as marked; the second button files every section from the top through this one.
-    @ViewBuilder private func confirmButton(_ group: BurstGroup) -> some View {
+    /// Files the section's Keep and Remove marks: Unsure's sections each have one.
+    private func confirmButton(_ group: BurstGroup) -> some View {
         Button(ReviewModel.confirmLabel) {
             focused = true
             Task { await model.confirm(group) }
@@ -370,39 +420,26 @@ struct ReviewScreen: View {
         .controlSize(.small).focusable(false)
         .disabled(!model.canConfirm)
         .accessibilityIdentifier("confirm-\(group.best)")
-        Button {
-            focused = true
-            Task { await model.confirmUpToHere(group) }
-        } label: {
-            Label(ReviewModel.confirmUpToHereLabel, systemImage: "arrow.up").labelStyle(.titleAndIcon)
-        }
-        .help(model.confirmUpToHereHelp(group))
-        .controlSize(.small).focusable(false)
-        .disabled(!model.canConfirm)
-        .accessibilityIdentifier("confirm-through-\(group.best)")
     }
 
-    private func cell(_ p: PassPhoto, compact: Bool = false) -> some View {
+    private func cell(_ p: PassPhoto, compact: Bool = false, large: CGFloat? = nil) -> some View {
         let mark: PhotoCell.Mark =
             switch model.view {
-            case .all:
-                model.decision(p.id).map { .decision($0) }
-                    ?? (model.pending[p.id] != nil
-                        ? .decision(.delete) : model.deletedAlbum[p.id] != nil ? .deleteMe : .none)
             case .deleted: .deleteMe
             case .pending: model.pending[p.id]?.keep == true ? .none : .decision(.delete)
-            case .pass: model.decision(p.id).map { .decision($0) } ?? .none
-            case .export, .importFolders: .none
+            case .pass, .unsure: model.decision(p.id).map { .decision($0) } ?? .none
+            case .export, .importFolders, .overview: .none
             }
         return PhotoCell(
             photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id), compact: compact,
-            keepOnly: model.canKeepOnly
+            large: large,
+            pickBest: model.canPickBest
                 ? {
                     focused = true
-                    Task { await model.keepOnly(p.id) }
+                    model.pickBest(p.id)
                 } : nil,
-            keepOnlyHelp: model.keepOnlyHelp(p.id),
-            label: model.accessibilityLabel(p), thumbnails: thumbnails, aspectFit: model.aspectFit,
+            pickBestHelp: model.pickBestHelp(p.id),
+            label: model.accessibilityLabel(p), thumbnails: thumbnails, aspectFit: model.aspectFit || large != nil,
             onTap: {
                 focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
                 let mods = NSEvent.modifierFlags
@@ -415,16 +452,16 @@ struct ReviewScreen: View {
 
 extension View {
     /// The grid takes keyboard focus: arrows move the selection, Space toggles the preview, ⌘A selects all,
-    /// Return confirms the selected section, and 1–9 in Bursts and Similar keep one photo of it. K and ⌫ are menu commands.
+    /// Return accepts the current section, and 1–9 in Bursts and Similar pick its ★. K and ⌫ are menu commands.
     fileprivate func keyboardSelection(
-        model: ReviewModel, focused: FocusState<Bool>.Binding, width: Binding<CGFloat>,
+        model: ReviewModel, focused: FocusState<Bool>.Binding, size: Binding<CGSize>,
         move: @escaping (KeyEquivalent) -> Void
     ) -> some View {
         self
-            .onGeometryChange(for: CGFloat.self) {
-                $0.size.width
+            .onGeometryChange(for: CGSize.self) {
+                $0.size
             } action: {
-                width.wrappedValue = $0
+                size.wrappedValue = $0
             }
             .focusable()
             .focused(focused)
@@ -444,10 +481,10 @@ extension View {
                 return .handled
             }
             .onKeyPress(characters: CharacterSet(charactersIn: "123456789")) { press in
-                guard model.isGrouped && model.canConfirm && !model.previewing, let n = Int(press.characters) else {
+                guard model.canPickBest && !model.previewing, let n = Int(press.characters) else {
                     return .ignored
                 }
-                Task { await model.confirm(keeping: n - 1) }
+                model.pickBest(number: n)
                 return .handled
             }
             .onKeyPress(.escape) {
@@ -464,8 +501,9 @@ extension View {
 extension ReviewView {
     var sidebarID: String {
         switch self {
-        case .all: "tab-all"
+        case .overview: "tab-overview"
         case .pass(let key): "tab-\(key)"
+        case .unsure: "tab-unsure"
         case .deleted: "tab-deleted"
         case .export: "tab-export"
         case .importFolders: "tab-import"
@@ -479,36 +517,30 @@ extension FocusedValues {
 }
 
 /// Edit > Undo and Redo drive the model's UndoManager directly, not the window's.
-/// Photo > Keep (K) and Delete (⌫) are menu items because the default Edit > Delete takes ⌫ before
+/// Photo > Keep (K) and Remove (⌫) are menu items because the default Edit > Delete takes ⌫ before
 /// the grid sees it. Disabled outside the review window, so they don't steal keys from Settings.
 struct ReviewCommands: Commands {
     @FocusedValue(\.reviewModel) private var model
 
     var body: some Commands {
         CommandMenu("Photo") {
-            Group {
-                Button("Keep") { model?.markSelection(.keep) }
-                    .keyboardShortcut("k", modifiers: [])
-                    .accessibilityIdentifier("mark-keep")
-                Button("Delete") { model?.markSelection(.delete) }
-                    .keyboardShortcut(.delete, modifiers: [])
-                    .accessibilityIdentifier("mark-delete")
-            }
-            .disabled(model?.canMark != true)
+            // K keeps the whole section in a pass, the selection in Unsure.
+            Button(model?.keepKeyLabel ?? Decision.keep.label) { Task { await model?.keepKey() } }
+                .keyboardShortcut("k", modifiers: [])
+                .accessibilityIdentifier("mark-keep")
+                .disabled(model?.canKeepKey != true)
+            // ⌫ also removes an Import folder from its list: this menu item owns the key everywhere.
+            Button(model?.deleteKeyLabel ?? Decision.delete.label) { model?.deleteKey() }
+                .keyboardShortcut(.delete, modifiers: [])
+                .accessibilityIdentifier("mark-delete")
+                .disabled(model?.canDeleteKey != true)
+            Button(Decision.unsure.label) { model?.markSelection(.unsure) }
+                .keyboardShortcut("?", modifiers: [])
+                .accessibilityIdentifier("mark-unsure")
+                .disabled(model?.canMarkUnsure != true)
             // No shortcut: a bare Return key equivalent would also catch Return in dialogs; the grid handles it.
             Button(ReviewModel.confirmLabel) { Task { await model?.confirm() } }.disabled(
                 model?.canConfirm != true)
-            Button(ReviewModel.confirmUpToHereLabel) {
-                Task { await model?.confirmUpToHere() }
-            }
-            .keyboardShortcut(.return, modifiers: .shift)
-            .disabled(model?.canConfirm != true)
-            Divider()
-            Group {
-                Button(ReviewModel.keepAllLabel) { model?.setAll(.keep) }
-                Button(ReviewModel.deleteAllLabel) { model?.setAll(.delete) }
-            }
-            .disabled(model?.canSetAll != true)
             Divider()
             // No shortcut here: the grid's own Space handler toggles the preview, and a bare-Space key equivalent would also catch Space in dialogs.
             Button(model?.inspectorToggleLabel ?? "Show Info") { model?.showsInspector.toggle() }
@@ -516,9 +548,7 @@ struct ReviewCommands: Commands {
             Button("Preview") { model?.togglePreview() }.disabled(model == nil)
             Button(model?.deleteInPhotosLabel ?? "Delete in Photos…") { Task { await model?.deleteInPhotos() } }
                 .disabled(model?.canDeleteInPhotos != true)
-            Button(ReviewModel.confirmAllLabel) { Task { await model?.commit() } }
-                .disabled(model?.canMove != true)
-            Button(model?.applyButtonLabel ?? "Apply to Photos…") { model?.confirmingApply = true }
+            Button(model?.applyButtonLabel ?? "Apply to Photos…") { Task { await model?.askApply() } }
                 .disabled(model?.canApply != true)
             Button(ReviewModel.sendBackLabel) { model?.sendBack() }.disabled(model?.canSendBack != true)
                 .accessibilityIdentifier("commit-menu")
@@ -595,9 +625,8 @@ struct InspectorView: View {
         if let info = model.inspectorInfo() {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    Color.gray.opacity(0.15).frame(height: 200)
-                        .overlay { LargeImage(id: info.id, side: 260, thumbnails: thumbnails) }
-                        .clipShape(.rect(cornerRadius: 4))
+                    if let why = model.why { whySection(why) }
+                    image(info.id)
                     Text(info.date).font(.headline)
                     Text(info.kind).foregroundStyle(.secondary)
                     if let v = info.verdict { Text(v) }
@@ -614,8 +643,9 @@ struct InspectorView: View {
                                     refocus()
                                 })
                         ) {
-                            Text("Keep").tag(Decision.keep)
-                            Text("Delete").tag(Decision.delete)
+                            Text(Decision.keep.label).tag(Decision.keep)
+                            Text(Decision.delete.label).tag(Decision.delete)
+                            if model.canMarkUnsure { Text(Decision.unsure.label).tag(Decision.unsure) }
                         }
                         .pickerStyle(.segmented).labelsHidden().focusable(false)
                     }
@@ -632,9 +662,32 @@ struct InspectorView: View {
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+        } else if let why = model.why {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    whySection(why)
+                    image(why.id)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         } else {
             Text(model.inspectorPlaceholder).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private func image(_ id: String) -> some View {
+        Color.gray.opacity(0.15).frame(height: 200)
+            .overlay { LargeImage(id: id, side: 260, thumbnails: thumbnails) }
+            .clipShape(.rect(cornerRadius: 4))
+    }
+
+    private func whySection(_ why: ReviewModel.Why) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(ReviewModel.whyTitle).font(.headline)
+            ForEach(why.lines, id: \.self) { Text($0) }
+        }
+        .accessibilityIdentifier("why-this-photo")
     }
 }

@@ -6,7 +6,7 @@ Photos Cleanup is a free Mac app. It clears screenshots, bursts, look-alikes and
 
 - **Free and open source.** No subscription, no account, no daily delete limit.
 - **Private.** Everything runs on your Mac, with no network calls. Apple's on-device Vision and Apple Intelligence do the analysis.
-- **Never deletes on its own.** Your marks go into albums. You delete in Photos, and Photos keeps deleted photos for 30 days.
+- **Never deletes on its own.** You review and accept in the app. Apply deletes only after macOS asks you to confirm, and Photos keeps deleted photos for 30 days.
 - **Fast on big libraries.** You review a whole pass in one grid and mark photos keep or delete with one key.
 
 ```bash
@@ -26,15 +26,15 @@ It also does two jobs around the library:
 
 **Nothing is deleted until you say so.**
 
-- Marking a photo delete only files it into an album, such as "Screenshots - Delete Me".
-- Photos are deleted only when you click Delete in Photos… and confirm in the macOS dialog.
+- Marking a photo Remove and accepting it changes nothing in Photos. It waits in Not in Photos Yet, and Undo reverses it.
+- Photos are deleted only when you click Apply to Photos… and confirm in the macOS dialog. The Apply dialog warns you first if they are not in your export.
 - Deleted photos stay in Photos' Recently Deleted for 30 days.
 
 **Some photos are protected from the start.**
 
 - Favorites are never suggested. Photos in your own albums are not either, unless you change it in Settings.
 - Photos you edited start as keep in Bursts, Similar and Low Quality.
-- Photos you keep go into a "Keep" album, such as "Screenshots - Keep". Later runs skip them.
+- Photos you keep go into one album, "Photos Cleanup - Keep". No pass suggests them again.
 
 **Export and Import never delete files.**
 
@@ -105,17 +105,17 @@ To change this later, open System Settings > Privacy & Security > Automation.
 
 ## Usage
 
-1. Pick a pass in the sidebar.
-2. Check the suggestions, a section at a time. Only photos to delete are marked.
-3. Fix any mark: K keeps, ⌫ deletes.
-4. Click the section's Confirm (shortcut: Return). The section leaves the pass and waits in Not in Photos Yet. Nothing changes in Photos yet, and Undo (toolbar, ⌘Z) reverses it.
-5. Click Apply to Photos…. Every pending photo goes to its album: marked ones to the pass's "Delete Me" album, the rest to its "Keep" album.
-6. Open In Delete Me Albums and click Delete in Photos…. macOS asks you to confirm.
+1. The app opens on Overview: how many photos each pass has to review. Click Start Cleanup, or pick a pass in the sidebar.
+   Start Cleanup goes through the passes in order, with a bar per pass across the top that fills as you accept. An empty pass offers Continue to the next. Picking a pass yourself hides the bar.
+2. Check the recommendations. A pass shows one section at a time, with its place in the header ("Burst 12 of 847"). The ★ in Bursts and Similar is the best shot; photos to remove are dimmed and tagged Remove.
+3. Fix any mark: ⌫ switches a photo between Keep and Remove. Can't decide? Press ? to mark it Unsure: accepting its section moves it to Unsure, under Cleanup, for later.
+4. Click Accept (shortcut: Return), or Keep All (shortcut: K) to keep every photo in the section and accept it. The section leaves the pass and waits in Not in Photos Yet, and the next one opens. Nothing changes in Photos yet, and Undo (toolbar, ⌘Z) reverses it.
+5. Click Apply to Photos…. The dialog counts what will be deleted per pass. macOS then asks you to confirm the deletion. The rest go to "Photos Cleanup - Keep".
 
-Not in Photos Yet, under Review, lists what you confirmed by album. Select photos there and click Send Back to Review to change your mind. The list is saved, so it survives a quit.
-Confirm All in the toolbar confirms every section at once, as marked; photos you haven't looked at, and left as Keep, stay in the pass.
+Not in Photos Yet, under Review, lists what you accepted by album. Select photos there and click Send Back to Review to change your mind. The list is saved, so it survives a quit.
+The header above the grid counts the photos you keep and remove, and says what the pass recommends; hover it for how. Marks stay when you switch to another view.
 
-| Pass | Finds | Starts as delete |
+| Pass | Finds | Starts as Remove |
 | --- | --- | --- |
 | Screenshots | Screenshots | The ones the on-device model calls junk |
 | Paperwork | Receipts, tickets, documents, labels | The ones the model calls junk |
@@ -128,32 +128,35 @@ In Bursts and Similar, the best shot is the one whose worst face Vision rates be
 
 A tile marks a Live Photo "Live" and a screen recording "Screen recording".
 
-Every pass is in sections: a group in Bursts and Similar, a month in the others, newest first.
-Bursts and Similar show one row per group: the best shot large, the others smaller beside it.
-A long group ends in "+N"; click it, or select a photo in the group, to see the rest.
-In Bursts and Similar, hover a photo and click Keep Only This (or right-click it; shortcut: 1–9). The group keeps only that photo and is confirmed.
-If you review by scrolling, click Confirm Up to Here beside the last section you looked at (shortcut: ⇧Return). Every section from the top through that one is confirmed.
-What's left in a pass is what you haven't confirmed, so you can work through a big one over several sittings.
+Every pass is in sections: a group in Bursts and Similar, a month, quarter or year in the others, newest first.
+Settings (⌘,), Sections, sets the period: Auto (the default) picks the finest one that keeps a pass to 25 sections or fewer.
+The change applies at once.
+A pass shows one section at a time. Bursts and Similar show the best shot (★ Best shot) large, with the other shots below it. The other passes show the section's photos as a grid.
+Select the ★, or select nothing, and the Info panel's "Why this photo?" lists what the app measured: its Vision score against the group's, its face quality where faces counted, an edit, or your pick.
+In Bursts and Similar, hover a photo and click its ☆ (or right-click it and pick Pick as Best; shortcut: 1–9). That photo becomes the group's ★ and is kept; the rest are marked Remove. Nothing is accepted until you press Return or click the group's Accept.
+What's left in a pass is what you haven't accepted, so you can work through a big one over several sittings.
 
-All shows every photo by month, for photos no pass suggests.
-Its sections have no Confirm buttons.
-Mark a photo Delete there, then click Confirm All and Apply to Photos…. The photo goes to "All - Delete Me".
+Mark a photo Unsure (?) when you can't decide. Accepting its section moves it to Unsure, so the pass still empties.
+Unsure lists those photos by the pass they came from. Mark each Keep (K) or Remove (⌫), then click the section's Accept: they go to Not in Photos Yet with the pass they came from.
+Unsure is saved, so it survives a relaunch.
+When every pass and Unsure are empty, the app says "Cleanup complete".
 
 | Key | Action |
 | --- | --- |
 | Click, ⇧-click, ⌘-click, ⌘A | Select |
-| Arrow keys | Move the selection; in Bursts and Similar, ↑ and ↓ move by group |
-| Return | Same as the section's Confirm button: confirm the selected section and go to the next |
-| 1–9 | Same as Keep Only This in Bursts and Similar: keep only photo N of the group, confirm it, and go to the next |
-| ⇧Return | Same as Confirm Up to Here: confirm every section from the top through the selected one |
-| K / ⌫ | Mark keep / delete; with one photo selected, move to the next |
+| Arrow keys | Move the selection within the section |
+| Return | Same as Accept: accept the section and go to the next |
+| 1–9 | In Bursts and Similar: pick photo N of the group as best (★); the rest are marked Remove |
+| K | In a pass: same as Keep All, keep every photo in the section and accept it. In Unsure: mark Keep |
+| ⌫ | Switch between Keep and Remove |
+| ? | Mark unsure: it moves to Unsure when its section is accepted |
 | Space, Esc | Show or close the large preview (videos play) |
 | ⌘I | Show the Info panel: date, albums, and why the photo was picked |
 | ⌘R | Show the photo in Photos |
 | ⌘Z / ⇧⌘Z | Same as the toolbar Undo button / redo |
 | ⌥⌘D | Show only photos marked delete |
 | ⌘+ / ⌘− | Larger / smaller thumbnails |
-| ⌥↓ / ⌥↑ | Next / previous month or group |
+| ⌥↓ / ⌥↑ | Next / previous section |
 
 With VoiceOver on, each photo reads its kind, date and mark.
 
@@ -186,8 +189,8 @@ Photos that are stored only in iCloud download first, so a first run can take ho
 Export runs 4 downloads at a time.
 If a photo fails, Export lists it. The next run tries it again.
 
-In Delete Me Albums warns you when photos in it are not in your export yet.
-Run Export before Delete in Photos… to keep a copy.
+The Apply dialog warns you when photos it will delete are not in your export yet.
+Run Export before Apply to keep a copy.
 
 ## Import: bring old photos into Photos
 
@@ -257,8 +260,9 @@ Import keeps most duplicates out of your library before you import (see Import).
 Passes skip favorites and photos in your own albums.
 To change this, open Settings (⌘,):
 
-- Turn off Keep photos in albums to review photos in your own albums too.
-- Add albums under Ignored albums to make only those not count.
+- Albums that keep photos safe: All my albums, except these (the default), or Only these albums.
+- With All my albums, list the albums whose photos can still be suggested.
+- With Only these albums, list the albums that protect their photos. Photos in your other albums can be suggested. Photos Cleanup - Keep is always on the list.
 
 Changes apply the next time the app opens.
 

@@ -76,47 +76,52 @@ public enum Passes {
     /// Passes shown as groups of photos, with the best of each marked.
     public static let grouped: Set<String> = ["bursts", "similar"]
 
-    /// The All view is not a pass, but it has a title and one Delete Me album, derived like a pass's.
+    /// The All view, since removed: pending photos saved under its key still apply.
     public static let allKey = "all"
     public static let allTitle = "All"
-    public static let allDeleteAlbum = "\(allTitle) - Delete Me"
 
     public static func title(_ key: String) -> String? { all.first { $0.key == key }?.title }
-    public static func deleteAlbum(_ key: String) -> String? { title(key).map { "\($0) - Delete Me" } }
-    // Not in cleanupAlbumNames, so they count as user albums and the candidate filter skips
-    // their photos on every later run.
-    public static func keepAlbum(_ key: String) -> String? { title(key).map { "\($0) - Keep" } }
+    /// Every photo kept by Apply, from any pass: none of them is suggested again. Not in
+    /// cleanupAlbumNames, so it also counts as a user album.
+    public static let keepAlbum = "Photos Cleanup - Keep"
 
-    /// The Delete Me album among a photo's albums (a pass's own, All's, or a legacy one), if any.
+    /// The Delete Me album among a photo's albums, if any. Apply deletes directly; these albums are
+    /// from versions that filed Remove photos into "<Pass title> - Delete Me" first.
     public static func waitingAlbum(in albums: [String]) -> String? {
-        let names = Set(all.compactMap { deleteAlbum($0.key) }).union([allDeleteAlbum]).union(
-            legacyAlbums.values.joined().filter { $0.hasSuffix(" - Delete Me") })
+        let names = Set((all.map(\.title) + [allTitle]).map { "\($0) - Delete Me" })
         return albums.sorted().first(where: names.contains)
     }
 
-    /// What each pass finds and how its photos start; the tab's tooltip.
-    /// What each pass finds and which photos start marked Delete, in plain words: the sidebar
-    /// tooltip and the line above the grid.
+    /// What each pass recommends, in one sentence: the line above the grid.
+    public static let captions: [String: String] = [
+        "screenshots":
+            "We recommend keeping the screenshots you still need and removing old codes, maps and confirmations.",
+        "paperwork":
+            "We recommend keeping the documents you still need and removing old receipts, tickets and labels.",
+        "bursts": "We recommend keeping the best shot of each burst and removing the similar ones.",
+        "similar": "We recommend keeping the best shot of each moment and removing the similar ones.",
+        "low-quality": "We recommend removing these shots: they look blurry, dark or taken by accident.",
+        "videos":
+            "We recommend removing clips under \(Int(accidentalVideoMax)) seconds, which are usually accidental, and keeping the rest.",
+    ]
+
+    /// What each pass finds and which photos start marked Remove, in plain words: the sidebar
+    /// tooltip and the caption's.
     public static let about: [String: String] = [
         "screenshots":
             "Your screenshots. Apple Intelligence marks the ones that look no longer needed, like old codes, maps and confirmations.",
         "paperwork":
             "Photos of receipts, tickets, labels and documents. Apple Intelligence marks the ones that look no longer needed.",
         "bursts":
-            "Several shots taken within a minute. The best one is kept: the sharpest, with the best faces. The rest are marked to delete. Photos you edited are kept.",
+            "Several shots taken within a minute. The best one is kept: the highest Vision score, or the best faces when there are faces. The rest are marked Remove. Photos you edited are kept.",
         "similar":
-            "Shots of the same scene on the same day. The best one is kept: the sharpest, with the best faces. The rest are marked to delete. Photos you edited are kept.",
+            "Shots of the same scene on the same day. The best one is kept: the highest Vision score, or the best faces when there are faces. The rest are marked Remove. Photos you edited are kept.",
         "low-quality":
-            "Shots that look blurry, dark or taken by accident. All are marked to delete, except photos you edited.",
+            "Shots that look blurry, dark or taken by accident. All are marked Remove, except photos you edited.",
         "videos":
-            "Your videos, longest first. Clips under \(Int(accidentalVideoMax)) seconds are marked to delete: they are usually accidental.",
+            "Your videos, longest first. Clips under \(Int(accidentalVideoMax)) seconds are marked Remove: they are usually accidental.",
     ]
 
-    /// Earlier names of a pass's album: photos in them still count as filed.
-    public static let legacyAlbums: [String: Set<String>] = [
-        "low-quality": ["Low Quality - Review Me"],
-        "paperwork": ["Utility - Delete Me", "Utility - Keep"],
-    ]
     /// Passes judged by Foundation Models.
     public static let verdictKinds: Set<String> = ["screenshots", "paperwork"]
 
@@ -167,9 +172,12 @@ public func userIgnoreAlbums(dir: URL = settingsDir, file: String = "albums_igno
         .filter { !$0.isEmpty && !$0.hasPrefix("#") }
 }
 
-/// Rewrites the names in `albums_ignore`, keeping its '#' comment lines. `albums_ignore.local` is untouched.
-public func saveIgnoreAlbums(_ names: [String], dir: URL = settingsDir) throws {
-    let file = dir.appendingPathComponent("albums_ignore")
+/// The albums whose photos are never suggested when only some albums protect (Settings, "Only these albums").
+public let safeAlbumsFile = "albums_safe"
+
+/// Rewrites the names in `file`, keeping its '#' comment lines. `albums_ignore.local` is untouched.
+public func saveIgnoreAlbums(_ names: [String], dir: URL = settingsDir, file name: String = "albums_ignore") throws {
+    let file = dir.appendingPathComponent(name)
     let old = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
     let comments = old.split(whereSeparator: \.isNewline).map(String.init).filter {
         $0.trimmingCharacters(in: .whitespaces).hasPrefix("#")
@@ -189,6 +197,23 @@ public func loadPending(dir: URL = settingsDir) -> [String: (pass: String, keep:
     return pending
 }
 
+/// Accepted as Unsure, "pass\tuuid" per line: the pass each photo came from, by uuid.
+public func loadUnsure(dir: URL = settingsDir) -> [String: String] {
+    guard let text = try? String(contentsOf: dir.appendingPathComponent("unsure"), encoding: .utf8) else { return [:] }
+    var unsure: [String: String] = [:]
+    for line in text.split(whereSeparator: \.isNewline) {
+        let f = line.split(separator: "\t").map(String.init)
+        if f.count == 2 { unsure[f[1]] = f[0] }
+    }
+    return unsure
+}
+
+public func saveUnsure(_ unsure: [String: String], dir: URL = settingsDir) throws {
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try unsure.sorted { ($0.value, $0.key) < ($1.value, $1.key) }.map { "\($0.value)\t\($0.key)\n" }.joined()
+        .write(to: dir.appendingPathComponent("unsure"), atomically: true, encoding: .utf8)
+}
+
 public func savePending(_ pending: [String: (pass: String, keep: Bool)], dir: URL = settingsDir) throws {
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     try pending.sorted { ($0.value.pass, $0.key) < ($1.value.pass, $1.key) }
@@ -202,12 +227,14 @@ private let minDate = ISO8601DateFormatter().date(from: "2000-01-01T00:00:00Z")!
 /// not in any of the user's own albums.
 public func candidatePhotos(
     _ photos: [Photo], ignoring ignore: Set<String>, kind: PhotoKind = .photo,
-    requireValidDate: Bool = false, keepAlbumPhotos: Bool = true
+    requireValidDate: Bool = false, keepAlbumPhotos: Bool = true, safeAlbums: Set<String> = []
 ) -> [Photo] {
     photos.filter { p in
         let k: PhotoKind = p.isMovie ? .video : p.screenshot ? .screenshot : .photo
         guard k == kind, !p.favorite else { return false }
-        guard !keepAlbumPhotos || Set(p.albums).subtracting(ignore).isEmpty else { return false }
+        // keepAlbumPhotos: every album but `ignore` protects; else only `safeAlbums` do.
+        let mine = keepAlbumPhotos ? Set(p.albums).subtracting(ignore) : Set(p.albums).intersection(safeAlbums)
+        guard mine.isEmpty else { return false }
         if requireValidDate {
             guard let d = p.date, d >= minDate else { return false }
         }
@@ -315,4 +342,55 @@ public func passVerdict(_ kind: String, _ v: Verdict?) -> Verdict? {
     guard var v else { return nil }
     if kind == "paperwork", v.kind == "screenshot", !v.keep { v.keep = true }
     return v
+}
+
+/// How a pass without groups splits into sections (Settings, Sections). Auto picks per pass.
+public enum Period: String, CaseIterable, Sendable {
+    case auto, month, quarter, year
+
+    public var title: String { rawValue.capitalized }
+    /// Auto takes the finest period that keeps a pass to this many sections.
+    public static let maxSections = 25
+    public static let unknown = "unknown"
+
+    /// Month, quarter or year: Auto's pick for these dates, else self.
+    public func resolved(_ dates: [Date], timeZone: TimeZone = .current) -> Period {
+        guard self == .auto else { return self }
+        return [.month, .quarter].first { p in Set(dates.map { p.key($0, timeZone) }).count <= Self.maxSections }
+            ?? .year
+    }
+
+    /// "2024-03", "2024-Q3" or "2024": sorts newest first as a string.
+    func key(_ d: Date, _ timeZone: TimeZone) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        let c = cal.dateComponents([.year, .month], from: d)
+        let (y, m) = (c.year!, c.month!)
+        return switch self {
+        case .auto, .month: String(format: "%04d-%02d", y, m)
+        case .quarter: String(format: "%04d-Q%d", y, (m - 1) / 3 + 1)
+        case .year: String(format: "%04d", y)
+        }
+    }
+
+    /// The period a section key was made with; nil for undated photos.
+    init?(key: String) {
+        if key == Self.unknown { return nil }
+        self = key.contains("-Q") ? .quarter : key.contains("-") ? .month : .year
+    }
+
+    /// Sections as `BurstGroup`s whose `best` is the key, newest first, undated photos ("unknown")
+    /// last. Photos keep the order of `photos`.
+    public func sections(_ photos: [Photo], timeZone: TimeZone = .current) -> [BurstGroup] {
+        let p = resolved(photos.compactMap(\.date), timeZone: timeZone)
+        var order: [String] = []
+        var by: [String: [Photo]] = [:]
+        for ph in photos {
+            let k = ph.date.map { p.key($0, timeZone) } ?? Self.unknown
+            if by[k] == nil { order.append(k) }
+            by[k, default: []].append(ph)
+        }
+        order.sort { a, b in (a == Self.unknown) != (b == Self.unknown) ? b == Self.unknown : a > b }
+        return order.map { BurstGroup(photos: by[$0]!, best: $0) }
+    }
 }

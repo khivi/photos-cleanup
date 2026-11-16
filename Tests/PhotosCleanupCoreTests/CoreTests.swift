@@ -51,13 +51,13 @@ import Testing
         Photo(uuid: "plain"), Photo(uuid: "mine", albums: ["Trip to Goa"]),
         Photo(uuid: "fav", favorite: true, albums: ["Trip to Goa"]),
         Photo(uuid: "filed", albums: ["Trip to Goa", "Paperwork - Delete Me"]),
-        Photo(uuid: "legacy", albums: ["Trip to Goa", "Utility - Keep"]),
+        Photo(uuid: "kept", albums: ["Trip to Goa", Passes.keepAlbum]),
     ]
     let ignore = loadIgnoreAlbums(dir: tempDir())
     #expect(candidatePhotos(photos, ignoring: ignore).map(\.uuid) == ["plain"])
     #expect(
         candidatePhotos(photos, ignoring: ignore, keepAlbumPhotos: false).map(\.uuid) == [
-            "plain", "mine", "filed", "legacy",
+            "plain", "mine", "filed", "kept",
         ])
     let (on, _) = try await makeCleanup(photos)
     #expect(Set(try await on.candidates("paperwork").map(\.uuid)) == ["plain"])
@@ -65,15 +65,33 @@ import Testing
     #expect(Set(try await off.candidates("paperwork").map(\.uuid)) == ["plain", "mine"])
 }
 
+@Test func onlyTheChosenAlbumsKeepPhotosSafe() async throws {
+    let photos = [
+        Photo(uuid: "plain"), Photo(uuid: "trip", albums: ["Trip to Goa"]),
+        Photo(uuid: "wedding", albums: ["Trip to Goa", "Wedding"]), Photo(uuid: "kept", albums: [Passes.keepAlbum]),
+    ]
+    let ignore = loadIgnoreAlbums(dir: tempDir())
+    #expect(
+        candidatePhotos(photos, ignoring: ignore, keepAlbumPhotos: false, safeAlbums: ["Wedding"]).map(\.uuid) == [
+            "plain", "trip", "kept",
+        ])
+    let c = Cleanup(
+        library: FakeLibrary(photos), judge: FakeJudge(), cacheDir: tempDir(), ignoreAlbums: ignore,
+        keepAlbumPhotos: false, safeAlbums: ["Wedding"])
+    try await c.load()
+    #expect(Set(try await c.candidates("paperwork").map(\.uuid)) == ["plain", "trip"])  // kept is always safe
+
+    let dir = tempDir()
+    try saveIgnoreAlbums(["Wedding"], dir: dir, file: safeAlbumsFile)
+    #expect(userIgnoreAlbums(dir: dir, file: safeAlbumsFile) == ["Wedding"] && userIgnoreAlbums(dir: dir).isEmpty)
+}
+
 @MainActor @Test func everyPassHasOneName() {
     for (key, title) in Passes.all {
-        #expect(Passes.deleteAlbum(key) == "\(title) - Delete Me")
-        #expect(Passes.keepAlbum(key) == "\(title) - Keep")
+        #expect(Passes.waitingAlbum(in: ["\(title) - Delete Me"]) == "\(title) - Delete Me")
         #expect(Passes.about[key]?.isEmpty == false, "\(key) needs a tooltip")
+        #expect(Passes.captions[key]?.isEmpty == false, "\(key) needs a caption")
     }
-    // All's one album derives from the All title, and the All tab reads that title.
-    #expect(Passes.allDeleteAlbum == "\(Passes.allTitle) - Delete Me")
-    #expect(ReviewModel.tabs.contains { $0.view == .all && $0.title == Passes.allTitle })
     // The app's tabs read exactly the pass titles.
     for (key, title) in Passes.all {
         #expect(ReviewModel.tabs.contains { $0.view == .pass(key) && $0.title == title })
@@ -113,7 +131,7 @@ import Testing
 
 @Test func burstsGroupWithBestAndNewestFirst() async throws {
     var photos = dated(["a": 0, "b": 10, "c": 20, "far": 500, "d": 1000, "e": 1010, "f": 1020])
-    photos.append(Photo(uuid: "filed", date: t0.addingTimeInterval(1020), albums: ["Bursts - Keep"]))
+    photos.append(Photo(uuid: "filed", date: t0.addingTimeInterval(1020), albums: [Passes.keepAlbum]))
     let scores: [String: Double] = ["a": 0.1, "b": 0.9, "c": 0.5, "far": 0.5, "d": 0.2, "e": 0.3, "f": 0.8]
     let (c, _) = try await makeCleanup(photos, vision: scores.mapValues { vr($0) })
     let r = try await c.pass("bursts")
@@ -162,7 +180,7 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     func similar() async throws -> [[String]] { try await c.pass("similar").groups.map { $0.photos.map(\.uuid) } }
     #expect(try await similar() == [["a", "b"]])
     #expect(try await similar() == [["a", "b"]])  // unchanged: the cached groups
-    _ = try await c.commit("similar", delete: ["b"], keep: [])
+    _ = try await c.apply(delete: ["b": "similar"], keep: [:])
     #expect(try await similar().isEmpty)  // a alone is no group
     lib.gate.open()
     await settle(c)
@@ -192,21 +210,11 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     let photos = [
         Photo(uuid: "a", screenshot: true),
         Photo(uuid: "b", screenshot: true, albums: ["Screenshots - Delete Me"]),
-        Photo(uuid: "c", screenshot: true, albums: ["Screenshots - Keep"]),
+        Photo(uuid: "c", screenshot: true, albums: [Passes.keepAlbum]),
         Photo(uuid: "d", screenshot: true, albums: ["Low Quality - Delete Me"]),  // another pass's album
     ]
-    let (c, _) = try await makeCleanup(photos, judge: FakeJudge(off: "off"))
-    #expect(Set(try await c.pass("screenshots").photos.map(\.photo.uuid)) == ["a", "d"])
-}
-
-@Test func lowQualityOldAlbumStillCountsAsFiled() async throws {
-    let photos = [
-        Photo(uuid: "old", albums: ["Low Quality - Review Me"]),  // filed before the rename
-        Photo(uuid: "new", albums: ["Low Quality - Delete Me"]),
-        Photo(uuid: "a"),
-    ]
-    let (c, _) = try await makeCleanup(photos, vision: ["old": vr(-0.9), "new": vr(-0.9), "a": vr(-0.9)])
-    #expect(try await c.pass("low-quality").photos.map(\.photo.uuid) == ["a"])
+    let (c, _) = try await makeCleanup(photos, judge: FakeJudge(off: "off"), keepAlbumPhotos: false)
+    #expect(Set(try await c.pass("screenshots").photos.map(\.photo.uuid)) == ["a"])
 }
 
 @Test func unknownPassThrows() async throws {
@@ -221,7 +229,7 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     var (c, lib) = try await makeCleanup(photos, judge: judge, cacheDir: dir)
     lib.gate.close()  // hold the Vision job so its results don't land yet
     var counts = await c.counts()
-    #expect(counts["all"] == 3 && counts["screenshots"] == 0)
+    #expect(counts["all"] == nil && counts["screenshots"] == 0)
     #expect(counts["low-quality"] == .some(nil) && counts["bursts"] == .some(nil) && counts["paperwork"] == .some(nil))
     lib.gate.open()
     await settle(c)
@@ -233,6 +241,25 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
         photos, vision: vision, verdicts: ["a": doc, "b": pic, "c": pic], judge: judge, cacheDir: tempDir())
     counts = await c.counts()
     #expect(counts["paperwork"] == 1 && counts["bursts"] == 2 && counts["low-quality"] == 1)
+}
+
+@Test func paperworkIsCountedWithoutOpeningItsPass() async throws {
+    let photos = [Photo(uuid: "a"), Photo(uuid: "b"), Photo(uuid: "odd")]
+    let vision: [String: VisionResult?] = [
+        "a": vr(0.5, utility: true, [0]), "b": vr(0.5, utility: true, [0.1]), "odd": vr(0.5, utility: true, [0.2]),
+    ]
+    let judge = FakeJudge([  // "odd" gets no verdict: unjudgeable, like the pass leaves it out
+        "a": Verdict(keep: false, kind: "receipt", reason: ""), "b": Verdict(keep: true, kind: "picture", reason: ""),
+    ])
+    judge.gate.close()
+    let (c, _) = try await makeCleanup(photos, vision: vision, judge: judge)
+    #expect(await c.counts()["paperwork"] == .some(nil))  // queued for verdicts, not yet judged
+    judge.gate.open()
+    await settle(c)
+    #expect(await c.counts()["paperwork"] == 1 && Set(judge.judged.withLock { $0 }) == ["a", "b", "odd"])
+
+    let (off, _) = try await makeCleanup(photos, vision: vision, judge: FakeJudge(off: "off"))
+    #expect(await off.counts()["paperwork"] == 0)  // no verdicts on this Mac: the pass shows none
 }
 
 // MARK: Background jobs
@@ -296,41 +323,49 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
 
 // MARK: Commit and decisions
 
-@Test func commitFilesDeleteAndKeepThenHidesThem() async throws {
+@Test func applyDeletesRemovesAndKeepsTheRestInOneAlbum() async throws {
     let photos = "abc".map { Photo(uuid: String($0), screenshot: true) }
-    let (c, lib) = try await makeCleanup(photos, judge: FakeJudge(off: "off"))
-    let done = try await c.commit("screenshots", delete: ["a"], keep: ["b"])
-    #expect(done == .init(added: 1, album: "Screenshots - Delete Me", kept: 1, keepAlbum: "Screenshots - Keep"))
-    #expect(
-        lib.adds.withLock { $0.map { "\($0.album):\($0.uuids)" } }
-            == ["Screenshots - Delete Me:[\"a\"]", "Screenshots - Keep:[\"b\"]"])
+    let (c, lib) = try await makeCleanup(photos, judge: FakeJudge(off: "off"), keepAlbumPhotos: false)
+    let done = try await c.apply(delete: ["a": "screenshots"], keep: ["b": "screenshots"])
+    #expect(done == .init(deleted: ["a"], kept: ["b"]))
+    #expect(lib.deletes.withLock { $0 } == [["a"]])
+    #expect(lib.adds.withLock { $0.map { "\($0.album):\($0.uuids)" } } == ["Photos Cleanup - Keep:[\"b\"]"])
     #expect(try await c.pass("screenshots").photos.map(\.photo.uuid) == ["c"])
+    #expect(await c.photos.map(\.uuid).sorted() == ["b", "c"])
 }
 
-@Test func commitErrors() async throws {
-    let (c, _) = try await makeCleanup([Photo(uuid: "a")])
-    await #expect(throws: CleanupError.unknownPass) { try await c.commit("bogus", delete: ["a"], keep: []) }
-    await #expect(throws: CleanupError.noMatchingPhotos) {
-        try await c.commit("screenshots", delete: ["x"], keep: ["y"])
-    }
+@Test func aCancelledApplyChangesNothing() async throws {
+    let photos = "ab".map { Photo(uuid: String($0), screenshot: true) }
+    let (c, lib) = try await makeCleanup(photos, judge: FakeJudge(off: "off"), keepAlbumPhotos: false)
+    lib.cancelsDelete.withLock { $0 = true }
+    #expect(try await c.apply(delete: ["a": "screenshots"], keep: ["b": "screenshots"]) == nil)
+    #expect(lib.adds.withLock { $0 }.isEmpty)
+    #expect(try await c.pass("screenshots").photos.map(\.photo.uuid).sorted() == ["a", "b"])
+}
+
+@Test func applySkipsPhotosNoLongerInTheLibrary() async throws {
+    let (c, lib) = try await makeCleanup([Photo(uuid: "a")])
+    #expect(try await c.apply(delete: ["x": "bursts"], keep: ["y": "bursts"]) == .init(deleted: [], kept: []))
+    #expect(lib.deletes.withLock { $0 }.isEmpty && lib.adds.withLock { $0 }.isEmpty)
     let denied = FakeLibrary([Photo(uuid: "a")], status: "denied")
     let (d, _) = try await makeCleanup([], library: denied)
-    await #expect(throws: LibraryError.accessDenied) { try await d.commit("screenshots", delete: ["a"], keep: []) }
+    await #expect(throws: LibraryError.accessDenied) { try await d.apply(delete: ["a": "bursts"], keep: [:]) }
 }
 
-@Test func commitLogsDecisionsAgainstVerdicts() async throws {
+@Test func applyLogsDecisionsAgainstVerdicts() async throws {
     let verdicts = [
         "a": Verdict(keep: false, kind: "receipt", reason: ""),  // user deletes: agree
         "b": Verdict(keep: false, kind: "ticket", reason: ""),  // user keeps: override
+        "d": Verdict(keep: false, kind: "receipt", reason: ""),  // deleted from a pass with no verdicts
     ]  // c has no verdict: not logged
     let dir = tempDir()
     let (c, _) = try await makeCleanup(
-        "abc".map { Photo(uuid: String($0)) }, verdicts: verdicts, judge: FakeJudge(off: "off"), cacheDir: dir)
-    _ = try await c.commit("screenshots", delete: ["a", "c"], keep: ["b"])
-    _ = try await c.commit("low-quality", delete: ["a"], keep: [])  // not a verdict pass
+        "abcd".map { Photo(uuid: String($0)) }, verdicts: verdicts, judge: FakeJudge(off: "off"), cacheDir: dir)
+    _ = try await c.apply(
+        delete: ["a": "screenshots", "c": "screenshots", "d": "low-quality"], keep: ["b": "screenshots"])
     let rows = readJSONLines(dir.appendingPathComponent(Cleanup.decisionsLog))
     #expect(
-        rows.map { "\($0["kind"]!) \($0["uuid"]!) \(($0["verdict_keep"] as? Bool)!) \($0["decision"]!)" }
+        Set(rows.map { "\($0["kind"]!) \($0["uuid"]!) \(($0["verdict_keep"] as? Bool)!) \($0["decision"]!)" })
             == ["screenshots a false delete", "screenshots b false keep"])
 }
 
@@ -376,34 +411,25 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
 }
 
 @Test func allDeleteMeCountsAsWaitingAndEveryPassSkipsIt() async throws {
-    #expect(Passes.waitingAlbum(in: ["Trip", Passes.allDeleteAlbum]) == Passes.allDeleteAlbum)
-    let filed = Photo(uuid: "a", screenshot: true, albums: [Passes.allDeleteAlbum])
+    #expect(Passes.waitingAlbum(in: ["Trip", "All - Delete Me"]) == "All - Delete Me")
+    let filed = Photo(uuid: "a", screenshot: true, albums: ["All - Delete Me"])
     let other = Photo(uuid: "b", screenshot: true)
     let (c, _) = try await makeCleanup([filed, other], judge: FakeJudge(off: "off"), keepAlbumPhotos: false)
     for kind in ["screenshots", "bursts"] {
         #expect(try await c.candidates(kind).map(\.uuid).filter { $0 == "a" }.isEmpty)
     }
     #expect(try await c.pass("screenshots").photos.map(\.photo.uuid) == ["b"])
-    let plain = [Photo(uuid: "a", albums: [Passes.allDeleteAlbum]), Photo(uuid: "b")]
+    let plain = [Photo(uuid: "a", albums: ["All - Delete Me"]), Photo(uuid: "b")]
     let (d, _) = try await makeCleanup(plain, keepAlbumPhotos: false)
     #expect(try await d.candidates("low-quality").map(\.uuid) == ["b"])
     #expect(try await d.candidates("paperwork").map(\.uuid) == ["b"])
 }
 
-@Test func commitInAllFilesDeletesOnlyAndLogsNothing() async throws {
-    let dir = tempDir()
-    let (c, lib) = try await makeCleanup("ab".map { Photo(uuid: String($0)) }, cacheDir: dir)
-    let done = try await c.commit(Passes.allKey, delete: ["a"], keep: ["b"])
-    #expect(done == .init(added: 1, album: "All - Delete Me", kept: 0, keepAlbum: ""))
-    #expect(lib.adds.withLock { $0.map(\.album) } == ["All - Delete Me"])
-    #expect(readJSONLines(dir.appendingPathComponent(Cleanup.decisionsLog)).isEmpty)
-}
-
-@Test func similarSkipsPhotosBurstsFiled() async throws {
-    let p = Photo(uuid: "a", date: .now, albums: ["Bursts - Keep"])
+@Test func aKeepInOnePassHidesThePhotoFromEveryPass() async throws {
+    let p = Photo(uuid: "a", date: .now, albums: [Passes.keepAlbum])
     let (c, _) = try await makeCleanup([p], keepAlbumPhotos: false)
     #expect(try await c.candidates("similar").isEmpty)
-    #expect(try await c.candidates("low-quality").map(\.uuid) == ["a"])
+    #expect(try await c.candidates("low-quality").isEmpty)
 }
 
 @Test func editedShotWinsTheBurst() async throws {

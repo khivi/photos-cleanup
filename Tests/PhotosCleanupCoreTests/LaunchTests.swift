@@ -37,7 +37,7 @@ import Testing
             return
         }
         #expect(Set(uuids) == ["a", "b"])
-        #expect(model.view == .all)
+        #expect(model.view == .overview)
         #expect(model.showsInspector && model.aspectFit && model.zoom == 3)
         #expect(model.cellSize == ReviewModel.zoomSizes[3])
     }

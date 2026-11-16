@@ -38,7 +38,7 @@ It only reads the library. CI cannot run it, because it needs a Photos library a
 
 ### Driving the app
 
-The main controls have accessibility identifiers, so automation finds them by a stable id, not by their label. Examples are `tab-<pass key>` for each sidebar pass, `commit`, `delete-in-photos`, `export-start`, `import-start` and `photo-<uuid>` for each grid cell. Search for `accessibilityIdentifier` in `Sources/PhotosCleanupApp/` for the full list.
+The main controls have accessibility identifiers, so automation finds them by a stable id, not by their label. Examples are `tab-<pass key>` for each sidebar pass, `confirm-<section>` (the Accept button: ids keep their old names so automation doesn't break), `delete-in-photos`, `export-start`, `import-start` and `photo-<uuid>` for each grid cell. Search for `accessibilityIdentifier` in `Sources/PhotosCleanupApp/` for the full list.
 A `tab-<key>` id lands on a text inside the sidebar's `AXRow`, because SwiftUI's `List` owns the row. To select a tab, set `AXSelected` on the `AXRow` that contains the id. Find the row from the window down: SwiftUI sometimes gives the text no `AXParent`.
 The [sandbox check](#sandbox-check) uses them when Claude drives the app with cmux-cua.
 There is no XCUITest suite. Outside demo mode the app works on the real Photos library, so a UI test would move real photos. Drive the [demo](#demo-mode) instead.
@@ -52,9 +52,9 @@ scripts/app.sh demo
 It builds and opens "Photos Cleanup Demo" (`com.khivi.photos-cleanup.demo`) with the `--demo` argument.
 The app then runs the full UI on a fake library. It never reads or changes your Photos library.
 The demo has its own sandbox container, so it shares no settings with the Dev build or the release.
-`scripts/demo/manifest.json` lists the photos: dates, sizes, flags, Vision results, albums and AI verdicts. Every pass has candidates, and Bursts and Similar have groups.
+`scripts/demo/manifest.json` lists the photos: dates, sizes, flags, Vision results, albums and AI verdicts. Every pass has candidates. Bursts has 4 groups and Similar 3, so the header counts "Burst 1 of 4". One burst's ★ is picked by faces over a higher Vision score, and one shot is a Live Photo. Screenshots and Paperwork each have a borderline item to mark Unsure. No photo starts in a Delete Me album.
 `scripts/demo/generate.swift` draws the images into the bundle at build time. Only the manifest and the generator are committed.
-Commit, Delete Me and Delete in Photos… change memory only, so each launch starts from the manifest.
+Apply and Delete in Photos… change memory only, so each launch starts from the manifest.
 Export writes real files into the folder you choose.
 The build also writes a sample folder to `.build/demo-import` for the Import screen. Import moves its files, so each `scripts/app.sh demo` makes a new one.
 The app chooses the demo only when `--demo` is set and the bundle holds fixtures. Release builds hold none, and `scripts/app.sh demo` refuses `SIGN_IDENTITY`.
@@ -112,7 +112,7 @@ Do this before each release. It has two parts. Both run `scripts/check-sandbox.s
 **Demo part.** It covers every file and settings path, including the steps that change photos, because the demo never touches your library.
 
 1. Run `scripts/app.sh demo`.
-2. Open each tab. Mark photos Keep and Delete Me, then Commit. Click Delete in Photos….
+2. Open each tab. Mark photos Keep and Remove, accept them, then click Apply to Photos….
 3. Export: choose a new, empty folder and export.
 4. Import: add `.build/demo-import`, click Check, then Sort. Its sidebar path starts with `~`.
 5. Change the zoom. Quit and open the demo again with `open ".build/Photos Cleanup Demo.app" --args --demo`. The zoom, the Export folder and the Import folder are kept, and no folder shows "Not found".
@@ -121,7 +121,7 @@ Do this before each release. It has two parts. Both run `scripts/check-sandbox.s
 
 1. Run `scripts/app.sh smoke`. It exits 0 when the Dev build loads your library.
 2. Run `scripts/app.sh run`. Allow Photos access if macOS asks.
-3. Let the Vision and AI passes give verdicts. Don't click Delete in Photos….
+3. Let the Vision and AI passes give verdicts. Don't click Apply to Photos… or Delete in Photos…: both delete.
 4. Click Show in Photos. Photos selects the photo. macOS asks once for Automation access.
 
 ## License of contributions

@@ -147,11 +147,13 @@ struct PhotoCell: View {
     let mark: Mark
     var selected = false
     var best = false
-    /// A small cell in a group's row: the Delete badge is just ✗, and no kind or duration pill.
+    /// A small cell in a group's row: no Remove tag (dimming says it), a bare ★, and no kind or duration pill.
     var compact = false
-    /// Keep Only This: set in Bursts and Similar. Shown on hover, and in the context menu.
-    var keepOnly: (() -> Void)?
-    var keepOnlyHelp = ""
+    /// The hero of a pass's section, this many points wide: a large image, not the grid's thumbnail.
+    var large: CGFloat?
+    /// Pick as Best: set in Bursts and Similar. A ☆ on hover where the ★ goes, and in the context menu.
+    var pickBest: (() -> Void)?
+    var pickBestHelp = ""
     var label = ""
     let thumbnails: Thumbnails
     /// The whole photo, fitted in the square cell, instead of a square crop.
@@ -181,9 +183,18 @@ struct PhotoCell: View {
             }
             .overlay(alignment: .topLeading) { badge.padding(6) }
             .overlay(alignment: .topTrailing) {
-                if best {
+                if best && compact {
                     Image(systemName: "star.fill").foregroundStyle(.yellow).shadow(radius: 2).padding(6).help(
-                        "Vision's pick")
+                        ReviewModel.bestBadge)
+                } else if best {
+                    label(ReviewModel.bestBadge, .yellow, text: .black).padding(6)
+                } else if hovering, let pickBest {
+                    Button(action: pickBest) {
+                        Image(systemName: "star").foregroundStyle(.white).shadow(radius: 2).padding(6)
+                    }
+                    .buttonStyle(.plain).help(pickBestHelp)
+                    .accessibilityLabel(ReviewModel.pickBestLabel)
+                    .accessibilityIdentifier("pick-best-\(photo.id)")
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -198,16 +209,9 @@ struct PhotoCell: View {
                     pill(Text(t).font(.caption2))
                 }
             }
-            .overlay(alignment: .bottomTrailing) {  // bottom left holds the Live pill
-                if hovering, let keepOnly {
-                    Button(ReviewModel.keepOnlyLabel, action: keepOnly)
-                        .controlSize(.small).help(keepOnlyHelp).padding(compact ? 4 : 6)
-                        .accessibilityIdentifier("keep-only-\(photo.id)")
-                }
-            }
             .onHover { hovering = $0 }
             .contextMenu {
-                if let keepOnly { Button(ReviewModel.keepOnlyLabel, action: keepOnly) }
+                if let pickBest, !best { Button(ReviewModel.pickBestLabel, systemImage: "star", action: pickBest) }
             }
             .clipped()
             .overlay { if selected { Rectangle().strokeBorder(Color.accentColor, lineWidth: 4) } }
@@ -222,7 +226,9 @@ struct PhotoCell: View {
             .help(photo.verdict.map { "\($0.kind): \($0.reason)" } ?? "")
             .onAppear {
                 thumbnails.near(photo.id)
-                requestID = thumbnails.request(photo.id) { image = $0 ?? image }
+                requestID =
+                    large.map { thumbnails.requestLarge(photo.id, side: $0) { image = $0 ?? image } }
+                    ?? thumbnails.request(photo.id) { image = $0 ?? image }
             }
             .onDisappear {
                 if let requestID { thumbnails.cancel(requestID) }
@@ -233,9 +239,10 @@ struct PhotoCell: View {
     @ViewBuilder private var badge: some View {
         switch mark {
         case .none: EmptyView()
-        case .deleteMe: label("✗ Delete Me", .red)
-        case .decision(.delete): label(compact ? "✗" : "✗ Delete", .red)
-        case .decision(.keep): EmptyView()  // most photos start as Keep: only the exceptions are marked
+        case .deleteMe: label(ReviewModel.deleteMeBadge, .red)
+        case .decision(.delete): if !compact { label(Decision.delete.badge, .gray.opacity(0.8)) }
+        case .decision(.keep): EmptyView()  // Keep is the default: not marked
+        case .decision(.unsure): label(compact ? "?" : Decision.unsure.badge, .gray)
         }
     }
 
@@ -244,8 +251,8 @@ struct PhotoCell: View {
             .background(.black.opacity(0.6), in: .rect(cornerRadius: 4)).padding(6)
     }
 
-    private func label(_ text: String, _ color: Color) -> some View {
-        Text(text).font(.caption.weight(.semibold)).foregroundStyle(.white)
+    private func label(_ text: String, _ color: Color, text fg: Color = .white) -> some View {
+        Text(text).font(.caption.weight(.semibold)).foregroundStyle(fg)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(color, in: .rect(cornerRadius: 4))
     }
@@ -268,7 +275,12 @@ struct PhotoPreview: View {
                 }
                 .overlay(alignment: .topLeading) {
                     HStack(spacing: 6) {
-                        if let badge = preview.badge { chip(badge, preview.badge == "✓ Keep" ? .green : .red) }
+                        if let badge = preview.badge {
+                            chip(
+                                badge,
+                                badge == Decision.keep.badge
+                                    ? .green : badge == ReviewModel.deleteMeBadge ? .red : .gray)
+                        }
                         if preview.best { Image(systemName: "star.fill").foregroundStyle(.yellow) }
                     }
                     .padding(16)

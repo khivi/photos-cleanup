@@ -1165,18 +1165,152 @@
    "favorite": true
   },
   {
-   "uuid": "demo-waiting-1",
-   "file": "demo-waiting-1.jpg",
-   "date": "2025-08-01T21:00:00Z",
+   "uuid": "demo-burst-c1",
+   "file": "demo-burst-c1.jpg",
+   "date": "2025-07-19T17:30:00Z",
    "width": 640,
    "height": 480,
    "scene": {
-    "hue": 0.7,
-    "kind": "dark"
+    "hue": 0.95,
+    "shift": 0,
+    "kind": "people"
    },
-   "albums": [
-    "Low Quality - Delete Me"
-   ],
+   "vision": {
+    "print": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.8,
+    "face": 0.3
+   }
+  },
+  {
+   "uuid": "demo-burst-c2",
+   "file": "demo-burst-c2.jpg",
+   "date": "2025-07-19T17:30:04Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.95,
+    "shift": 1,
+    "kind": "people"
+   },
+   "live": true,
+   "vision": {
+    "print": [
+     0.02,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.6,
+    "face": 0.85
+   }
+  },
+  {
+   "uuid": "demo-burst-c3",
+   "file": "demo-burst-c3.jpg",
+   "date": "2025-07-19T17:30:08Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.95,
+    "shift": 2,
+    "kind": "people"
+   },
+   "vision": {
+    "print": [
+     0.04,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.55,
+    "face": 0.7
+   }
+  },
+  {
+   "uuid": "demo-burst-c4",
+   "file": "demo-burst-c4.jpg",
+   "date": "2025-07-19T17:30:12Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.95,
+    "shift": 3,
+    "kind": "people"
+   },
+   "vision": {
+    "print": [
+     0.06,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.5,
+    "face": 0.5
+   }
+  },
+  {
+   "uuid": "demo-burst-c5",
+   "file": "demo-burst-c5.jpg",
+   "date": "2025-07-19T17:30:16Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.95,
+    "shift": 4,
+    "kind": "people"
+   },
+   "vision": {
+    "print": [
+     0.08,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.45,
+    "face": 0.6
+   }
+  },
+  {
+   "uuid": "demo-burst-d1",
+   "file": "demo-burst-d1.jpg",
+   "date": "2025-09-06T19:45:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.04,
+    "shift": 0,
+    "kind": "landscape"
+   },
    "vision": {
     "print": [
      0.0,
@@ -1189,23 +1323,75 @@
      0.0
     ],
     "utility": false,
-    "score": -1.0,
+    "score": 0.4,
     "face": 0.0
    }
   },
   {
-   "uuid": "demo-waiting-2",
-   "file": "demo-waiting-2.jpg",
-   "date": "2025-08-02T21:00:00Z",
+   "uuid": "demo-burst-d2",
+   "file": "demo-burst-d2.jpg",
+   "date": "2025-09-06T19:45:05Z",
    "width": 640,
    "height": 480,
    "scene": {
-    "hue": 0.7,
-    "kind": "dark"
+    "hue": 0.04,
+    "shift": 1,
+    "kind": "landscape"
    },
-   "albums": [
-    "Low Quality - Delete Me"
-   ],
+   "vision": {
+    "print": [
+     0.03,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.75,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-burst-d3",
+   "file": "demo-burst-d3.jpg",
+   "date": "2025-09-06T19:45:10Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.04,
+    "shift": 2,
+    "kind": "landscape"
+   },
+   "vision": {
+    "print": [
+     0.06,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    "utility": false,
+    "score": 0.5,
+    "face": 0.0
+   }
+  },
+  {
+   "uuid": "demo-similar-c1",
+   "file": "demo-similar-c1.jpg",
+   "date": "2025-08-23T15:00:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.3,
+    "shift": 0,
+    "kind": "people"
+   },
    "vision": {
     "print": [
      0.0,
@@ -1218,7 +1404,119 @@
      1.0
     ],
     "utility": false,
-    "score": -1.0,
+    "score": 0.5,
+    "face": 0.55
+   }
+  },
+  {
+   "uuid": "demo-similar-c2",
+   "file": "demo-similar-c2.jpg",
+   "date": "2025-08-23T15:07:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.3,
+    "shift": 1,
+    "kind": "people"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.04,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ],
+    "utility": false,
+    "score": 0.58,
+    "face": 0.8
+   }
+  },
+  {
+   "uuid": "demo-similar-c3",
+   "file": "demo-similar-c3.jpg",
+   "date": "2025-08-23T15:14:00Z",
+   "width": 640,
+   "height": 480,
+   "scene": {
+    "hue": 0.3,
+    "shift": 2,
+    "kind": "people"
+   },
+   "vision": {
+    "print": [
+     0.0,
+     0.08,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ],
+    "utility": false,
+    "score": 0.42,
+    "face": 0.65
+   }
+  },
+  {
+   "uuid": "demo-screenshot-7",
+   "file": "demo-screenshot-7.jpg",
+   "date": "2025-08-14T09:37:00Z",
+   "width": 390,
+   "height": 844,
+   "scene": {
+    "hue": 0.35,
+    "kind": "screenshot",
+    "lines": [
+     "Shopping list",
+     "Milk, eggs, bread",
+     "Batteries (AA)"
+    ]
+   },
+   "screenshot": true,
+   "verdict": {
+    "keep": false,
+    "kind": "screenshot",
+    "reason": "Shopping list from last month"
+   }
+  },
+  {
+   "uuid": "demo-paperwork-8",
+   "file": "demo-paperwork-8.jpg",
+   "date": "2025-09-11T13:00:00Z",
+   "width": 480,
+   "height": 640,
+   "scene": {
+    "hue": 0.15,
+    "kind": "document",
+    "lines": [
+     "note",
+     "call back re:",
+     "Tues?"
+    ]
+   },
+   "verdict": {
+    "keep": false,
+    "kind": "notes",
+    "reason": "Handwritten note, hard to read"
+   },
+   "vision": {
+    "print": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "utility": true,
+    "score": 0.2,
     "face": 0.0
    }
   }

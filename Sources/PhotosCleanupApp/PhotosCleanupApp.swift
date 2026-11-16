@@ -65,8 +65,9 @@ struct ContentView: View {
         return LaunchSettings(
             ignoreAlbums: loadIgnoreAlbums(),
             keepAlbumPhotos: defaults.object(forKey: keepAlbumPhotosKey) as? Bool ?? true,
+            safeAlbums: Set(userIgnoreAlbums(file: safeAlbumsFile)),
             exportFolder: loadExportDestination(),
-            showsInspector: savedInspector(.all),
+            showsInspector: savedInspector(.overview),
             zoom: defaults.object(forKey: zoomKey) as? Int,
             aspectFit: defaults.bool(forKey: aspectFitKey))
     }
