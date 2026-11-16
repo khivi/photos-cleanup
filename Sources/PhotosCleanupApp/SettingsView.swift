@@ -28,35 +28,14 @@ struct SettingsView: View {
                 .font(.caption).foregroundStyle(.secondary)
             }
             Section {
-                Toggle("Keep photos in albums", isOn: $keepAlbumPhotos)
+                Toggle("Photos in my albums are safe", isOn: $keepAlbumPhotos)
                     .accessibilityIdentifier("settings-keep-album-photos")
                 Text(
-                    "On: a photo in one of your own albums is never suggested. Off: it can be. Favorites and photos you’ve already reviewed are always skipped."
+                    "The app won’t suggest a photo you put in an album. Favorites and photos you’ve already reviewed are never suggested."
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Ignored albums") {
-                Text(
-                    "Photos in these albums are not protected by being in them (Apple’s smart albums and “\(Passes.keepAlbum)” already are)."
-                )
-                .font(.caption).foregroundStyle(.secondary)
-                List(ignored, id: \.self, selection: $selection) { Text($0) }
-                    .frame(height: 120)
-                    .overlay { if ignored.isEmpty { Text("None").foregroundStyle(.secondary) } }
-                HStack {
-                    TextField("Album name", text: $newName).onSubmit(add)
-                        .accessibilityIdentifier("settings-album-name")
-                    Button("Add", action: add).disabled(trimmed.isEmpty)
-                        .accessibilityIdentifier("settings-album-add")
-                    Button("Remove") {
-                        ignored.removeAll { $0 == selection }
-                        selection = nil
-                        save()
-                    }
-                    .disabled(selection == nil)
-                    .accessibilityIdentifier("settings-album-remove")
-                }
-            }
+            if keepAlbumPhotos { ignoredAlbums }
             if let saveError {
                 Text("Could not save the ignored albums: \(saveError)").font(.caption).foregroundStyle(.red)
             }
@@ -66,6 +45,31 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var ignoredAlbums: some View {
+        Section("Albums that don’t count") {
+            Text(
+                "Photos in these albums can still be suggested. Apple’s own albums, like Selfies and Recents, already don’t count."
+            )
+            .font(.caption).foregroundStyle(.secondary)
+            List(ignored, id: \.self, selection: $selection) { Text($0) }
+                .frame(height: 120)
+                .overlay { if ignored.isEmpty { Text("None").foregroundStyle(.secondary) } }
+            HStack {
+                TextField("Album name", text: $newName).onSubmit(add)
+                    .accessibilityIdentifier("settings-album-name")
+                Button("Add", action: add).disabled(trimmed.isEmpty)
+                    .accessibilityIdentifier("settings-album-add")
+                Button("Remove") {
+                    ignored.removeAll { $0 == selection }
+                    selection = nil
+                    save()
+                }
+                .disabled(selection == nil)
+                .accessibilityIdentifier("settings-album-remove")
+            }
+        }
     }
 
     private var ungrouped: String {

@@ -259,8 +259,8 @@ Import keeps most duplicates out of your library before you import (see Import).
 Passes skip favorites and photos in your own albums.
 To change this, open Settings (⌘,):
 
-- Turn off Keep photos in albums to review photos in your own albums too.
-- Add albums under Ignored albums to make only those not count.
+- Turn off Photos in my albums are safe to review photos in your own albums too.
+- Add albums under Albums that don't count to make only those not protect their photos. This list shows only while the setting is on.
 
 Changes apply the next time the app opens.
 
