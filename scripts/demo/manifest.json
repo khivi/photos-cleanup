@@ -1163,64 +1163,6 @@
    "movie": true,
    "duration": 128,
    "favorite": true
-  },
-  {
-   "uuid": "demo-waiting-1",
-   "file": "demo-waiting-1.jpg",
-   "date": "2025-08-01T21:00:00Z",
-   "width": 640,
-   "height": 480,
-   "scene": {
-    "hue": 0.7,
-    "kind": "dark"
-   },
-   "albums": [
-    "Low Quality - Delete Me"
-   ],
-   "vision": {
-    "print": [
-     0.0,
-     0.0,
-     0.0,
-     0.0,
-     0.0,
-     0.0,
-     1.0,
-     0.0
-    ],
-    "utility": false,
-    "score": -1.0,
-    "face": 0.0
-   }
-  },
-  {
-   "uuid": "demo-waiting-2",
-   "file": "demo-waiting-2.jpg",
-   "date": "2025-08-02T21:00:00Z",
-   "width": 640,
-   "height": 480,
-   "scene": {
-    "hue": 0.7,
-    "kind": "dark"
-   },
-   "albums": [
-    "Low Quality - Delete Me"
-   ],
-   "vision": {
-    "print": [
-     0.0,
-     0.0,
-     0.0,
-     0.0,
-     0.0,
-     0.0,
-     0.0,
-     1.0
-    ],
-    "utility": false,
-    "score": -1.0,
-    "face": 0.0
-   }
   }
  ]
 }

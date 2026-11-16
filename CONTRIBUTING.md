@@ -112,7 +112,7 @@ Do this before each release. It has two parts. Both run `scripts/check-sandbox.s
 **Demo part.** It covers every file and settings path, including the steps that change photos, because the demo never touches your library.
 
 1. Run `scripts/app.sh demo`.
-2. Open each tab. Mark photos Keep and Remove, accept them, then click Apply to Photos…. Click Delete in Photos… in In Delete Me Albums.
+2. Open each tab. Mark photos Keep and Remove, accept them, then click Apply to Photos….
 3. Export: choose a new, empty folder and export.
 4. Import: add `.build/demo-import`, click Check, then Sort. Its sidebar path starts with `~`.
 5. Change the zoom. Quit and open the demo again with `open ".build/Photos Cleanup Demo.app" --args --demo`. The zoom, the Export folder and the Import folder are kept, and no folder shows "Not found".

@@ -8,7 +8,7 @@ private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().dele
 
 @Test func demoManifestLoads() throws {
     let photos = try DemoLibrary(directory: fixtures).photos()
-    #expect(photos.count == 46)
+    #expect(photos.count == 44)
     let byID = Dictionary(uniqueKeysWithValues: photos.map { ($0.uuid, $0) })
     #expect(byID["demo-screenshot-1"]?.screenshot == true)
     #expect(byID["demo-video-5"]?.isMovie == true)
@@ -16,7 +16,6 @@ private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().dele
     #expect(byID["demo-burst-a4"]?.edited == true)
     #expect(byID["demo-photo-3"]?.albums == ["Family Trip"])
     #expect(byID["demo-photo-8"]?.date == nil)
-    #expect(byID["demo-waiting-1"]?.albums == ["Low Quality - Delete Me"])
 }
 
 @Test func demoAlbumsAndDeletesChangePhotos() async throws {
@@ -27,17 +26,18 @@ private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().dele
 
     #expect(try lib.delete(uuids: ["demo-photo-1", "nope"]) == 1)
     #expect(try lib.delete(uuids: ["demo-photo-1"]) == 0)
-    #expect(try lib.photos().count == 45)
+    #expect(try lib.photos().count == 43)
     #expect(try lib.photos().contains { $0.uuid == "demo-photo-1" } == false)
-    #expect(try lib.exportable().count == 45)
+    #expect(try lib.exportable().count == 43)
     #expect(try lib.importIndex().contains { $0.id == "demo-photo-1" } == false)
     #expect(try lib.add(album: "Keepers", uuids: ["demo-photo-1"]) == 0)
 }
 
 @Test func demoImportIndexSkipsDeleteMePhotos() throws {
     let lib = try DemoLibrary(directory: fixtures)
+    _ = try lib.add(album: "Low Quality - Delete Me", uuids: ["demo-burst-a2"])  // left by an older version
     let ids = Set(try lib.importIndex().map(\.id))
-    #expect(!ids.contains("demo-waiting-1"))
+    #expect(!ids.contains("demo-burst-a2"))
     #expect(!ids.contains("demo-photo-8"))  // no capture date
     let shot = try #require(try lib.importIndex().first { $0.id == "demo-burst-a1" })
     #expect((shot.width, shot.height) == (640, 480))

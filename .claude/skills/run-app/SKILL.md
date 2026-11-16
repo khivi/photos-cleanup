@@ -24,7 +24,7 @@ Run when the user asks for a sandbox check, or before a release. These are the s
 1. Run `scripts/check-sandbox.sh entitlements`. Stop if it fails.
 2. Start `scripts/check-sandbox.sh watch` with `run_in_background`. Add `--hidden` to every `scripts/app.sh run` or `demo` below, so the app opens behind the user's windows without taking focus.
 3. Demo part: quit any running copy, then follow its steps. Drive "Photos Cleanup Demo" with the `cmux-cua` tools (`launch_app` attaches to the running copy), and read the window state after each action. Find controls by their accessibility ids (`CONTRIBUTING.md` → Driving the app).
-   - Every step is safe here, Apply to Photos… and Delete in Photos… included: the demo never touches the user's library.
+   - Every step is safe here, Apply to Photos… included: the demo never touches the user's library.
    - Export into a new folder under `/tmp`. The folder picker is a separate system panel. If you can't drive it, ask the user to pick the folder.
 4. Photos part: quit the demo, then follow its steps on "Photos Cleanup Dev".
    - Never click Apply to Photos… or Delete in Photos…: both delete. The app is working on the user's real library.
