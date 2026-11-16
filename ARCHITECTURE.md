@@ -42,14 +42,14 @@ The Swift package has no dependencies.
 | `Cleanup.swift` | The `Cleanup` actor. It holds the photo list, the Vision job, the verdict queue, commits and the caches. |
 | `Export.swift` | The `Exporter` actor and `ExportManifest`. Export copies originals, edits and Live Photo videos to `<destination>/YYYY/MM`. `.photos-export.tsv` there records what each run wrote, so the next run copies only new or changed photos. It never deletes from the destination. |
 | `Import.swift` | The `Importer` actor and `ImportScan`. Import checks a folder of old photos against the library by pixel size and capture time, and plans moves into `Done/` (in the library, or a copy) and `Import/` (to bring into Photos). It never writes to the library. |
-| `Review.swift` | `ReviewModel` (`@Observable`, main actor). The sidebar and its counts, keep/delete marks with undo, the selection, the preview, what Confirm sends, Delete in Photos…, progress, the In Delete Me Albums list (read from the Delete Me albums), and every label the window shows. |
+| `Review.swift` | `ReviewModel` (`@Observable`, main actor). The sidebar and its counts, keep/delete marks with undo, the selection, the preview, what Accept sends, Delete in Photos…, progress, the In Delete Me Albums list (read from the Delete Me albums), and every label the window shows. |
 
 `PhotosCleanupApp` has these files:
 
 | File | Role |
 | --- | --- |
 | `PhotosCleanupApp.swift` | The app, its window and the Settings window. It calls Core's `launch(...)` with PhotoKit and the saved settings, then shows the review screen. |
-| `ReviewScreen.swift` | The sidebar, the toolbar, the grid, the Info panel (an `.inspector`, ⌘I) and the menu commands. Bursts and Similar show one row per group: the ★ full size, the others smaller, "+N" past one row. The other passes and All show month sections. Each section has Confirm and Confirm Up to Here buttons, each photo in Bursts and Similar has a ☆ on hover that picks it as the ★ (`pickBest`), and the toolbar has Undo. The keys (Return, ⇧Return, 1–9, ⌘Z) are shortcuts for these buttons. The grid takes the arrow keys, Space, Return and 1–9; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
+| `ReviewScreen.swift` | The sidebar, the toolbar, the grid, the Info panel (an `.inspector`, ⌘I) and the menu commands. Bursts and Similar show one row per group: the ★ as the hero (1.8× the cell, capped at 420 pt and the window width), the other shots smaller beside it, "+N" past the ★'s height. The other passes and All show month sections. Each section has Accept and Accept Up to Here buttons, each photo in Bursts and Similar has a ☆ on hover that picks it as the ★ (`pickBest`), and the toolbar has Undo. The keys (Return, ⇧Return, 1–9, ⌘Z) are shortcuts for these buttons. The grid takes the arrow keys, Space, Return and 1–9; K, ⌫ and the other shortcuts are menu items. It refreshes the model every 2 s while work runs. |
 | `Thumbnails.swift` | One `PHCachingImageManager`: high-quality thumbnails, cached about 30 rows ahead of the visible ones, and the large preview. The settings come from the grid spike (`feea7cb`). |
 | `ExportView.swift` | The Export screen: destination, counts, progress and failures. |
 | `ImportView.swift` | The Import screen: the checked folders, their counts, Sort into Done and Import…, and Open Import in Photos. |
@@ -109,7 +109,7 @@ sequenceDiagram
 2. **Vision analysis.** A background job sends all still photos to `PhotoKitLibrary.vision` in batches of 20. Results go to a disk cache. Bursts, Similar, Low Quality and Paperwork read this cache.
 3. **Verdicts.** When you open Screenshots or Paperwork, the classifier queues the photos with no verdict. It renders each as a 1024 px image and asks Foundation Models. Verdicts go to a disk cache. A photo the model cannot judge is not queued again until the next launch.
 4. **Thumbnails and preview.** The views ask `PHCachingImageManager` directly. Nothing is written to disk. The preview shows the local copy first. If the full photo is only in iCloud, Photos downloads it.
-5. **Confirm, then Apply.** A section's Confirm or Confirm Up to Here moves the section's photos to Not in Photos Yet (in a pass every photo, in All only the Delete marks): `ReviewModel.pending`, saved in `pending`, and held out of every pass by `Cleanup.hold`. Nothing is written to Photos, so ⌘Z restores the app's state alone. Apply to Photos… calls `Cleanup.commit` once per pass, which adds the photos to each album and logs your decision against the model's verdict. Apply is not undoable; nothing is deleted until Delete in Photos…. In All, only the Delete marks move, to one album ("All - Delete Me"); nothing is logged, because All has no verdicts.
+5. **Accept, then Apply.** A section's Accept or Accept Up to Here moves the section's photos to Not in Photos Yet (in a pass every photo, in All only the Remove marks): `ReviewModel.pending`, saved in `pending`, and held out of every pass by `Cleanup.hold`. Nothing is written to Photos, so ⌘Z restores the app's state alone. Apply to Photos… calls `Cleanup.commit` once per pass, which adds the photos to each album and logs your decision against the model's verdict. Apply is not undoable; nothing is deleted until Delete in Photos…. In All, only the Remove marks move, to one album ("All - Delete Me"); nothing is logged, because All has no verdicts.
 6. **Delete in Photos.** In In Delete Me Albums, `Cleanup.delete` keeps only photos in a Delete Me album and calls `PhotoLibrary.delete`. macOS shows its own confirmation. If you cancel, PhotoKit reports a user cancel, the library returns 0 and nothing changes. Otherwise the photos leave the model's lists. Photos keeps them in Recently Deleted for 30 days.
 
 Blocking PhotoKit and Vision calls run off the actor, so the screen never waits behind a batch.
@@ -130,7 +130,7 @@ After such a change, rename the constant to force a recompute. Old files stay in
 
 `Application Support/photos-cleanup/albums_ignore` lists albums whose membership doesn't protect a photo.
 
-`pending` in the same folder lists confirmed photos not yet applied, as `bursts<TAB>uuid<TAB>keep`.
+`pending` in the same folder lists accepted photos not yet applied, as `bursts<TAB>uuid<TAB>keep`.
 
 ## Security
 

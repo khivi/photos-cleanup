@@ -147,7 +147,7 @@ struct PhotoCell: View {
     let mark: Mark
     var selected = false
     var best = false
-    /// A small cell in a group's row: the Delete badge is just ✗, and no kind or duration pill.
+    /// A small cell in a group's row: no Remove tag (dimming says it), a bare ★, and no kind or duration pill.
     var compact = false
     /// Pick as Best: set in Bursts and Similar. A ☆ on hover where the ★ goes, and in the context menu.
     var pickBest: (() -> Void)?
@@ -181,9 +181,11 @@ struct PhotoCell: View {
             }
             .overlay(alignment: .topLeading) { badge.padding(6) }
             .overlay(alignment: .topTrailing) {
-                if best {
+                if best && compact {
                     Image(systemName: "star.fill").foregroundStyle(.yellow).shadow(radius: 2).padding(6).help(
-                        "Best shot")
+                        ReviewModel.bestBadge)
+                } else if best {
+                    label(ReviewModel.bestBadge, .yellow, text: .black).padding(6)
                 } else if hovering, let pickBest {
                     Button(action: pickBest) {
                         Image(systemName: "star").foregroundStyle(.white).shadow(radius: 2).padding(6)
@@ -233,10 +235,10 @@ struct PhotoCell: View {
     @ViewBuilder private var badge: some View {
         switch mark {
         case .none: EmptyView()
-        case .deleteMe: label("✗ Delete Me", .red)
-        case .decision(.delete): label(compact ? "✗" : "✗ Delete", .red)
+        case .deleteMe: label(ReviewModel.deleteMeBadge, .red)
+        case .decision(.delete): if !compact { label(Decision.delete.badge, .gray.opacity(0.8)) }
         case .decision(.keep): EmptyView()  // Keep is the default: not marked
-        case .decision(.unsure): label(compact ? "?" : "? Unsure", .gray)
+        case .decision(.unsure): label(compact ? "?" : Decision.unsure.badge, .gray)
         }
     }
 
@@ -245,8 +247,8 @@ struct PhotoCell: View {
             .background(.black.opacity(0.6), in: .rect(cornerRadius: 4)).padding(6)
     }
 
-    private func label(_ text: String, _ color: Color) -> some View {
-        Text(text).font(.caption.weight(.semibold)).foregroundStyle(.white)
+    private func label(_ text: String, _ color: Color, text fg: Color = .white) -> some View {
+        Text(text).font(.caption.weight(.semibold)).foregroundStyle(fg)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(color, in: .rect(cornerRadius: 4))
     }
@@ -269,7 +271,12 @@ struct PhotoPreview: View {
                 }
                 .overlay(alignment: .topLeading) {
                     HStack(spacing: 6) {
-                        if let badge = preview.badge { chip(badge, preview.badge == "✓ Keep" ? .green : .red) }
+                        if let badge = preview.badge {
+                            chip(
+                                badge,
+                                badge == Decision.keep.badge
+                                    ? .green : badge == ReviewModel.deleteMeBadge ? .red : .gray)
+                        }
                         if preview.best { Image(systemName: "star.fill").foregroundStyle(.yellow) }
                     }
                     .padding(16)

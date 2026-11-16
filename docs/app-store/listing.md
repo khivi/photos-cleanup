@@ -1,6 +1,6 @@
 # App Store Connect listing: Photos Cleanup: On-Device AI
 
-Draft fields for version 0.11.0. Category: Photography. Price: free.
+Draft fields for version 0.11.0. The Description is updated for the next version (keep-first wording); 0.11.0 was submitted with the earlier text. Category: Photography. Price: free.
 
 Subtitle, promotional text and keywords carry no price words: App Review rejects them there (guideline 2.3.7).
 
@@ -16,29 +16,29 @@ Clear screenshots and bursts
 Review screenshots, paperwork, bursts and blurry shots in one grid. Analysis runs on your Mac, and nothing is deleted until you confirm in Photos.
 ```
 
-## Description (4000 max, 2625 used)
+## Description (4000 max, 2662 used)
 
 ```text
 Photos Cleanup is free. It has no subscription, no account and no limit on how many photos you delete.
 
 It runs on your Mac. Apple's on-device Vision and Foundation Models do the analysis. The app makes no network calls, and nothing leaves your Mac.
 
-It never deletes on its own. When you mark a photo to delete, the app files it into an album such as "Screenshots - Delete Me". Photos are deleted only when you click Delete in Photos… and confirm in the macOS dialog. Photos then keeps them in Recently Deleted for 30 days.
+It never deletes on its own. When you mark a photo to remove, the app files it into an album such as "Screenshots - Delete Me". Photos are deleted only when you click Delete in Photos… and confirm in the macOS dialog. Photos then keeps them in Recently Deleted for 30 days.
 
 PASSES
 
-Pick a pass in the sidebar and review it in one grid. Mark a photo keep or delete with one key.
+Pick a pass in the sidebar and review it in one grid. Mark a photo keep or remove with one key.
 
 Screenshots: your screenshots. The on-device model marks the ones that look no longer needed, like old codes, maps and confirmations.
 Paperwork: photos of receipts, tickets, labels and documents. The model marks the ones that look no longer needed.
-Bursts: several shots taken within a minute. The best one is kept, and the rest are marked to delete.
-Similar: shots of the same scene on the same day. The best one is kept, and the rest are marked to delete.
+Bursts: several shots taken within a minute. The best one is kept, and the rest are marked to remove.
+Similar: shots of the same scene on the same day. The best one is kept, and the rest are marked to remove.
 Low Quality: shots that look blurry, dark or taken by accident, worst first.
-Videos: your videos, longest first. Clips under 2 seconds are marked to delete.
+Videos: your videos, longest first. Clips under 2 seconds are marked to remove.
 
-In Bursts and Similar, the best shot is the one with the best faces: sharp, well lit and facing the camera.
+In Bursts and Similar, the best shot is the one with the highest Vision score, or the best faces when there are faces. Pick another with one click.
 
-You work through a pass in sections and confirm each one. Confirmed photos wait until you click Apply to Photos…. Undo reverses a confirm. What is left in a pass is what you have not confirmed, so you can work through a big library over several sittings.
+You work through a pass in sections and accept each one. Accepted photos wait until you click Apply to Photos…. Undo reverses an accept. What is left in a pass is what you have not accepted, so you can work through a big library over several sittings.
 
 SAFE BY DEFAULT
 

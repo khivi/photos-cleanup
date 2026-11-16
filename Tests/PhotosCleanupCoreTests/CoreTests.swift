@@ -70,6 +70,7 @@ import Testing
         #expect(Passes.deleteAlbum(key) == "\(title) - Delete Me")
         #expect(Passes.keepAlbum(key) == "\(title) - Keep")
         #expect(Passes.about[key]?.isEmpty == false, "\(key) needs a tooltip")
+        #expect(Passes.captions[key]?.isEmpty == false, "\(key) needs a caption")
     }
     // All's one album derives from the All title, and the All tab reads that title.
     #expect(Passes.allDeleteAlbum == "\(Passes.allTitle) - Delete Me")

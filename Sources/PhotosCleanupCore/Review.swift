@@ -19,14 +19,14 @@ public enum Decision: Sendable, Equatable {
     public var label: String {
         switch self {
         case .keep: "Keep"
-        case .delete: "Delete"
+        case .delete: "Remove"
         case .unsure: "Unsure"
         }
     }
     public var badge: String {
         switch self {
         case .keep: "✓ Keep"
-        case .delete: "✗ Delete"
+        case .delete: "Remove"
         case .unsure: "? Unsure"
         }
     }
@@ -120,8 +120,6 @@ public final class ReviewModel {
     private let importer: Importer?
     private let dir: URL
     private let defaults: UserDefaults
-    /// Pass keys whose caption shows as one line.
-    private var foldedCaptions: Set<String>
 
     public init(
         cleanup: Cleanup, exporter: Exporter? = nil, exportBookmark: FolderBookmark? = nil, importer: Importer? = nil,
@@ -134,7 +132,6 @@ public final class ReviewModel {
         self.dir = dir
         self.defaults = defaults
         pending = loadPending(dir: dir).mapValues { Pending(pass: $0.pass, keep: $0.keep) }
-        foldedCaptions = Set(defaults.stringArray(forKey: foldedCaptionsKey) ?? [])
         importBookmarks = loadImportFolders(defaults: defaults)
         importFolder = importFolders.first
         undoObservers = [Notification.Name.NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange].map {
@@ -153,14 +150,14 @@ public final class ReviewModel {
 
     public var best: Set<String> { Set(groups.map(\.best)) }
 
-    /// Show only photos marked Delete (in All, also those already in a Delete Me album). Off on every view change.
+    /// Show only photos marked Remove (in All, also those already in a Delete Me album). Off on every view change.
     public var onlyDelete = false {
         didSet {
             if onlyDelete { onlyUnsure = false }
             pruneSelection()
         }
     }
-    public static let onlyDeleteLabel = "Show Only Delete"
+    public static let onlyDeleteLabel = "Show Only Remove"
     /// Show only photos marked Unsure. Off on every view change.
     public var onlyUnsure = false {
         didSet {
@@ -225,14 +222,14 @@ public final class ReviewModel {
         [
             (
                 .all, Passes.allTitle,
-                "Every photo in your library, except those waiting in Not in Photos Yet. Mark photos Delete to move them to “\(Passes.allDeleteAlbum)”."
+                "Every photo in your library, except those waiting in Not in Photos Yet. Mark photos Remove to move them to “\(Passes.allDeleteAlbum)”."
             )
         ]
         + Passes.all.map { (.pass($0.key), $0.title, Passes.about[$0.key] ?? "") }
         + [
             (
                 .pending, "Not in Photos Yet",
-                "Photos you confirmed, not yet in their albums. Apply to Photos… adds them; nothing changes in Photos before."
+                "Photos you accepted, not yet in their albums. Apply to Photos… adds them; nothing changes in Photos before."
             ),
             (.deleted, "In Delete Me Albums", "Photos waiting in a Delete Me album. Delete them there in Photos."),
             (
@@ -312,21 +309,16 @@ public final class ReviewModel {
 
     public var inPass: Bool { view.passKey != nil }
 
-    /// "N candidates · M to delete", "N photos" or "N in Delete Me albums".
+    /// "41 photos · keeping 29 · removing 12", "N photos" or "N in Delete Me albums".
     public var summary: String {
         if view == .deleted { return "\(deleted.count.formatted()) in Delete Me albums" }
         if view == .pending { return "\(pending.count.formatted()) to apply to Photos" }
         if view == .export { return exportCountsLabel }
         if view == .importFolders { return importSummary }
-        if inPass {
-            let unsure = photos.count { decisions[$0.id] == .unsure }
-            return
-                "\(photos.count.formatted()) \(photos.count == 1 ? "candidate" : "candidates") · \(doomed.count.formatted()) to delete"
-                + (unsure > 0 ? " · \(unsure.formatted()) unsure" : "")
-        }
         let unsure = photos.count { decisions[$0.id] == .unsure }
         let n = "\(photos.count.formatted()) \(photos.count == 1 ? "photo" : "photos")"
-        return n + (doomed.isEmpty ? "" : " · \(doomed.count.formatted()) to delete")
+        let keeping = inPass ? " · keeping \(photos.count { decisions[$0.id] == .keep }.formatted())" : ""
+        return n + keeping + (doomed.isEmpty && !inPass ? "" : " · removing \(doomed.count.formatted())")
             + (unsure > 0 ? " · \(unsure.formatted()) unsure" : "")
     }
 
@@ -339,18 +331,9 @@ public final class ReviewModel {
         return "\(Passes.about[key] ?? "") \(spared) never suggested."
     }
 
-    /// The line above a pass's grid; in a grouped pass, then its keys.
-    public var passCaption: String? {
-        view.passKey.map(passNote)
-    }
-    public var captionFolded: Bool { view.passKey.map(foldedCaptions.contains) ?? false }
-    public var captionToggleLabel: String { captionFolded ? "Show More" : "Show Less" }
-
-    public func toggleCaption() {
-        guard let key = view.passKey else { return }
-        if foldedCaptions.remove(key) == nil { foldedCaptions.insert(key) }
-        defaults.set(foldedCaptions.sorted(), forKey: foldedCaptionsKey)
-    }
+    /// The line above a pass's grid: what it recommends. `captionHelp`, its tooltip, says how.
+    public var passCaption: String? { view.passKey.flatMap { Passes.captions[$0] } }
+    public var captionHelp: String? { view.passKey.map(passNote) }
 
     /// A sidebar ring's tooltip: which job, and how far.
     static func jobLabel(_ j: JobProgress) -> String {
@@ -388,11 +371,11 @@ public final class ReviewModel {
     }
     public var emptyStateLabel: String {
         onlyDelete
-            ? "Nothing marked Delete."
+            ? "Nothing marked Remove."
             : onlyUnsure ? "Nothing marked Unsure." : view == .pending ? Self.nothingPending : Self.emptyState
     }
     public static let nothingPending =
-        "Nothing here. Confirm photos in a pass; they wait here until Apply to Photos…."
+        "Nothing here. Accept photos in a pass; they wait here until Apply to Photos…."
     public static let emptyState = "Nothing left to review. Photos already filed in this pass’s albums are hidden."
 
     // MARK: Commit preview (Phase 5 labels)
@@ -419,7 +402,17 @@ public final class ReviewModel {
     public var canDeleteInPhotos: Bool { view == .deleted && !loading && !deleting && !deleted.isEmpty }
     public var inspectorToggleLabel: String { showsInspector ? "Hide Info" : "Show Info" }
     public static let keepAllLabel = "Keep All"
-    public static let deleteAllLabel = "Delete All"
+    public static let deleteAllLabel = "Remove All"
+    public static let deleteMeBadge = "✗ Delete Me"
+    public static let bestBadge = "★ Best shot"
+    /// Above the photos beside a group's ★.
+    public var othersLabel: String? {
+        switch view.passKey {
+        case "bursts": "Other shots from this burst"
+        case "similar": "Other shots from this moment"
+        default: nil
+        }
+    }
 
     // MARK: Loading
 
@@ -595,8 +588,8 @@ public final class ReviewModel {
         if grouping { undoName = name ?? "" }
     }
 
-    /// ⌫: marks Delete, or on the Import screen removes the selected folder from the list (never from disk).
-    public var deleteKeyLabel: String { view == .importFolders ? "Remove from List" : "Delete" }
+    /// ⌫: marks Remove, or on the Import screen removes the selected folder from the list (never from disk).
+    public var deleteKeyLabel: String { view == .importFolders ? "Remove from List" : Decision.delete.label }
     public var canDeleteKey: Bool { view == .importFolders ? importFolder != nil && importBusy == nil : canMark }
     public func deleteKey() {
         guard canDeleteKey else { return }
@@ -624,7 +617,7 @@ public final class ReviewModel {
         guard inPass else { return }  // marking the whole library isn't useful
         apply(
             Dictionary(photos.map { ($0.id, (d, true)) }, uniquingKeysWith: { a, _ in a }),
-            name: d == .keep ? "Keep All" : "Delete All")
+            name: d == .keep ? Self.keepAllLabel : Self.deleteAllLabel)
     }
 
     // MARK: Selection
@@ -663,7 +656,7 @@ public final class ReviewModel {
     public var preview: Preview? {
         guard previewing, let id = anchor else { return nil }
         let verdict = photos.first { $0.id == id }?.verdict
-        let badge: String? = view == .deleted ? "✗ Delete Me" : decision(id).map(\.badge)
+        let badge: String? = view == .deleted ? Self.deleteMeBadge : decision(id).map(\.badge)
         return Preview(
             id: id, badge: badge, best: isBest(id), reason: verdict.map { "\($0.kind): \($0.reason)" } ?? scoreLine(id),
             video: displayed.first { $0.id == id }?.isMovie ?? false)
@@ -747,9 +740,11 @@ public final class ReviewModel {
             case .unsure: target = nil  // stays in the pass
             }
         }
+        let explained = why?.id == id  // the Why section already says it
         return Info(
             id: id, date: Self.dateLabel(p.photo, locale: locale, timeZone: timeZone), kind: p.photo.kindLabel,
-            verdict: p.verdict.map { "\($0.kind): \($0.reason)" }, score: scoreLine(id),
+            verdict: explained ? nil : p.verdict.map { "\($0.kind): \($0.reason)" },
+            score: explained ? nil : scoreLine(id),
             albums: p.photo.albums.isEmpty
                 ? "In no album"
                 : "In \(p.photo.albums.count == 1 ? "album" : "albums"): \(p.photo.albums.sorted().joined(separator: ", "))",
@@ -761,14 +756,14 @@ public final class ReviewModel {
         return p.date.map { $0.formatted(style) } ?? "Unknown date"
     }
 
-    /// What VoiceOver reads for a grid cell: "Video, 0:05, May 3, 2014 at 9:00 AM, marked Delete, ★ best pick, junk: blurry".
+    /// What VoiceOver reads for a grid cell: "Video, 0:05, May 3, 2014 at 9:00 AM, marked Remove, ★ best shot, junk: blurry".
     public func accessibilityLabel(_ p: PassPhoto, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
         let mark =
             decision(p.id).map { "marked \($0.label)" }
             ?? (view == .deleted || deletedAlbum[p.id] != nil ? "in Delete Me" : nil)
         return [
             p.photo.kindLabel, p.photo.durationLabel, Self.dateLabel(p.photo, locale: locale, timeZone: timeZone), mark,
-            isBest(p.id) ? "★ best pick" : nil, p.verdict.map { "\($0.kind): \($0.reason)" },
+            isBest(p.id) ? "★ best shot" : nil, p.verdict.map { "\($0.kind): \($0.reason)" },
         ].compactMap { $0 }.joined(separator: ", ")
     }
 
@@ -786,6 +781,43 @@ public final class ReviewModel {
         if best.edited { return "\(line) · ★ is edited" }
         if let f = faces[g.best] { return "\(line) · ★ face \(fmt(f))" }
         return "\(line) · ★ scored \(scores[g.best].map(fmt) ?? "?")"
+    }
+
+    public static let whyTitle = "Why this photo?"
+
+    /// The Info panel's "Why this photo?": what the app measured, never a signal it doesn't compute.
+    public struct Why: Sendable, Equatable {
+        public let id: String
+        public let lines: [String]
+    }
+
+    /// The selected photo's reasons, if it is a group's ★ or has a verdict; with nothing selected in
+    /// Bursts or Similar, the current group's ★.
+    public var why: Why? {
+        let id = selected.count == 1 ? anchor : selected.isEmpty && isGrouped ? currentStar : nil
+        guard inPass, let id, let p = photos.first(where: { $0.id == id }) else { return nil }
+        if let v = p.verdict {
+            return Why(
+                id: id,
+                lines: ["Apple Intelligence suggests \(v.keep ? "keeping" : "removing") it: \(v.reason)"])
+        }
+        guard isBest(id), let g = groups.first(where: { $0.photos.contains { $0.id == id } }) else { return nil }
+        let others = g.photos.filter { $0.id != id }
+        let fmt = { (x: Double) in x.formatted(.number.precision(.fractionLength(2))) }
+        func compare(_ best: String, _ plain: String, _ x: Double?, _ of: [String: Double]) -> String? {
+            guard let x else { return nil }
+            guard let top = others.compactMap({ of[$0.id] }).max() else { return "\(plain) \(fmt(x))" }
+            return x >= top
+                ? "\(best) in the group: \(fmt(x)) (next best \(fmt(top)))"
+                : "\(plain) \(fmt(x)) (best in the group \(fmt(top)))"
+        }
+        let lines = [
+            starred[g.best] == id && id != g.best ? "You picked it as the best shot." : nil,
+            p.photo.edited ? "You edited it in Photos." : nil,
+            compare("Best face quality", "Face quality", faces[id], faces),
+            compare("Highest Vision aesthetics score", "Vision aesthetics score", scores[id], scores),
+        ].compactMap { $0 }
+        return lines.isEmpty ? nil : Why(id: id, lines: lines)
     }
 
     /// The Info panel's text when it has no single photo.
@@ -1028,8 +1060,6 @@ extension Photo {
 
 // MARK: Sections and Confirm
 
-let foldedCaptionsKey = "foldedCaptions"
-
 extension BurstGroup {
     /// The ★ first, the rest in time order: a group's row shows it largest, and 1 is its key.
     var bestFirst: BurstGroup {
@@ -1061,6 +1091,9 @@ extension ReviewModel {
         return anchor.flatMap { a in gs.first { $0.photos.contains { $0.id == a } } } ?? gs.first
     }
 
+    /// The current group's ★: the user's pick, else Vision's.
+    var currentStar: String? { currentGroup.map { starred[$0.best] ?? $0.best } }
+
     public func isCurrent(_ g: BurstGroup) -> Bool { hasSections && currentGroup?.best == g.best }
     /// The number key that picks this photo as best: its place in the current group, 1–9.
     public func keyNumber(_ id: String) -> Int? {
@@ -1070,27 +1103,27 @@ extension ReviewModel {
 
     /// A section confirms what it shows: a pass files every photo, All only its Delete marks.
     public var canConfirm: Bool { hasSections && !loading && !committing && currentGroup != nil }
-    /// Why a Confirm filed nothing, in the status bar: the buttons stay enabled, so a click always answers.
+    /// Why an Accept filed nothing, in the status bar: the buttons stay enabled, so a click always answers.
     func nothingToConfirm(_ sections: Int) -> String {
         let here = sections == 1 ? "this \(sectionUnit)" : "these \(sectionUnit)s"
         return view == .all
-            ? "Nothing to confirm in \(here): mark photos Delete (⌫) first."
-            : "Nothing to confirm in \(here): every photo is Unsure. Mark them K or ⌫ first."
+            ? "Nothing to accept in \(here): mark photos Remove (⌫) first."
+            : "Nothing to accept in \(here): every photo is Unsure. Mark them K or ⌫ first."
     }
     private func filesSomething(_ gs: [BurstGroup]) -> Bool {
         let files: (Decision?) -> Bool = view == .all ? { $0 == .delete } : { $0 != .unsure }
         return gs.contains { $0.photos.contains { files(decisions[$0.id]) } }
     }
-    public static let confirmLabel = "Confirm"
-    public static let confirmUpToHereLabel = "Confirm Up to Here"
+    public static let confirmLabel = "Accept"
+    public static let confirmUpToHereLabel = "Accept Up to Here"
 
-    /// Return, or a section's Confirm button: files the section as marked, then selects the next one.
+    /// Return, or a section's Accept button: files the section as marked, then selects the next one.
     public func confirm(_ section: BurstGroup? = nil) async {
         guard canConfirm, let g = section ?? currentGroup else { return }
         await confirm([full(g)], name: Self.confirmLabel)
     }
 
-    /// ⇧Return, or a section's Confirm Up to Here button: confirms every section from the top through
+    /// ⇧Return, or a section's Accept Up to Here button: accepts every section from the top through
     /// `section` (default the current one), for a pass reviewed by scrolling.
     public func confirmUpToHere(_ section: BurstGroup? = nil) async {
         guard canConfirm, let g = section ?? currentGroup else { return }
@@ -1100,7 +1133,7 @@ extension ReviewModel {
     }
 
     /// A photo's ☆, or a number key: this photo becomes its group's ★ and Keep, the rest Delete. Not confirmed:
-    /// Return or the group's Confirm does that.
+    /// Return or the group's Accept does that.
     public func pickBest(_ id: String) {
         guard isGrouped, let g = groups.first(where: { $0.photos.contains { $0.id == id } }) else { return }
         undoManager.beginUndoGrouping()  // the ★ and the marks undo as one
@@ -1128,14 +1161,14 @@ extension ReviewModel {
     private var sectionUnit: String { isGrouped ? "group" : "month" }
     /// A section's tooltips name the key only on the current section, where the key acts.
     public func confirmHelp(_ g: BurstGroup) -> String {
-        "Confirm this \(sectionUnit)" + (inPass ? "" : ": files its Delete marks") + (isCurrent(g) ? " (Return)" : "")
+        "Accept this \(sectionUnit)" + (inPass ? "" : ": files its Remove marks") + (isCurrent(g) ? " (Return)" : "")
     }
     public func confirmUpToHereHelp(_ g: BurstGroup) -> String {
-        "Confirm every section from the top through this \(sectionUnit)" + (isCurrent(g) ? " (⇧Return)" : "")
+        "Accept every section from the top through this \(sectionUnit)" + (isCurrent(g) ? " (⇧Return)" : "")
     }
     public static let pickBestLabel = "Pick as Best"
     public func pickBestHelp(_ id: String) -> String {
-        "Pick as best: keep this photo, mark the rest of the group Delete" + (keyNumber(id).map { " (\($0))" } ?? "")
+        "Pick as best: keep this photo, mark the rest of the group Remove" + (keyNumber(id).map { " (\($0))" } ?? "")
     }
     public var canPickBest: Bool { isGrouped && !loading && !committing }
 
@@ -1163,7 +1196,7 @@ extension ReviewModel {
         }
     }
 
-    /// The whole section: Show Only Delete hides its Keep photos, and Confirm covers them too.
+    /// The whole section: Show Only Remove hides its Keep photos, and Accept covers them too.
     private func full(_ g: BurstGroup) -> BurstGroup { groups.first { $0.best == g.best } ?? g }
 }
 
@@ -1192,10 +1225,20 @@ extension ReviewModel {
         return order.map { BurstGroup(photos: byMonth[$0]!, best: $0) }
     }
 
-    /// A section header: "October 2026 · 214" for a month, the group's date and count in Bursts and Similar.
+    /// A section header: "October 2026 · 214" for a month; in Bursts and Similar
+    /// "Jan 1, 2024 · keeping 1 · removing 5 similar photos", counted over the whole group.
     public func header(_ g: BurstGroup, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
         if view == .pending { return "\(g.best) · \(g.photos.count.formatted(.number.locale(locale)))" }
-        guard !isGrouped else { return g.headerLabel(locale: locale, timeZone: timeZone) }
+        if isGrouped {
+            let marks = full(g).photos.map { decisions[$0.id] }
+            let n = { (d: Decision) in marks.count { $0 == d } }
+            let fmt = { (x: Int) in x.formatted(.number.locale(locale)) }
+            return [
+                g.dateLabel(locale: locale, timeZone: timeZone), "keeping \(fmt(n(.keep)))",
+                n(.delete) > 0 ? "removing \(fmt(n(.delete))) similar \(n(.delete) == 1 ? "photo" : "photos")" : nil,
+                n(.unsure) > 0 ? "\(fmt(n(.unsure))) unsure" : nil,
+            ].compactMap { $0 }.joined(separator: " · ")
+        }
         let style = Date.FormatStyle(locale: locale, timeZone: timeZone).year().month(.wide)
         let month = g.photos.compactMap(\.date).first.map { $0.formatted(style) } ?? "Unknown date"
         return "\(month) · \(g.photos.count.formatted(.number.locale(locale)))"
@@ -1205,13 +1248,11 @@ extension ReviewModel {
 // MARK: Burst headers
 
 extension BurstGroup {
-    /// "Jan 1, 2024 · 3 photos": the date of the first shot and the count. The date is left out
-    /// when no shot has one. Locale and time zone are parameters so tests can pin them.
-    public func headerLabel(locale: Locale = .current, timeZone: TimeZone = .current) -> String {
-        let count = "\(photos.count) \(photos.count == 1 ? "photo" : "photos")"
-        guard let first = photos.compactMap(\.date).min() else { return count }
+    /// "Jan 1, 2024": the date of the first shot, nil when no shot has one. Locale and time zone are
+    /// parameters so tests can pin them.
+    public func dateLabel(locale: Locale = .current, timeZone: TimeZone = .current) -> String? {
         let style = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: locale, timeZone: timeZone)
-        return "\(first.formatted(style)) · \(count)"
+        return photos.compactMap(\.date).min().map { $0.formatted(style) }
     }
 }
 

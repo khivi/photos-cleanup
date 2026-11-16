@@ -95,7 +95,6 @@ Homebrew is the only install path: the cask in `khivi/homebrew-photos-cleanup` i
 
 ## App
 
-- [x] **Live Photos and Selfies passes: built, then removed** (2026-11-07; built in `afcf2ae`, never released). Every photo started as Keep with no signal, so each pass was only a copy of Photos' own album. Selfie retakes are what a sweep finds, and Bursts and Similar already catch them. The "Live" tile tag stays (`Photo.live`).
 - [x] **Job progress in the sidebar, not the toolbar** (done 2026-11-07). Every pass row shows a filling ring while its count is unknown, then its count, 0 included: a ring or a number. Exception: Paperwork before it is opened, whose count waits on verdicts that only start in the pass, stays blank.
   - Paperwork, Bursts, Similar, Low Quality: the Vision ring (already in `1dd75da`), tooltip "Analysing photos on this Mac: N of M".
   - Screenshots, Paperwork: the verdict ring once Vision is done for the pass, tooltip "Checking photos with Apple Intelligence: N of M"; only on a pass with photos in the queue (screenshots → Screenshots, the rest → Paperwork). One ring per row.
@@ -206,6 +205,31 @@ Why: Confirm All left untouched Keeps in the pass, and nothing on screen said so
 - ~~**Thumbnail zoom (was Phase 5's V9)**~~: dropped 2026-11-02, the adaptive grid and Space preview cover it. Was: toolbar slider and ⌘+ / ⌘−, kept across launches; View menu items for both. Cells are 120–150pt today.
 - [x] **VoiceOver (was Phase 5's A11y)** (2026-11-02) — each cell reads its date, kind and mark; the sidebar reads its counts.
 - [x] **Show in Photos** (2026-11-02, Info panel button and ⌘R) — an Inspector button (⌘R) that opens Photos at the photo, through Photos' AppleScript `spotlight (first media item whose id is "<id>")`, which selects it (S2, Phase 5). S2b checked 2026-11-02: with a Photos window open, it scrolls Photos to the photo and selects it. Shipping it needs the `com.apple.security.automation.apple-events` entitlement, `NSAppleEventsUsageDescription` and a one-time Automation prompt, all in the docs (entitlements file, Info.plist, README permissions, SECURITY).
+
+## UX roadmap (2026-11-16)
+
+Positioning: "I help you keep the photos that matter". The workflow stays; the language and emphasis change.
+
+Phase 1: keep language (branch `khivi/keep-language`, on #16).
+
+- [x] No red ✗ Delete in the grid: a dimmed photo with a gray "Remove" tag (compact cells: dimming only); "★ Best shot" on the pick. "✗ Delete Me" only for photos really in a Delete Me album.
+- [x] Copy around keeping: "41 photos · keeping 29 · removing 12"; group headers "keeping 1 · removing 5 similar photos"; menu Keep / Remove; Keep All / Remove All; "marked Remove".
+- [x] One trust-first caption per pass ("We recommend keeping the best shot of each burst…"); the detail moved to the caption's and sidebar's tooltip.
+- [x] Confirm is Accept / Accept Up to Here. Accessibility ids stay `confirm-*`.
+- [x] Info panel "Why this photo?" for the ★ (or, with nothing selected, the current group's ★) and for a verdict: only what the app measured (score against the group's, face quality where faces counted, edited, your pick, the verdict reason).
+- [x] The ★ is the hero of its row: 1.8× the cell, capped at 420 pt; "Other shots from this burst/moment" above the rest.
+- [x] Captions are one sentence, so the Show Less / Show More fold is gone. The Bursts and Similar tooltip names the Vision score, not "the sharpest". `docs/app-store/listing.md` Description follows, for the next submission.
+
+Phase 2, to discuss: "Inbox Zero for Photos". One group at a time ("Burst 12 of 847"), the recommended photo large, Accept or Review. Keyboard first: Space accepts, ← keeps all, → accepts the recommendation.
+
+Phase 3, a later experiment: a dashboard ("You can recover 18.2 GB", counts per category, Start Cleanup). The current navigation stays.
+
+Open naming questions:
+
+- "Low Quality" → "Likely Missed Shots". A pass title is its album prefix: needs `Passes.legacyAlbums`.
+- The `<Pass> - Delete Me` album names (same migration).
+- "candidate" in docs and code (the UI says "photos" now).
+- Delete in Photos… and the macOS dialog keep "delete": that step really deletes.
 
 ## photos-import: Done and Import (2026-11-02)
 
