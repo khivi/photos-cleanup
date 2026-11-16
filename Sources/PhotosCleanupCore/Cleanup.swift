@@ -50,6 +50,8 @@ public actor Cleanup {
     let ignoreAlbums: Set<String>
     /// False: photos in the user's own albums can be candidates too.
     let keepAlbumPhotos: Bool
+    /// With keepAlbumPhotos off, the albums that still protect their photos.
+    let safeAlbums: Set<String>
     /// Set at startup when verdicts can't run here; shown in the UI instead of verdicts.
     public let verdictsOff: String?
 
@@ -94,13 +96,14 @@ public actor Cleanup {
 
     public init(
         library: any PhotoLibrary, judge: any Judge, cacheDir: URL, ignoreAlbums: Set<String>,
-        keepAlbumPhotos: Bool = true, verdictsOff: String? = nil
+        keepAlbumPhotos: Bool = true, safeAlbums: Set<String> = [], verdictsOff: String? = nil
     ) {
         self.library = library
         self.judge = judge
         self.cacheDir = cacheDir
         self.ignoreAlbums = ignoreAlbums
         self.keepAlbumPhotos = keepAlbumPhotos
+        self.safeAlbums = safeAlbums
         self.verdictsOff = verdictsOff
     }
 
@@ -130,14 +133,20 @@ public actor Cleanup {
         switch kind {
         case "screenshots":
             found = candidatePhotos(
-                photos, ignoring: ignoreAlbums, kind: .screenshot, keepAlbumPhotos: keepAlbumPhotos)
+                photos, ignoring: ignoreAlbums, kind: .screenshot, keepAlbumPhotos: keepAlbumPhotos,
+                safeAlbums: safeAlbums)
         case "videos":
-            found = candidatePhotos(photos, ignoring: ignoreAlbums, kind: .video, keepAlbumPhotos: keepAlbumPhotos)
+            found = candidatePhotos(
+                photos, ignoring: ignoreAlbums, kind: .video, keepAlbumPhotos: keepAlbumPhotos,
+                safeAlbums: safeAlbums)
         case "paperwork", "low-quality":
-            found = candidatePhotos(photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos)
+            found = candidatePhotos(
+                photos, ignoring: ignoreAlbums, keepAlbumPhotos: keepAlbumPhotos,
+                safeAlbums: safeAlbums)
         case "bursts", "similar":
             found = candidatePhotos(
-                photos, ignoring: ignoreAlbums, requireValidDate: true, keepAlbumPhotos: keepAlbumPhotos)
+                photos, ignoring: ignoreAlbums, requireValidDate: true, keepAlbumPhotos: keepAlbumPhotos,
+                safeAlbums: safeAlbums)
         default: throw CleanupError.unknownPass
         }
         return found.filter {

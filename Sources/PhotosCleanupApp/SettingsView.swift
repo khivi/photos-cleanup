@@ -1,7 +1,7 @@
 import PhotosCleanupCore
 import SwiftUI
 
-/// UserDefaults key of the "Keep photos in albums" toggle; ContentView reads it at launch.
+/// UserDefaults key of "Albums that keep photos safe": true for All my albums, false for Only these. Read at launch.
 let keepAlbumPhotosKey = "keepAlbumPhotos"
 /// UserDefaults key of Sections; ReviewScreen applies it as it changes.
 let sectionsKey = "sections"
@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage(keepAlbumPhotosKey) private var keepAlbumPhotos = true
     @AppStorage(sectionsKey) private var sections = Period.auto
     @State private var ignored = userIgnoreAlbums()
+    @State private var safe = userIgnoreAlbums(file: safeAlbumsFile)
     @State private var selection: String?
     @State private var newName = ""
     @State private var saveError: String?
@@ -27,17 +28,9 @@ struct SettingsView: View {
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }
-            Section {
-                Toggle("Photos in my albums are safe", isOn: $keepAlbumPhotos)
-                    .accessibilityIdentifier("settings-keep-album-photos")
-                Text(
-                    "The app won’t suggest a photo you put in an album. Favorites and photos you’ve already reviewed are never suggested."
-                )
-                .font(.caption).foregroundStyle(.secondary)
-            }
-            if keepAlbumPhotos { ignoredAlbums }
+            albums
             if let saveError {
-                Text("Could not save the ignored albums: \(saveError)").font(.caption).foregroundStyle(.red)
+                Text("Could not save the album list: \(saveError)").font(.caption).foregroundStyle(.red)
             }
             Text("Album changes apply the next time Photos Cleanup opens.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -45,31 +38,56 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+        .onChange(of: keepAlbumPhotos) { selection = nil }
     }
 
-    private var ignoredAlbums: some View {
-        Section("Albums that don’t count") {
+    /// One choice and one list: the albums that don't count, or the only albums that protect.
+    private var albums: some View {
+        Section("Albums that keep photos safe") {
+            Picker("Albums that keep photos safe", selection: $keepAlbumPhotos) {
+                Text("All my albums, except these").tag(true)
+                Text("Only these albums").tag(false)
+            }
+            .pickerStyle(.radioGroup).labelsHidden()
+            .accessibilityIdentifier("settings-keep-album-photos")
             Text(
-                "Photos in these albums can still be suggested. Apple’s own albums, like Selfies and Recents, already don’t count."
+                keepAlbumPhotos
+                    ? "A photo in an album you made is never suggested, unless the album is listed here. Apple’s own albums, like Selfies and Recents, don’t count."
+                    : "Only photos in these albums are never suggested. Photos in your other albums can be."
             )
             .font(.caption).foregroundStyle(.secondary)
-            List(ignored, id: \.self, selection: $selection) { Text($0) }
-                .frame(height: 120)
-                .overlay { if ignored.isEmpty { Text("None").foregroundStyle(.secondary) } }
+            List(selection: $selection) {
+                if !keepAlbumPhotos {
+                    Label(Passes.keepAlbum, systemImage: "lock").foregroundStyle(.secondary)
+                        .help("Photos you kept are always safe.")
+                        .selectionDisabled()
+                }
+                ForEach(list, id: \.self) { Text($0) }
+            }
+            .frame(height: 120)
+            .overlay { if keepAlbumPhotos && list.isEmpty { Text("None").foregroundStyle(.secondary) } }
             HStack {
                 TextField("Album name", text: $newName).onSubmit(add)
                     .accessibilityIdentifier("settings-album-name")
                 Button("Add", action: add).disabled(trimmed.isEmpty)
                     .accessibilityIdentifier("settings-album-add")
                 Button("Remove") {
-                    ignored.removeAll { $0 == selection }
+                    list.removeAll { $0 == selection }
                     selection = nil
                     save()
                 }
                 .disabled(selection == nil)
                 .accessibilityIdentifier("settings-album-remove")
             }
+            Text("Favorites and photos you’ve already reviewed are never suggested.")
+                .font(.caption).foregroundStyle(.secondary)
         }
+    }
+
+    /// The list the choice shows; each keeps its own, so switching loses neither.
+    private var list: [String] {
+        get { keepAlbumPhotos ? ignored : safe }
+        nonmutating set { if keepAlbumPhotos { ignored = newValue } else { safe = newValue } }
     }
 
     private var ungrouped: String {
@@ -80,14 +98,14 @@ struct SettingsView: View {
 
     private func add() {
         guard !trimmed.isEmpty else { return }
-        if !ignored.contains(trimmed) { ignored.append(trimmed) }
+        if !list.contains(trimmed) && (keepAlbumPhotos || trimmed != Passes.keepAlbum) { list.append(trimmed) }
         newName = ""
         save()
     }
 
     private func save() {
         do {
-            try saveIgnoreAlbums(ignored)
+            try saveIgnoreAlbums(list, file: keepAlbumPhotos ? "albums_ignore" : safeAlbumsFile)
             saveError = nil
         } catch {
             saveError = error.localizedDescription

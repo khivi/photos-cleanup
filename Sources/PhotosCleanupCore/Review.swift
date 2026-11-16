@@ -309,7 +309,10 @@ public final class ReviewModel {
 
     /// A pass's explanation, then which photos it never suggests.
     public func passNote(_ key: String) -> String {
-        let spared = cleanup.keepAlbumPhotos ? "Favorites and photos in your albums are" : "Favorites are"
+        let spared =
+            cleanup.keepAlbumPhotos
+            ? "Favorites and photos in your albums are"
+            : cleanup.safeAlbums.isEmpty ? "Favorites are" : "Favorites and photos in the albums you chose are"
         return "\(Passes.about[key] ?? "") \(spared) never suggested."
     }
 
@@ -1584,17 +1587,20 @@ extension ReviewModel {
 public struct LaunchSettings: Sendable {
     public var ignoreAlbums: Set<String>
     public var keepAlbumPhotos = true
+    public var safeAlbums: Set<String> = []
     public var exportFolder: FolderBookmark?
     public var showsInspector = false
     public var zoom: Int?
     public var aspectFit = false
 
     public init(
-        ignoreAlbums: Set<String> = [], keepAlbumPhotos: Bool = true, exportFolder: FolderBookmark? = nil,
+        ignoreAlbums: Set<String> = [], keepAlbumPhotos: Bool = true, safeAlbums: Set<String> = [],
+        exportFolder: FolderBookmark? = nil,
         showsInspector: Bool = false, zoom: Int? = nil, aspectFit: Bool = false
     ) {
         self.ignoreAlbums = ignoreAlbums
         self.keepAlbumPhotos = keepAlbumPhotos
+        self.safeAlbums = safeAlbums
         self.exportFolder = exportFolder
         self.showsInspector = showsInspector
         self.zoom = zoom
@@ -1618,7 +1624,8 @@ public func launch(
     guard status == "authorized" else { return .noAccess(status) }
     let cleanup = Cleanup(
         library: library, judge: judge, cacheDir: cacheDir, ignoreAlbums: settings.ignoreAlbums,
-        keepAlbumPhotos: settings.keepAlbumPhotos, verdictsOff: judge.unavailableReason())
+        keepAlbumPhotos: settings.keepAlbumPhotos, safeAlbums: settings.safeAlbums,
+        verdictsOff: judge.unavailableReason())
     do { try await cleanup.load() } catch { return .failed("\(error)") }
     let photos = await cleanup.photos
     print("Loaded: \(photos.count) photos, \(memoryLabel())")

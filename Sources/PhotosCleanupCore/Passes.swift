@@ -172,9 +172,12 @@ public func userIgnoreAlbums(dir: URL = settingsDir, file: String = "albums_igno
         .filter { !$0.isEmpty && !$0.hasPrefix("#") }
 }
 
-/// Rewrites the names in `albums_ignore`, keeping its '#' comment lines. `albums_ignore.local` is untouched.
-public func saveIgnoreAlbums(_ names: [String], dir: URL = settingsDir) throws {
-    let file = dir.appendingPathComponent("albums_ignore")
+/// The albums whose photos are never suggested when only some albums protect (Settings, "Only these albums").
+public let safeAlbumsFile = "albums_safe"
+
+/// Rewrites the names in `file`, keeping its '#' comment lines. `albums_ignore.local` is untouched.
+public func saveIgnoreAlbums(_ names: [String], dir: URL = settingsDir, file name: String = "albums_ignore") throws {
+    let file = dir.appendingPathComponent(name)
     let old = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
     let comments = old.split(whereSeparator: \.isNewline).map(String.init).filter {
         $0.trimmingCharacters(in: .whitespaces).hasPrefix("#")
@@ -224,12 +227,14 @@ private let minDate = ISO8601DateFormatter().date(from: "2000-01-01T00:00:00Z")!
 /// not in any of the user's own albums.
 public func candidatePhotos(
     _ photos: [Photo], ignoring ignore: Set<String>, kind: PhotoKind = .photo,
-    requireValidDate: Bool = false, keepAlbumPhotos: Bool = true
+    requireValidDate: Bool = false, keepAlbumPhotos: Bool = true, safeAlbums: Set<String> = []
 ) -> [Photo] {
     photos.filter { p in
         let k: PhotoKind = p.isMovie ? .video : p.screenshot ? .screenshot : .photo
         guard k == kind, !p.favorite else { return false }
-        guard !keepAlbumPhotos || Set(p.albums).subtracting(ignore).isEmpty else { return false }
+        // keepAlbumPhotos: every album but `ignore` protects; else only `safeAlbums` do.
+        let mine = keepAlbumPhotos ? Set(p.albums).subtracting(ignore) : Set(p.albums).intersection(safeAlbums)
+        guard mine.isEmpty else { return false }
         if requireValidDate {
             guard let d = p.date, d >= minDate else { return false }
         }

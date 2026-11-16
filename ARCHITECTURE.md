@@ -53,7 +53,7 @@ The Swift package has no dependencies.
 | `Thumbnails.swift` | One `PHCachingImageManager`: high-quality thumbnails, cached about 30 rows ahead of the visible ones, and the large preview. The settings come from the grid spike (`feea7cb`). |
 | `ExportView.swift` | The Export screen: destination, counts, progress and failures. |
 | `ImportView.swift` | The Import screen: the checked folders, their counts, Sort into Done and Import…, and Open Import in Photos. |
-| `SettingsView.swift` | The Settings window: Sections (applied at once), Photos in my albums are safe, and, while it is on, Albums that don't count (the ignored albums). |
+| `SettingsView.swift` | The Settings window: Sections (applied at once), and Albums that keep photos safe: All my albums except a list (`albums_ignore`), or Only these albums (`albums_safe`, with Photos Cleanup - Keep always on it). |
 
 The tests fake `PhotoLibrary` and `Judge`, so they need no library and no Apple Intelligence. Launch is in Core too: `launch(...)` authorizes, loads, starts Vision and builds the `ReviewModel`. The app only supplies PhotoKit, the judge and the saved settings.
 

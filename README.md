@@ -259,8 +259,9 @@ Import keeps most duplicates out of your library before you import (see Import).
 Passes skip favorites and photos in your own albums.
 To change this, open Settings (⌘,):
 
-- Turn off Photos in my albums are safe to review photos in your own albums too.
-- Add albums under Albums that don't count to make only those not protect their photos. This list shows only while the setting is on.
+- Albums that keep photos safe: All my albums, except these (the default), or Only these albums.
+- With All my albums, list the albums whose photos can still be suggested.
+- With Only these albums, list the albums that protect their photos. Photos in your other albums can be suggested. Photos Cleanup - Keep is always on the list.
 
 Changes apply the next time the app opens.
 

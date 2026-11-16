@@ -65,6 +65,27 @@ import Testing
     #expect(Set(try await off.candidates("paperwork").map(\.uuid)) == ["plain", "mine"])
 }
 
+@Test func onlyTheChosenAlbumsKeepPhotosSafe() async throws {
+    let photos = [
+        Photo(uuid: "plain"), Photo(uuid: "trip", albums: ["Trip to Goa"]),
+        Photo(uuid: "wedding", albums: ["Trip to Goa", "Wedding"]), Photo(uuid: "kept", albums: [Passes.keepAlbum]),
+    ]
+    let ignore = loadIgnoreAlbums(dir: tempDir())
+    #expect(
+        candidatePhotos(photos, ignoring: ignore, keepAlbumPhotos: false, safeAlbums: ["Wedding"]).map(\.uuid) == [
+            "plain", "trip", "kept",
+        ])
+    let c = Cleanup(
+        library: FakeLibrary(photos), judge: FakeJudge(), cacheDir: tempDir(), ignoreAlbums: ignore,
+        keepAlbumPhotos: false, safeAlbums: ["Wedding"])
+    try await c.load()
+    #expect(Set(try await c.candidates("paperwork").map(\.uuid)) == ["plain", "trip"])  // kept is always safe
+
+    let dir = tempDir()
+    try saveIgnoreAlbums(["Wedding"], dir: dir, file: safeAlbumsFile)
+    #expect(userIgnoreAlbums(dir: dir, file: safeAlbumsFile) == ["Wedding"] && userIgnoreAlbums(dir: dir).isEmpty)
+}
+
 @MainActor @Test func everyPassHasOneName() {
     for (key, title) in Passes.all {
         #expect(Passes.waitingAlbum(in: ["\(title) - Delete Me"]) == "\(title) - Delete Me")
