@@ -1351,8 +1351,10 @@ extension ReviewModel {
         guard inRun else { return [] }
         let start = max(runStart, groups.count)
         let open = start == 0 ? 1 : 1 - Double(groups.count) / Double(start)
+        // Unsure fills as passes are accepted, so it counts as done only once they are.
         return overviewRows.map {
-            RunStep(view: $0.view, title: $0.title, progress: $0.view == view ? open : $0.count == 0 ? 1 : 0)
+            let done = $0.count == 0 && ($0.view != .unsure || cleanupComplete)
+            return RunStep(view: $0.view, title: $0.title, progress: $0.view == view ? open : done ? 1 : 0)
         }
     }
 
