@@ -4,10 +4,14 @@
 
 Photos Cleanup is a free Mac app. It clears screenshots, bursts, look-alikes and blurry shots out of your Photos library.
 
-- **Free and open source.** No subscription, no account, no daily delete limit.
+Open it, and Overview shows how many photos each pass has to review. Click Start Cleanup. The app picks the best shot of each burst and marks the rest. You check its marks and press Return.
+
+- **Built for big libraries.** One key accepts a whole section. Work through 30,000 photos over several sittings: the app saves your place.
+- **Asked once.** A photo you keep is never suggested again. Run it after each import, and it shows only the new photos.
+- **Says why.** "Why this photo?" lists what the app measured: its Vision score, face quality, your edits. Can't decide? Mark it Unsure and come back later.
+- **Never deletes on its own.** Nothing changes in Photos until you click Apply to Photos… and confirm. Photos keeps deleted photos for 30 days.
 - **Private.** Everything runs on your Mac, with no network calls. Apple's on-device Vision and Apple Intelligence do the analysis.
-- **Never deletes on its own.** You review and accept in the app. Apply deletes only after macOS asks you to confirm, and Photos keeps deleted photos for 30 days.
-- **Fast on big libraries.** You review a whole pass in one grid and mark photos keep or delete with one key.
+- **Free and open source.** No subscription, no account, no daily delete limit.
 
 ```bash
 brew install --cask khivi/photos-cleanup/photos-cleanup
@@ -111,6 +115,7 @@ To change this later, open System Settings > Privacy & Security > Automation.
 3. Fix any mark: ⌫ switches a photo between Keep and Remove. Can't decide? Press ? to mark it Unsure: accepting its section moves it to Unsure, under Cleanup, for later.
 4. Click Accept (shortcut: Return), or Keep All (shortcut: K) to keep every photo in the section and accept it. The section leaves the pass and waits in Not in Photos Yet, and the next one opens. Nothing changes in Photos yet, and Undo (toolbar, ⌘Z) reverses it.
 5. Click Apply to Photos…. The dialog counts what will be deleted per pass. macOS then asks you to confirm the deletion. The rest go to "Photos Cleanup - Keep".
+6. Come back after your next import. The passes show only photos you haven't reviewed.
 
 Not in Photos Yet, under Review, lists what you accepted by album. Select photos there and click Send Back to Review to change your mind. The list is saved, so it survives a quit.
 The header above the grid counts the photos you keep and remove, and says what the pass recommends; hover it for how. Marks stay when you switch to another view.

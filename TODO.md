@@ -50,6 +50,18 @@ Decided 2026-11-16: "Low Quality" keeps its name. It names what the pass scores 
 
 - [ ] **After #16–#23 merge: retake every screenshot from the demo** (`scripts/app.sh demo`): the App Store screenshots (`docs/app-store/screenshots/`), `docs/screenshot.jpg`, the Import screenshot (from a sample folder with a neutral path; the demo's is under `.build/`), and the social preview `docs/social-preview.png` (1280×640), which shows the real library and the old UI. Upload the social preview in GitHub Settings > General > Social preview; GitHub has no API for it.
 
+Proposed 2026-11-16 (product review): make cleanup a routine, not a one-off. Not built yet.
+
+- [ ] **Quick Wins / Review Needed:** one queue of obvious removals across passes (junk screenshots, burst extras), then the harder ones. Needs a confidence signal: verdicts are yes/no today, Vision scores and burst distance are the only gradients.
+- [ ] **Confidence labels:** "Recommended Remove" vs "Needs Review" on a section, from the same signal as Quick Wins.
+- [ ] **Short sessions:** a queue of ~30 photos with an estimated time, instead of a whole pass. A daily queue is fine; streaks and reminders stay out (see Not pursuing).
+- [ ] **Recent photos:** "Added this week: 249 photos, 18 screenshots, 6 blurry". PhotoKit has no public date-added, so this needs creation date or a seen-before list the app keeps.
+- [ ] **Progress stats:** photos removed and kept to date, from `decisions.jsonl`. Counts only: no GB (see Not pursuing).
+- [ ] **Richer "Why this photo?":** reasons as a checklist (eyes open, largest face, screenshot, not in an album, not edited), for Remove marks too, not only the ★.
+- [ ] **Insights:** name a section by its story ("17 near-identical photos from one trip", "24 screenshots of directions or receipts") with Foundation Models.
+
+Out of scope: search, filtering, browsing, album management, metadata views. Photos does those.
+
 ## photos-import
 
 Decided: import stays through Photos (drag or File → Import, for its duplicate detection); the tool stays read-only on the library, and moves files only within the folder.
