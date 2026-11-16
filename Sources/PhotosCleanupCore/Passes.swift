@@ -59,7 +59,7 @@ public struct JobProgress: Sendable, Equatable {
 }
 
 /// One name per pass: the key is the UI view and the decisions.jsonl kind; the title is the
-/// tab label and the album prefix. Album names are derived, never written out.
+/// tab label. Renaming a title strands its old Delete Me album (`waitingAlbum`).
 public enum Passes {
     public static let all: [(key: String, title: String)] = [
         ("screenshots", "Screenshots"),
@@ -146,8 +146,8 @@ public let defaultIgnoreAlbums: Set<String> = [
     "RAW", "Cinematic", "Spatial",
 ]
 
-/// Review albums, so a photo in one still counts as a candidate. The last five come from the
-/// photo-cleanup command-line tool and may exist in libraries it was run on.
+/// Review albums, so a photo in one still counts as a candidate. The last five are older review
+/// albums that may still exist in a library.
 public let cleanupAlbumNames: Set<String> = [
     "Screenshots - Delete Me", "Low Quality - Delete Me", "Low Quality - Review Me",
     "Cluster Extras - Review Me", "Cluster Keepers", "Similar Photos - Keepers",

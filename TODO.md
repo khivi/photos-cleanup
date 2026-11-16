@@ -46,13 +46,9 @@ Say on every page: macOS 15 or later; Screenshots and Paperwork verdicts need ma
 
 ## UX
 
+Decided 2026-11-16: "Low Quality" keeps its name. It names what the pass scores (blurry, dark or accidental), and fits the one-word tabs. "Candidate" stays in code and developer docs: a photo a pass may suggest, never shown in the UI. Apply to Photos… keeps "Apply" (it deletes and files Keeps); Delete in Photos… keeps "delete" (it only deletes).
+
 - [ ] **After #16–#23 merge: retake every screenshot from the demo** (`scripts/app.sh demo`): the App Store screenshots (`docs/app-store/screenshots/`), `docs/screenshot.jpg`, the Import screenshot (from a sample folder with a neutral path; the demo's is under `.build/`), and the social preview `docs/social-preview.png` (1280×640), which shows the real library and the old UI. Upload the social preview in GitHub Settings > General > Social preview; GitHub has no API for it.
-
-Open naming questions:
-
-- "Low Quality" → "Likely Missed Shots". Albums no longer use the title; only an old `Low Quality - Delete Me` album would be stranded.
-- "candidate" in docs and code (the UI says "photos" now).
-- Delete in Photos… and the macOS dialog keep "delete": that step really deletes.
 
 ## photos-import
 

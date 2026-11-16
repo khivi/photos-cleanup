@@ -20,7 +20,7 @@ It also does two jobs around the library:
 - **Export** backs up every photo and video to a folder or disk. Each run copies only what is new or changed.
 - **Import** checks folders of old photos against your library. It sorts the files you already have from the ones to bring into Photos.
 
-![The Videos pass: candidate videos in a grid, longest first, with the pass list in the sidebar](docs/screenshot.jpg)
+![The Videos pass: videos in a grid, longest first, with the pass list in the sidebar](docs/screenshot.jpg)
 
 ## Safety
 
