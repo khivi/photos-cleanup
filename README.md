@@ -107,13 +107,13 @@ To change this later, open System Settings > Privacy & Security > Automation.
 
 1. Pick a pass in the sidebar.
 2. Check the suggestions, a section at a time. Only photos to delete are marked.
-3. Fix any mark: K keeps, ⌫ deletes.
+3. Fix any mark: K keeps, ⌫ deletes. Can't decide? Press ? to mark it Unsure: confirming its section leaves it in the pass for later.
 4. Click the section's Confirm (shortcut: Return). The section leaves the pass and waits in Not in Photos Yet. Nothing changes in Photos yet, and Undo (toolbar, ⌘Z) reverses it.
 5. Click Apply to Photos…. Every pending photo goes to its album: marked ones to the pass's "Delete Me" album, the rest to its "Keep" album.
 6. Open In Delete Me Albums and click Delete in Photos…. macOS asks you to confirm.
 
 Not in Photos Yet, under Review, lists what you confirmed by album. Select photos there and click Send Back to Review to change your mind. The list is saved, so it survives a quit.
-Confirm All in the toolbar confirms every section at once, as marked; photos you haven't looked at, and left as Keep, stay in the pass.
+The header above the grid counts the candidates and the photos to delete. Keep All and Delete All mark every photo in the pass. Marks stay when you switch to another view.
 
 | Pass | Finds | Starts as delete |
 | --- | --- | --- |
@@ -131,27 +131,28 @@ A tile marks a Live Photo "Live" and a screen recording "Screen recording".
 Every pass is in sections: a group in Bursts and Similar, a month in the others, newest first.
 Bursts and Similar show one row per group: the best shot large, the others smaller beside it.
 A long group ends in "+N"; click it, or select a photo in the group, to see the rest.
-In Bursts and Similar, hover a photo and click Keep Only This (or right-click it; shortcut: 1–9). The group keeps only that photo and is confirmed.
-If you review by scrolling, click Confirm Up to Here beside the last section you looked at (shortcut: ⇧Return). Every section from the top through that one is confirmed.
+In Bursts and Similar, hover a photo and click its ☆ (or right-click it and pick Pick as Best; shortcut: 1–9). That photo becomes the group's ★ and is kept; the rest are marked Delete. Nothing is confirmed until you press Return or click the group's Confirm.
+If you review by scrolling, click Confirm Up to Here beside the last section you looked at (shortcut: ⇧Return). Every section from the top through that one is confirmed. Confirm acts only on sections you can see, so a photo you never scrolled to stays in the pass.
 What's left in a pass is what you haven't confirmed, so you can work through a big one over several sittings.
 
 All shows every photo by month, for photos no pass suggests.
-Its sections have no Confirm buttons.
-Mark a photo Delete there, then click Confirm All and Apply to Photos…. The photo goes to "All - Delete Me".
+Mark a photo Delete there, then click its section's Confirm (or Confirm Up to Here) and Apply to Photos…. Confirm files only the section's Delete photos, to "All - Delete Me". As in a pass, confirmed photos leave All and wait in Not in Photos Yet.
 
 | Key | Action |
 | --- | --- |
 | Click, ⇧-click, ⌘-click, ⌘A | Select |
 | Arrow keys | Move the selection; in Bursts and Similar, ↑ and ↓ move by group |
 | Return | Same as the section's Confirm button: confirm the selected section and go to the next |
-| 1–9 | Same as Keep Only This in Bursts and Similar: keep only photo N of the group, confirm it, and go to the next |
+| 1–9 | In Bursts and Similar: pick photo N of the group as best (★); the rest are marked Delete |
 | ⇧Return | Same as Confirm Up to Here: confirm every section from the top through the selected one |
-| K / ⌫ | Mark keep / delete; with one photo selected, move to the next |
+| K / ⌫ | Mark keep / delete |
+| ? | Mark unsure: it stays in the pass when its section is confirmed |
 | Space, Esc | Show or close the large preview (videos play) |
 | ⌘I | Show the Info panel: date, albums, and why the photo was picked |
 | ⌘R | Show the photo in Photos |
 | ⌘Z / ⇧⌘Z | Same as the toolbar Undo button / redo |
 | ⌥⌘D | Show only photos marked delete |
+| ⌥⌘U | Show only photos marked unsure |
 | ⌘+ / ⌘− | Larger / smaller thumbnails |
 | ⌥↓ / ⌥↑ | Next / previous month or group |
 

@@ -149,9 +149,9 @@ struct PhotoCell: View {
     var best = false
     /// A small cell in a group's row: the Delete badge is just ✗, and no kind or duration pill.
     var compact = false
-    /// Keep Only This: set in Bursts and Similar. Shown on hover, and in the context menu.
-    var keepOnly: (() -> Void)?
-    var keepOnlyHelp = ""
+    /// Pick as Best: set in Bursts and Similar. A ☆ on hover where the ★ goes, and in the context menu.
+    var pickBest: (() -> Void)?
+    var pickBestHelp = ""
     var label = ""
     let thumbnails: Thumbnails
     /// The whole photo, fitted in the square cell, instead of a square crop.
@@ -183,7 +183,14 @@ struct PhotoCell: View {
             .overlay(alignment: .topTrailing) {
                 if best {
                     Image(systemName: "star.fill").foregroundStyle(.yellow).shadow(radius: 2).padding(6).help(
-                        "Vision's pick")
+                        "Best shot")
+                } else if hovering, let pickBest {
+                    Button(action: pickBest) {
+                        Image(systemName: "star").foregroundStyle(.white).shadow(radius: 2).padding(6)
+                    }
+                    .buttonStyle(.plain).help(pickBestHelp)
+                    .accessibilityLabel(ReviewModel.pickBestLabel)
+                    .accessibilityIdentifier("pick-best-\(photo.id)")
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -198,16 +205,9 @@ struct PhotoCell: View {
                     pill(Text(t).font(.caption2))
                 }
             }
-            .overlay(alignment: .bottomTrailing) {  // bottom left holds the Live pill
-                if hovering, let keepOnly {
-                    Button(ReviewModel.keepOnlyLabel, action: keepOnly)
-                        .controlSize(.small).help(keepOnlyHelp).padding(compact ? 4 : 6)
-                        .accessibilityIdentifier("keep-only-\(photo.id)")
-                }
-            }
             .onHover { hovering = $0 }
             .contextMenu {
-                if let keepOnly { Button(ReviewModel.keepOnlyLabel, action: keepOnly) }
+                if let pickBest, !best { Button(ReviewModel.pickBestLabel, systemImage: "star", action: pickBest) }
             }
             .clipped()
             .overlay { if selected { Rectangle().strokeBorder(Color.accentColor, lineWidth: 4) } }
@@ -235,7 +235,8 @@ struct PhotoCell: View {
         case .none: EmptyView()
         case .deleteMe: label("✗ Delete Me", .red)
         case .decision(.delete): label(compact ? "✗" : "✗ Delete", .red)
-        case .decision(.keep): EmptyView()  // most photos start as Keep: only the exceptions are marked
+        case .decision(.keep): EmptyView()  // Keep is the default: not marked
+        case .decision(.unsure): label(compact ? "?" : "? Unsure", .gray)
         }
     }
 

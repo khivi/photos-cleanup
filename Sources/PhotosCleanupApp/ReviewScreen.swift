@@ -160,16 +160,12 @@ struct ReviewScreen: View {
                 .accessibilityIdentifier("only-delete-toggle")
             }
         }
-        if model.inPass {
-            ToolbarItemGroup {
-                Group {
-                    Button(ReviewModel.keepAllLabel, systemImage: "checkmark") { model.setAll(.keep) }
-                        .accessibilityIdentifier("keep-all")
-                    Button(ReviewModel.deleteAllLabel, systemImage: "trash") { model.setAll(.delete) }
-                        .accessibilityIdentifier("delete-all")
-                }
-                .labelStyle(.titleAndIcon)
-                .disabled(!model.canSetAll)
+        if model.canMarkUnsure {
+            ToolbarItem {
+                @Bindable var model = model
+                Toggle(ReviewModel.onlyUnsureLabel, systemImage: "questionmark.circle", isOn: $model.onlyUnsure)
+                    .help(ReviewModel.onlyUnsureLabel)
+                    .accessibilityIdentifier("only-unsure-toggle")
             }
         }
         if model.view == .deleted {
@@ -186,14 +182,6 @@ struct ReviewScreen: View {
                     .labelStyle(.titleAndIcon)
                     .disabled(!model.canSendBack)
                     .accessibilityIdentifier("send-back")
-            }
-        }
-        if model.canMark {  // Keep All / Delete All stay pass-only; All has just Confirm All
-            ToolbarItem {
-                Button(model.moveButtonLabel) { Task { await model.commit() } }
-                    .help(model.confirmAllHelp)
-                    .disabled(!model.canMove)
-                    .accessibilityIdentifier("commit")
             }
         }
         if model.showsApply {
@@ -234,70 +222,101 @@ struct ReviewScreen: View {
         } else if model.showsEmptyState {
             ContentUnavailableView(model.emptyStateLabel, systemImage: "checkmark.circle")
         } else {
-            // One ScrollView for every list: a second one would leave keyboard focus on the old one.
-            ScrollView {
-                if let caption = model.passCaption {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(caption).lineLimit(model.captionFolded ? 1 : nil)
-                            .help(model.captionFolded ? caption : "")
-                        Spacer()
-                        Button(model.captionToggleLabel) { model.toggleCaption() }
-                            .buttonStyle(.link).focusable(false)
-                            .accessibilityIdentifier("caption-toggle")
-                    }
-                    .font(.callout).foregroundStyle(.secondary)
-                    .padding(.horizontal, gridPadding).padding(.top, 8)
+            VStack(spacing: 0) {
+                if model.showsHeader { header }
+                grid
+            }
+        }
+    }
+
+    /// Above the grid, outside its ScrollView so it stays put: the counts, the pass's caption, and the
+    /// buttons that act on the whole pass. A section's own Confirm sits on its header in the grid.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(model.summary).font(.headline).accessibilityIdentifier("pass-summary")
+            if let caption = model.passCaption {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(caption).lineLimit(model.captionFolded ? 1 : nil)
+                        .help(model.captionFolded ? caption : "")
+                    Spacer()
+                    Button(model.captionToggleLabel) { model.toggleCaption() }
+                        .buttonStyle(.link)
+                        .accessibilityIdentifier("caption-toggle")
                 }
-                if model.isGrouped {
-                    LazyVStack(alignment: .leading, spacing: 4) {
-                        ForEach(model.shownGroups, id: \.best) { groupRow($0) }
+                .font(.callout).foregroundStyle(.secondary)
+            }
+            HStack {
+                if model.inPass {
+                    Group {
+                        Button(ReviewModel.keepAllLabel, systemImage: "checkmark") { model.setAll(.keep) }
+                            .accessibilityIdentifier("keep-all")
+                        Button(ReviewModel.deleteAllLabel, systemImage: "trash") { model.setAll(.delete) }
+                            .accessibilityIdentifier("delete-all")
                     }
-                    .padding(.horizontal, gridPadding)
-                } else {
-                    LazyVGrid(
-                        columns: [
-                            GridItem(
-                                .adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
-                        ], spacing: 4
-                    ) {
-                        if model.view == .pending {
-                            ForEach(model.pendingGroups, id: \.best) { group in
-                                Section {
-                                    ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
-                                } header: {
-                                    Text(model.header(group)).font(.headline)
-                                        .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
-                                }
-                            }
-                        } else if model.hasSections {
-                            let verdicts = Dictionary(model.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-                            ForEach(model.shownGroups, id: \.best) { group in
-                                Section {
-                                    ForEach(group.photos) { photo in
-                                        cell(verdicts[photo.id] ?? PassPhoto(photo: photo))
-                                    }
-                                } header: {
-                                    HStack {
-                                        Text(model.header(group)).font(.headline)
-                                        if model.inPass { confirmButton(group) }
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
-                                    .id(sectionID(group.best))
-                                }
-                            }
-                        } else {
-                            ForEach(items) { cell($0) }
-                        }
-                    }
-                    .padding(.horizontal, gridPadding)
+                    .labelStyle(.titleAndIcon)
+                    .disabled(!model.canSetAll)
                 }
             }
-            .scrollPosition($position)
-            .keyboardSelection(model: model, focused: $focused, width: $width) { move($0) }
-            .overlay {  // an overlay, not a swap: the grid stays in the hierarchy and keeps keyboard focus
-                if let p = model.preview {
-                    PhotoPreview(preview: p, thumbnails: thumbnails).onTapGesture { model.closePreview() }
+        }
+        .focusable(false)  // keys stay with the grid
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, gridPadding).padding(.vertical, 8)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    private var grid: some View {
+        // One ScrollView for every list: a second one would leave keyboard focus on the old one.
+        ScrollView {
+            if model.isGrouped {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    ForEach(model.shownGroups, id: \.best) { groupRow($0) }
                 }
+                .padding(.horizontal, gridPadding)
+            } else {
+                LazyVGrid(
+                    columns: [
+                        GridItem(
+                            .adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
+                    ], spacing: 4
+                ) {
+                    if model.view == .pending {
+                        ForEach(model.pendingGroups, id: \.best) { group in
+                            Section {
+                                ForEach(group.photos) { cell(PassPhoto(photo: $0)) }
+                            } header: {
+                                Text(model.header(group)).font(.headline)
+                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                            }
+                        }
+                    } else if model.hasSections {
+                        let verdicts = Dictionary(model.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                        ForEach(model.shownGroups, id: \.best) { group in
+                            Section {
+                                ForEach(group.photos) { photo in
+                                    cell(verdicts[photo.id] ?? PassPhoto(photo: photo))
+                                }
+                            } header: {
+                                HStack {
+                                    Text(model.header(group)).font(.headline)
+                                    confirmButton(group)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                                .id(sectionID(group.best))
+                            }
+                        }
+                    } else {
+                        ForEach(items) { cell($0) }
+                    }
+                }
+                .padding(.horizontal, gridPadding)
+            }
+        }
+        .scrollPosition($position)
+        .keyboardSelection(model: model, focused: $focused, width: $width) { move($0) }
+        .overlay {  // an overlay, not a swap: the grid stays in the hierarchy and keeps keyboard focus
+            if let p = model.preview {
+                PhotoPreview(preview: p, thumbnails: thumbnails).onTapGesture { model.closePreview() }
             }
         }
     }
@@ -387,8 +406,7 @@ struct ReviewScreen: View {
             switch model.view {
             case .all:
                 model.decision(p.id).map { .decision($0) }
-                    ?? (model.pending[p.id] != nil
-                        ? .decision(.delete) : model.deletedAlbum[p.id] != nil ? .deleteMe : .none)
+                    ?? (model.deletedAlbum[p.id] != nil ? .deleteMe : .none)
             case .deleted: .deleteMe
             case .pending: model.pending[p.id]?.keep == true ? .none : .decision(.delete)
             case .pass: model.decision(p.id).map { .decision($0) } ?? .none
@@ -396,12 +414,12 @@ struct ReviewScreen: View {
             }
         return PhotoCell(
             photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id), compact: compact,
-            keepOnly: model.canKeepOnly
+            pickBest: model.canPickBest
                 ? {
                     focused = true
-                    Task { await model.keepOnly(p.id) }
+                    model.pickBest(p.id)
                 } : nil,
-            keepOnlyHelp: model.keepOnlyHelp(p.id),
+            pickBestHelp: model.pickBestHelp(p.id),
             label: model.accessibilityLabel(p), thumbnails: thumbnails, aspectFit: model.aspectFit,
             onTap: {
                 focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
@@ -444,10 +462,10 @@ extension View {
                 return .handled
             }
             .onKeyPress(characters: CharacterSet(charactersIn: "123456789")) { press in
-                guard model.isGrouped && model.canConfirm && !model.previewing, let n = Int(press.characters) else {
+                guard model.canPickBest && !model.previewing, let n = Int(press.characters) else {
                     return .ignored
                 }
-                Task { await model.confirm(keeping: n - 1) }
+                model.pickBest(number: n)
                 return .handled
             }
             .onKeyPress(.escape) {
@@ -486,15 +504,19 @@ struct ReviewCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Photo") {
-            Group {
-                Button("Keep") { model?.markSelection(.keep) }
-                    .keyboardShortcut("k", modifiers: [])
-                    .accessibilityIdentifier("mark-keep")
-                Button("Delete") { model?.markSelection(.delete) }
-                    .keyboardShortcut(.delete, modifiers: [])
-                    .accessibilityIdentifier("mark-delete")
-            }
-            .disabled(model?.canMark != true)
+            Button("Keep") { model?.markSelection(.keep) }
+                .keyboardShortcut("k", modifiers: [])
+                .accessibilityIdentifier("mark-keep")
+                .disabled(model?.canMark != true)
+            // ⌫ also removes an Import folder from its list: this menu item owns the key everywhere.
+            Button(model?.deleteKeyLabel ?? "Delete") { model?.deleteKey() }
+                .keyboardShortcut(.delete, modifiers: [])
+                .accessibilityIdentifier("mark-delete")
+                .disabled(model?.canDeleteKey != true)
+            Button(Decision.unsure.label) { model?.markSelection(.unsure) }
+                .keyboardShortcut("?", modifiers: [])
+                .accessibilityIdentifier("mark-unsure")
+                .disabled(model?.canMarkUnsure != true)
             // No shortcut: a bare Return key equivalent would also catch Return in dialogs; the grid handles it.
             Button(ReviewModel.confirmLabel) { Task { await model?.confirm() } }.disabled(
                 model?.canConfirm != true)
@@ -516,8 +538,6 @@ struct ReviewCommands: Commands {
             Button("Preview") { model?.togglePreview() }.disabled(model == nil)
             Button(model?.deleteInPhotosLabel ?? "Delete in Photos…") { Task { await model?.deleteInPhotos() } }
                 .disabled(model?.canDeleteInPhotos != true)
-            Button(ReviewModel.confirmAllLabel) { Task { await model?.commit() } }
-                .disabled(model?.canMove != true)
             Button(model?.applyButtonLabel ?? "Apply to Photos…") { model?.confirmingApply = true }
                 .disabled(model?.canApply != true)
             Button(ReviewModel.sendBackLabel) { model?.sendBack() }.disabled(model?.canSendBack != true)
@@ -539,6 +559,9 @@ struct ReviewCommands: Commands {
             Button(ReviewModel.onlyDeleteLabel) { model?.onlyDelete.toggle() }
                 .keyboardShortcut("d", modifiers: [.command, .option])
                 .disabled(model?.canFilter != true)
+            Button(ReviewModel.onlyUnsureLabel) { model?.onlyUnsure.toggle() }
+                .keyboardShortcut("u", modifiers: [.command, .option])
+                .disabled(model?.canMarkUnsure != true)
             Button("Next Section") { model?.moveSection(by: 1) }
                 .keyboardShortcut(.downArrow, modifiers: .option)
                 .disabled(model?.canMoveSection != true)
@@ -616,6 +639,7 @@ struct InspectorView: View {
                         ) {
                             Text("Keep").tag(Decision.keep)
                             Text("Delete").tag(Decision.delete)
+                            if model.canMarkUnsure { Text(Decision.unsure.label).tag(Decision.unsure) }
                         }
                         .pickerStyle(.segmented).labelsHidden().focusable(false)
                     }

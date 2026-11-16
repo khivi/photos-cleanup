@@ -21,6 +21,10 @@ struct ImportView: View {
                         }
                         .help(model.pathLabel(url))
                         .tag(url)
+                        .contextMenu {
+                            Button("Remove from List", systemImage: "minus") { model.removeImportFolder(url) }
+                                .disabled(model.importBusy != nil)
+                        }
                     }
                 }
                 HStack {
@@ -28,9 +32,10 @@ struct ImportView: View {
                         if let url = pickFolder(prompt: "Add") { Task { await model.addImportFolder(url) } }
                     }
                     .accessibilityIdentifier("import-add-folder")
-                    Button("Remove", systemImage: "minus") {
+                    Button("Remove from List", systemImage: "minus") {
                         if let url = model.importFolder { model.removeImportFolder(url) }
                     }
+                    .help("Remove from List (⌫). The folder itself stays on disk.")
                     .disabled(model.importFolder == nil || model.importBusy != nil)
                     .accessibilityIdentifier("import-remove-folder")
                     Spacer()

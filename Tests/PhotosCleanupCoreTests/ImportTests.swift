@@ -151,8 +151,10 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     #expect(m.importSummary == "2 new · 0 to move")
     #expect(!m.canSortImport)
 
-    m.removeImportFolder(root)
-    #expect(m.importFolder == nil && loadImportFolders(defaults: defaults).isEmpty)
+    #expect(m.deleteKeyLabel == "Remove from List" && m.canDeleteKey)
+    m.deleteKey()  // ⌫ removes the folder from the list; the folder stays on disk
+    #expect(FileManager.default.fileExists(atPath: root.path))
+    #expect(m.importFolder == nil && !m.canDeleteKey && loadImportFolders(defaults: defaults).isEmpty)
 }
 
 @Test func importMatchesHoldWhenFilesMove() async throws {

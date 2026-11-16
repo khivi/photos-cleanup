@@ -183,6 +183,20 @@ Homebrew reaches only developers who already know the app. Users search the App 
   - [ ] Later: a CI job in `release.yml` that builds the store `.pkg` and uploads it to App Store Connect (TestFlight); review stays manual. Needs an App Store Connect API key that may upload, and the Apple Distribution and installer certificates as a `.p12` secret.
 - Say on every page: macOS 15 or later; Screenshots and Paperwork verdicts need macOS 27 with Apple Intelligence.
 
+### Confirm by section (decided 2026-11-12)
+
+Why: Confirm All left untouched Keeps in the pass, and nothing on screen said so (a 42 s video stayed, with the button grayed out). Naming the difference, marked versus not reviewed, was too subtle.
+
+- [x] Confirm acts only on sections you can see, as shown: in a pass every photo (✗ to Delete Me, the rest to Keep), in All only the ✗ Delete marks. Confirm and Confirm Up to Here on every section, All included; finishing a pass is Confirm Up to Here on the last section (⇧Return).
+- [x] A header above the grid, outside the scroll: counts ("N candidates · D to delete"), the caption, and in a pass Keep All and Delete All. In All, only the counts. The window subtitle is empty there.
+- [x] Marks survive switching views (in memory, per view); they used to reset.
+- [x] Unsure (?): a mark you choose when you can't decide. Confirming its section leaves it in the pass; the header counts it; Show Only Unsure (⌥⌘U) finds them. In passes and All, in memory like the other marks; All's Confirm still files only ✗. A section with only Unsure photos can't be confirmed. Confirm buttons in All stay gray until the section has a ✗.
+- [x] Pick as Best replaces Keep Only This: a ☆ on hover (and 1–9) makes that photo the group's ★ and Keep, the rest Delete, without confirming. Undo takes back the ★ and the marks together; the pick survives switching views.
+- [x] Confirmed photos leave All as they leave a pass, and wait in Not in Photos Yet; All's count leaves them out. All used to keep them on screen, badged Delete, unlike every other view.
+- [x] K, ⌫ and ? keep the selection on the photo (they used to move to the next). Confirm stays enabled; a Confirm that files nothing says why in the status bar.
+- [x] ⌫ on the Import screen removes the selected folder from the list (the Photo menu item reads Remove from List there); also on right-click.
+- Not chosen: a pass-wide confirm. Filing only chosen photos needs the hidden marked-or-not distinction. Filing everything lets one click put an unreviewed pass into Keep albums, which later runs skip.
+
 ### Future (not next up)
 
 - ~~**Space freed per pass**~~: dropped 2026-11-02, needs an undocumented PhotoKit key; photo counts suffice. Notes kept: "Bursts · 66 · 1.2 GB" in the sidebar and the move dialog, like the old tool's savings report. PhotoKit has no public file size; `PHAssetResource`'s `fileSize` is an undocumented key. Only if the number matters. Not now (2026-10-30). If built: guard with `responds(to: Selector(("fileSize")))`, since a dropped key raises an Objective-C exception Swift can't catch; sum all of a photo's resources; the figure is iCloud storage, freed once deleted in Photos and Recently Deleted empties. Measure the per-asset cost on the real library first.

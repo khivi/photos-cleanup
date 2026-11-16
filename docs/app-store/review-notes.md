@@ -18,7 +18,7 @@ The app needs Photos access with Full Access (read and write). Please choose All
 TRY IT (about two minutes)
 1. In the sidebar under Review, pick Screenshots, Bursts, Videos or Low Quality. Wait for the progress bar to finish; the grid fills in. Each pass lists photos in sections (a month, or a group of shots).
 2. Photos marked Delete show a delete badge; the rest are Keep. Select a photo and press K to keep or the Delete key to mark delete.
-3. Click a section's Confirm button (or press Return). The section leaves the pass and moves to "Not in Photos Yet". Nothing has changed in Photos at this point, and Undo (toolbar, Cmd-Z) reverses it. "Confirm All" in the toolbar does this for every section.
+3. Click a section's Confirm button (or press Return). The section leaves the pass and moves to "Not in Photos Yet". Nothing has changed in Photos at this point, and Undo (toolbar, Cmd-Z) reverses it. Confirm acts only on the sections on screen; "Confirm Up to Here" on the last section files the whole pass.
 4. Click "Apply N to Photos…" and then Apply. Photos are now filed into albums in the Photos app: "<Pass title> - Delete Me" for photos marked delete and "<Pass title> - Keep" for the rest, for example "Screenshots - Delete Me" and "Screenshots - Keep". The Photos app itself shows these albums.
 5. Open "In Delete Me Albums" in the sidebar. Click "Delete N in Photos…". macOS shows its own confirmation dialog. Those photos are deleted only if the user confirms there. Photos keeps them in Recently Deleted for 30 days. To avoid deleting anything during review, stop after step 4, or cancel the macOS dialog.
 
