@@ -66,6 +66,7 @@ struct ReviewScreen: View {
                     InspectorView(model: model, thumbnails: thumbnails) { focused = true }
                         .inspectorColumnWidth(min: 220, ideal: 260, max: 400)
                 }
+                .safeAreaInset(edge: .top, spacing: 0) { if !model.runSteps.isEmpty { runStrip } }
                 .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
                 .confirmationDialog("Apply to Photos?", isPresented: $model.confirmingApply) {
                     Button("Apply") { Task { await model.apply() } }
@@ -222,8 +223,8 @@ struct ReviewScreen: View {
             ContentUnavailableView {
                 Label(model.emptyStateLabel, systemImage: "checkmark.circle")
             } actions: {
-                if model.canMark, let next = model.nextToReview, let label = model.continueLabel {
-                    Button(label) { Task { await model.select(next) } }
+                if model.canMark, let label = model.continueLabel {
+                    Button(label) { Task { await model.advance() } }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                         .accessibilityIdentifier("continue")
@@ -235,6 +236,26 @@ struct ReviewScreen: View {
                 grid
             }
         }
+    }
+
+    /// During a cleanup run: a bar per pass and Unsure, filled as it empties; the open one's title in bold.
+    private var runStrip: some View {
+        HStack(spacing: 6) {
+            ForEach(model.runSteps) { step in
+                VStack(alignment: .leading, spacing: 2) {
+                    ProgressView(value: step.progress)
+                    Text(step.title).font(.caption2).lineLimit(1)
+                        .fontWeight(step.view == model.view ? .semibold : .regular)
+                        .foregroundStyle(step.view == model.view ? .primary : .secondary)
+                }
+            }
+        }
+        .padding(.horizontal, gridPadding).padding(.vertical, 6)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(model.runLabel)
+        .accessibilityIdentifier("cleanup-progress")
     }
 
     /// Above the grid, outside its ScrollView so it stays put: the counts and the pass's caption; in a

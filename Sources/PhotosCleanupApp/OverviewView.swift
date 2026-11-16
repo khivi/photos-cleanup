@@ -11,8 +11,8 @@ struct OverviewView: View {
                 Text(model.overviewHeadline).font(.title2.weight(.semibold))
                     .accessibilityIdentifier("overview-headline")
                 ForEach(model.overviewNotes, id: \.self) { Text($0).foregroundStyle(.secondary) }
-                if let next = model.nextToReview {
-                    Button(ReviewModel.startLabel) { Task { await model.select(next) } }
+                if model.nextToReview != nil {
+                    Button(ReviewModel.startLabel) { Task { await model.advance() } }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                         .accessibilityIdentifier("start-cleanup")

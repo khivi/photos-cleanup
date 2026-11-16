@@ -106,6 +106,7 @@ To change this later, open System Settings > Privacy & Security > Automation.
 ## Usage
 
 1. The app opens on Overview: how many photos each pass has to review. Click Start Cleanup, or pick a pass in the sidebar.
+   Start Cleanup goes through the passes in order, with a bar per pass across the top that fills as you accept. An empty pass offers Continue to the next. Picking a pass yourself hides the bar.
 2. Check the recommendations. A pass shows one section at a time, with its place in the header ("Burst 12 of 847"). The ★ in Bursts and Similar is the best shot; photos to remove are dimmed and tagged Remove.
 3. Fix any mark: ⌫ switches a photo between Keep and Remove. Can't decide? Press ? to mark it Unsure: accepting its section leaves it in the pass for later.
 4. Click Accept (shortcut: Return), or Keep All (shortcut: K) to keep every photo in the section and accept it. The section leaves the pass and waits in Not in Photos Yet, and the next one opens. Nothing changes in Photos yet, and Undo (toolbar, ⌘Z) reverses it.

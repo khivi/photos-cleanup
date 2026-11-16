@@ -608,6 +608,32 @@ extension ReviewModel {
         #expect(m.nextToReview == nil && m.overviewHeadline == ReviewModel.completeLabel)
     }
 
+    @Test func aCleanupRunShowsEachPassFillingAndEndsWhenYouPickAView() async throws {
+        let photos = [
+            Photo(uuid: "a", date: t0, screenshot: true), Photo(uuid: "b", date: t0 + 40 * 86_400, screenshot: true),
+            Photo(uuid: "v", isMovie: true, duration: 1),
+        ]
+        let (c, _) = try await makeCleanup(photos, judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c, dir: tempDir(), defaults: freshDefaults())
+        m.period = .month
+        await m.refreshCounts()
+        #expect(m.runSteps.isEmpty)
+        await m.advance()  // Start Cleanup
+        #expect(m.view == .pass("screenshots") && m.runSteps.map(\.title) == Passes.all.map(\.title) + ["Unsure"])
+        let progress = { (v: ReviewView) in m.runSteps.first { $0.view == v }?.progress }
+        #expect(progress(.pass("screenshots")) == 0 && progress(.pass("bursts")) == 1 && progress(.pass("videos")) == 0)
+        #expect(m.runLabel == "Cleanup, Screenshots, step 1 of \(Passes.all.count + 1)")
+        await m.confirm(m.groups[0])
+        #expect(progress(.pass("screenshots")) == 0.5)  // one of two months accepted
+        await m.confirm(m.groups[0])
+        await m.refreshCounts()
+        #expect(progress(.pass("screenshots")) == 1)
+        await m.advance()  // Continue
+        #expect(m.view == .pass("videos") && progress(.pass("screenshots")) == 1 && progress(.pass("videos")) == 0)
+        await m.select(.pass("screenshots"))  // chosen in the sidebar: no run
+        #expect(m.runSteps.isEmpty && m.runLabel.isEmpty)
+    }
+
     @Test func cleanupIsCompleteWhenEveryPassAndUnsureAreEmpty() async throws {
         let (c, _) = try await makeCleanup(shots("a"), judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c, dir: tempDir())

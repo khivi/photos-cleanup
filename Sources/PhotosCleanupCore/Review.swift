@@ -85,6 +85,10 @@ public final class ReviewModel {
     public private(set) var autoPeriods: [String: Period] = [:]
     /// Settings, Sections: how the passes without groups split. A change regroups the open pass.
     public var period: Period = .auto { didSet { if period != oldValue { regroup() } } }
+    /// A cleanup run: Start Cleanup or Continue opened this view. Choosing a view yourself ends it.
+    public private(set) var inRun = false
+    /// The open step's section count when the run reached it, for its share done.
+    @ObservationIgnored private var runStart = 0
     /// The open pass's own order (worst first, longest first), kept within a section.
     @ObservationIgnored private var passOrder: [String: Int] = [:]
     /// The background Vision analysis and verdict queue, refreshed with `counts`.
@@ -405,6 +409,7 @@ public final class ReviewModel {
     // MARK: Loading
 
     public func select(_ v: ReviewView) async {
+        inRun = false
         status = nil
         previewing = false
         onlyDelete = false
@@ -1322,6 +1327,40 @@ extension ReviewModel {
                 ? nil : "\(deleted.count.formatted()) waiting in Delete Me albums: Delete in Photos… deletes them.",
             autoIsCoarse ? Self.sectionsNote : nil,
         ].compactMap { $0 }
+    }
+
+    /// Start Cleanup and Continue: the next pass with photos, as a step of a cleanup run.
+    public func advance() async {
+        guard let next = nextToReview else { return }
+        await select(next)
+        inRun = true
+        runStart = groups.count
+    }
+
+    public struct RunStep: Identifiable, Sendable, Equatable {
+        public let view: ReviewView
+        public let title: String
+        /// 1 once nothing is left; the open step by the share of its sections accepted.
+        public let progress: Double
+        public var id: ReviewView { view }
+    }
+
+    /// The strip over a cleanup run: every pass, then Unsure. Empty outside a run, so a pass opened
+    /// from the sidebar or the Overview shows none.
+    public var runSteps: [RunStep] {
+        guard inRun else { return [] }
+        let start = max(runStart, groups.count)
+        let open = start == 0 ? 1 : 1 - Double(groups.count) / Double(start)
+        return overviewRows.map {
+            RunStep(view: $0.view, title: $0.title, progress: $0.view == view ? open : $0.count == 0 ? 1 : 0)
+        }
+    }
+
+    /// "Cleanup, Bursts, step 3 of 7": the strip for VoiceOver.
+    public var runLabel: String {
+        let steps = runSteps
+        guard let i = steps.firstIndex(where: { $0.view == view }) else { return "" }
+        return "Cleanup, \(steps[i].title), step \(i + 1) of \(steps.count)"
     }
 
     /// Where Start Cleanup, and Continue once a pass is empty, go: the next pass with photos to review after
