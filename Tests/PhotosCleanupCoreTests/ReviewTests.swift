@@ -897,6 +897,11 @@ extension ReviewModel {
         #expect(m.overviewNotes.contains(ReviewModel.sectionsNote))
         m.period = .month  // set by hand: no note
         #expect(!m.overviewNotes.contains(ReviewModel.sectionsNote))
+
+        let (small, _) = try await makeCleanup(few, vision: [:])
+        let n = ReviewModel(cleanup: small, dir: tempDir(), defaults: freshDefaults())
+        await n.refreshCounts()
+        #expect(!n.overviewNotes.contains(ReviewModel.sectionsNote))  // Auto stayed by month
     }
 }
 
