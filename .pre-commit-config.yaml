@@ -29,6 +29,9 @@ repos:
     rev: v1.7.12
     hooks:
       - id: actionlint
+        # v1.7.12 predates GitHub's `uses: $/...` self-repository form (July 2026), which zizmor
+        # requires; drop this once actionlint accepts it.
+        args: [-ignore, 'reusable workflow call "\$/']
 
   # actionlint checks that a workflow is correct, zizmor that it is safe: release.yml
   # holds the Developer ID certificate, the notary key and HOMEBREW_TAP_TOKEN.

@@ -1,7 +1,8 @@
 name: release
 
-# When a commit to master changes CFBundleShortVersionString in the app's
-# Info.plist (or on a manual run): build the universal app, sign it with
+# Called by ci.yml after a master commit passes lint and both builds (or run
+# by hand): when CFBundleShortVersionString in the app's Info.plist names a
+# version with no release yet, build the universal app, sign it with
 # Developer ID, notarize and staple it, create the GitHub Release v<version>
 # with the zip attached, then write the cask in the Homebrew tap.
 #
@@ -18,37 +19,36 @@ name: release
 # (base64), NOTARY_KEY_ID, NOTARY_ISSUER_ID.
 
 on:
-  push:
-    branches: [master]
-    paths: ["Sources/PhotosCleanupApp/Info.plist"]
+  workflow_call:
+    secrets:
+      MACOS_CERT_P12: { required: true }
+      MACOS_CERT_PASSWORD: { required: true }
+      NOTARY_KEY_P8: { required: true }
+      NOTARY_KEY_ID: { required: true }
+      NOTARY_ISSUER_ID: { required: true }
+      HOMEBREW_TAP_TOKEN: { required: true }
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: release
-  cancel-in-progress: false
-
 jobs:
-  release:
-    # xcode-27 (preview) has the macOS 27 SDK; on macos-latest the app would
-    # ship without Foundation Models verdicts.
-    runs-on: xcode-27
-    permissions:
-      contents: write # create the tag and Release with GITHUB_TOKEN
+  # On ubuntu, so a master commit that doesn't change the version never waits for a macOS runner.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      skip: ${{ steps.check.outputs.skip }}
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          fetch-depth: 0 # full history: BUILD_NUMBER is the commit count
-
       - name: Read version and skip if already released
-        id: ver
+        id: check
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          v="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Sources/PhotosCleanupApp/Info.plist)"
+          v="$(python3 -c 'import plistlib; print(plistlib.load(open("Sources/PhotosCleanupApp/Info.plist", "rb"))["CFBundleShortVersionString"])')"
           if [ -z "$v" ]; then
             echo "::error::could not read CFBundleShortVersionString"
             exit 1
@@ -61,11 +61,27 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+  release:
+    needs: version
+    if: needs.version.outputs.skip == 'false'
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    # xcode-27 (preview) has the macOS 27 SDK; on macos-latest the app would
+    # ship without Foundation Models verdicts.
+    runs-on: xcode-27
+    permissions:
+      contents: write # create the tag and Release with GITHUB_TOKEN
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # full history: BUILD_NUMBER is the commit count
+
       - name: Build, sign, notarize and staple the app
-        if: steps.ver.outputs.skip == 'false'
         id: pkg
         env:
-          V: ${{ steps.ver.outputs.version }}
+          V: ${{ needs.version.outputs.version }}
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
@@ -125,10 +141,9 @@ jobs:
           rm -rf "$RUNNER_TEMP/signing"
 
       - name: Create tag and GitHub Release
-        if: steps.ver.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-          V: ${{ steps.ver.outputs.version }}
+          V: ${{ needs.version.outputs.version }}
           ZIP: ${{ steps.pkg.outputs.zip }}
         run: |
           gh release create "v$V" "$ZIP" \
@@ -137,10 +152,9 @@ jobs:
       # The cask is written whole from here, so this repo holds its only copy.
       # The old formula of the same name goes: brew would prefer it over the cask.
       - name: Write the Homebrew cask
-        if: steps.ver.outputs.skip == 'false'
         env:
           TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          V: ${{ steps.ver.outputs.version }}
+          V: ${{ needs.version.outputs.version }}
           SHA: ${{ steps.pkg.outputs.sha256 }}
         run: |
           git clone -q "https://x-access-token:$TOKEN@github.com/khivi/homebrew-photos-cleanup.git" tap

@@ -27,7 +27,7 @@ Not pursuing:
 
 Homebrew is the install path: the cask in `khivi/homebrew-photos-cleanup` installs the signed, notarized app zip from each GitHub Release. Release steps are in [CONTRIBUTING.md](CONTRIBUTING.md#release).
 
-`ci.yml` runs `swift build` and `swift test` on `macos-latest` (no macOS 27 SDK: the no-verdicts fallback) and `xcode-27` (verdicts compiled in), where it also builds and signs the `.app`.
+`ci.yml` lints every push on ubuntu. The macOS jobs run only on master, since the pre-push hook builds, tests and smoke-tests on a Mac: `swift build` and `swift test` on `macos-latest` (no macOS 27 SDK: the no-verdicts fallback) and `xcode-27` (verdicts compiled in), where it also builds and signs the `.app`. A green master then calls `release.yml`.
 
 ## Visibility
 
