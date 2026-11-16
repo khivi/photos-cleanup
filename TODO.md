@@ -20,7 +20,7 @@ Not pursuing:
 - **Dry run.** Nothing changes until Apply is confirmed.
 - **Date range.** The Keep album hides reviewed photos, so a rerun shows only new ones.
 - **Side-by-side compare in a group.** ←/→ in the preview flips between frames.
-- **Anything sorted by size.** No file sizes are read (see the recoverable GB item).
+- **Anything sorted by size, or "you can recover N GB".** No file sizes are read: `PHAssetResource`'s `fileSize` is an undocumented key.
 - **Streaks, widgets, reminders, swiping, video compression, Live Photo → still.** Phone retention features; compression and conversion re-import through PhotoKit and lose metadata.
 
 ## Packaging and CI
@@ -33,7 +33,6 @@ Homebrew is the install path: the cask in `khivi/homebrew-photos-cleanup` instal
 
 Say on every page: macOS 15 or later; Screenshots and Paperwork verdicts need macOS 27 with Apple Intelligence.
 
-- [ ] **Social preview:** `docs/social-preview.png` (1280×640). Upload it in Settings > General > Social preview; GitHub has no API for it.
 - [ ] **Landing page:** one GitHub Pages page (headline, screenshots or a GIF, Download button to the latest release, requirements), set as the repo homepage.
 - [ ] **Listings:** posts on r/macapps and r/apple; Show HN (lead with the on-device Vision and Foundation Models work); pull requests to `serhii-londar/open-source-mac-os-apps` and `jaywcjlove/awesome-mac`; AlternativeTo and MacUpdate; Product Hunt once the landing page is up. Claude drafts; the user posts.
 - [ ] **Official Homebrew cask** (`brew install --cask photos-cleanup` without the tap). Homebrew turns down repos that aren't yet well known, about 75 stars.
@@ -43,16 +42,12 @@ Say on every page: macOS 15 or later; Screenshots and Paperwork verdicts need ma
 0.11.0 (build 274) is submitted for review, manual release (2026-11-10). App ID 6833111040; `AppStore.provisionprofile` expires 2027-11-10.
 
 - [ ] TestFlight check of 274: Photos access, Import and Export folders kept across relaunch, no Show in Photos.
-- [ ] After approval: Release This Version in App Store Connect.
-- [ ] An Import screenshot from a sample folder with a neutral path (the demo's is under `.build/`).
-- [ ] Later: a CI job in `release.yml` that builds the store `.pkg` and uploads it to App Store Connect (TestFlight); review stays manual. Needs an App Store Connect API key that may upload, and the Apple Distribution and installer certificates as a `.p12` secret.
+- [ ] Release 0.11.0 by hand after approval. From 0.12, use automatic release in App Store Connect, and have a `release.yml` job build the store `.pkg` (`scripts/app.sh store`) and upload it with `xcrun altool`; khivi submits for review. Needs an App Store Connect API key that may upload (check whether the notary key's role allows it), and the Apple Distribution and 3rd Party Mac Developer Installer certificates as a `.p12` secret.
 
 ## UX
 
-- [ ] **After #16–#24 merge: retake the App Store screenshots** (`docs/app-store/screenshots/`) and `docs/screenshot.jpg` from the demo (`scripts/app.sh demo`). They show the old grid, Delete Me albums and the All view.
+- [ ] **After #16–#23 merge: retake every screenshot from the demo** (`scripts/app.sh demo`): the App Store screenshots (`docs/app-store/screenshots/`), `docs/screenshot.jpg`, the Import screenshot (from a sample folder with a neutral path; the demo's is under `.build/`), and the social preview `docs/social-preview.png` (1280×640), which shows the real library and the old UI. Upload the social preview in GitHub Settings > General > Social preview; GitHub has no API for it.
 - [ ] Paperwork is skipped by Start Cleanup and Continue until opened: its count waits for verdicts, which start only when the pass opens.
-- [ ] "You can recover 18.2 GB": needs each asset's file size. `PHAssetResource`'s `fileSize` is an undocumented key: guard with `responds(to:)`, since a missing key raises an Objective-C exception Swift can't catch.
-- [ ] A single section with hundreds of photos (a trip in Videos) could split by week.
 
 Open naming questions:
 
