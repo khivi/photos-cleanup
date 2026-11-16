@@ -2,6 +2,7 @@ import Foundation
 import Observation
 
 public enum ReviewView: Hashable, Sendable {
+    case overview  // what's left to review, per pass
     case pass(String)  // a key from `Passes.all`
     case unsure  // photos accepted as Unsure in a pass, by pass
     case deleted  // photos waiting in Delete Me albums
@@ -36,7 +37,7 @@ public enum Decision: Sendable, Equatable {
 /// the "In Delete Me Albums" list. No timers: the view calls `refresh()` while `progress.pending > 0`.
 @MainActor @Observable
 public final class ReviewModel {
-    public private(set) var view = ReviewView.pass(Passes.all[0].key)
+    public private(set) var view = ReviewView.overview
     public private(set) var photos: [PassPhoto] = []
     /// Grouped passes: one row per group.
     public private(set) var groups: [BurstGroup] = []
@@ -203,7 +204,8 @@ public final class ReviewModel {
     // MARK: Labels (what the screen shows; views only lay them out)
 
     public static let tabs: [(view: ReviewView, title: String, help: String)] =
-        Passes.all.map { (.pass($0.key), $0.title, Passes.about[$0.key] ?? "") }
+        [(.overview, overviewTitle, "What’s left to review in each pass.")]
+        + Passes.all.map { (.pass($0.key), $0.title, Passes.about[$0.key] ?? "") }
         + [
             (
                 .unsure, unsureTitle,
@@ -228,7 +230,7 @@ public final class ReviewModel {
 
     /// Each sidebar row's SF Symbol; Photos' own where it has the same row.
     static let icons: [ReviewView: String] = [
-        .unsure: "questionmark.circle", .pass("screenshots"): "camera.viewfinder",
+        .overview: "checklist", .unsure: "questionmark.circle", .pass("screenshots"): "camera.viewfinder",
         .pass("paperwork"): "doc.text", .pass("bursts"): "square.stack.3d.down.right",
         .pass("similar"): "square.on.square", .pass("low-quality"): "camera.metering.unknown",
         .pass("videos"): "video", .deleted: "trash", .pending: "tray.full", .export: "square.and.arrow.up",
@@ -254,11 +256,12 @@ public final class ReviewModel {
         public var id: String { title }
     }
 
-    /// Cleanup (the passes, Unsure), Review (Pending, To be deleted), Transfer (Export, Import), built from `tabs`.
+    /// Cleanup (Overview, the passes, Unsure), Review (Pending, To be deleted), Transfer (Export, Import), built from `tabs`.
     public var sidebar: [SidebarSection] {
         func item(_ t: (view: ReviewView, title: String, help: String)) -> SidebarItem {
             let n: Int? =
                 switch t.view {
+                case .overview: nil
                 case .pass(let k): counts[k] ?? nil
                 case .unsure: unsure.count
                 case .deleted: deleted.count
@@ -282,7 +285,7 @@ public final class ReviewModel {
         }
         func items(_ keep: (ReviewView) -> Bool) -> [SidebarItem] { Self.tabs.filter { keep($0.view) }.map(item) }
         return [
-            SidebarSection(title: "Cleanup", items: items { $0.passKey != nil || $0 == .unsure }),
+            SidebarSection(title: "Cleanup", items: items { $0.passKey != nil || $0 == .unsure || $0 == .overview }),
             SidebarSection(title: "Review", items: items { $0 == .pending || $0 == .deleted }),
             SidebarSection(title: "Transfer", items: items { $0 == .export || $0 == .importFolders }),
         ]
@@ -296,6 +299,7 @@ public final class ReviewModel {
         if view == .pending { return "\(pending.count.formatted()) to apply to Photos" }
         if view == .export { return exportCountsLabel }
         if view == .importFolders { return importSummary }
+        if view == .overview { return overviewHeadline }
         let unsure = photos.count { decisions[$0.id] == .unsure }
         let n = "\(photos.count.formatted()) \(photos.count == 1 ? "photo" : "photos")"
         let keeping = photos.count { decisions[$0.id] == .keep }
@@ -416,7 +420,7 @@ public final class ReviewModel {
         onlyDelete = false
         if canMark { savedMarks[view] = decisions.filter { touched.contains($0.key) } }
         if isGrouped { savedStars[view] = starred }
-        if v == .export || v == .importFolders {
+        if v == .export || v == .importFolders || v == .overview {
             view = v
             clearSelection()
             forgetUndo()
@@ -1223,6 +1227,66 @@ extension ReviewModel {
     private func full(_ g: BurstGroup) -> BurstGroup { groups.first { $0.best == g.best } ?? g }
 }
 
+// MARK: Overview
+
+extension ReviewModel {
+    public static let overviewTitle = "Overview"
+    public static let startLabel = "Start Cleanup"
+
+    /// One row per pass, then Unsure: its count (nil while unknown) and what it recommends.
+    public struct OverviewRow: Identifiable, Sendable, Equatable {
+        public let view: ReviewView
+        public let title: String
+        public let count: Int?
+        public let caption: String?
+        public var id: ReviewView { view }
+    }
+
+    public var overviewRows: [OverviewRow] {
+        Passes.all.map {
+            OverviewRow(
+                view: .pass($0.key), title: $0.title, count: counts[$0.key] ?? nil, caption: Passes.captions[$0.key])
+        }
+            + [
+                OverviewRow(
+                    view: .unsure, title: Self.unsureTitle, count: unsure.count,
+                    caption: "Photos you accepted as Unsure.")
+            ]
+    }
+
+    /// "Cleanup complete.", "214 photos to review", or "Checking your library…" before any count is known.
+    public var overviewHeadline: String {
+        if cleanupComplete { return Self.completeLabel }
+        let known = overviewRows.compactMap(\.count)
+        guard known.count > 1 else { return "Checking your library…" }  // Unsure alone is always known
+        let n = known.reduce(0, +)
+        return "\(n.formatted()) \(n == 1 ? "photo" : "photos") to review"
+    }
+
+    /// The other steps waiting: photos to apply, then photos to delete in Photos.
+    public var overviewNotes: [String] {
+        [
+            pending.isEmpty
+                ? nil
+                : "\(pending.count.formatted()) accepted, not in Photos yet: Apply to Photos… adds them to their albums.",
+            deleted.isEmpty
+                ? nil : "\(deleted.count.formatted()) waiting in Delete Me albums: Delete in Photos… deletes them.",
+        ].compactMap { $0 }
+    }
+
+    /// Where Start Cleanup, and Continue once a pass is empty, go: the next pass with photos to review after
+    /// the open one, wrapping round, else Unsure. A pass at 0, or still being counted, is skipped.
+    public var nextToReview: ReviewView? { nextRow?.view }
+    /// "Continue to Bursts (7)", under an emptied pass or Unsure.
+    public var continueLabel: String? { nextRow.map { "Continue to \($0.title) (\(($0.count ?? 0).formatted()))" } }
+
+    private var nextRow: OverviewRow? {
+        let rows = overviewRows
+        let at = rows.firstIndex { $0.view == view }.map { $0 + 1 } ?? 0
+        return (rows[at...] + rows[..<at]).first { ($0.count ?? 0) > 0 && $0.view != view }
+    }
+}
+
 // MARK: Month sections
 
 extension ReviewModel {
@@ -1513,7 +1577,7 @@ public enum LaunchResult {
     case loaded(ReviewModel, uuids: [String])
 }
 
-/// Authorizes, loads the library, starts Vision and builds the model on the first pass.
+/// Authorizes, loads the library, starts Vision and builds the model on the Overview.
 @MainActor
 public func launch(
     library: PhotoLibrary, judge: Judge, settings: LaunchSettings, cacheDir: URL,
@@ -1535,6 +1599,6 @@ public func launch(
     model.showsInspector = settings.showsInspector
     model.zoom = settings.zoom ?? model.zoom
     model.aspectFit = settings.aspectFit
-    await model.select(.pass(Passes.all[0].key))
+    await model.select(.overview)
     return .loaded(model, uuids: photos.map(\.uuid))
 }

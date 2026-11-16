@@ -194,7 +194,7 @@ extension ReviewModel {
         let m = ReviewModel(cleanup: c, dir: tempDir())
         #expect(
             ReviewModel.tabs.map(\.title) == [
-                "Screenshots", "Paperwork", "Bursts", "Similar", "Low Quality", "Videos", "Unsure",
+                "Overview", "Screenshots", "Paperwork", "Bursts", "Similar", "Low Quality", "Videos", "Unsure",
                 "Not in Photos Yet", "In Delete Me Albums", "Export", "Import",
             ])
         #expect(m.sidebar.map(\.title) == ["Cleanup", "Review", "Transfer"])
@@ -223,7 +223,7 @@ extension ReviewModel {
         #expect(m.sidebar.map(\.title) == ["Cleanup", "Review", "Transfer"])
         #expect(
             titles == [
-                Passes.all.map(\.title) + ["Unsure"], ["Not in Photos Yet", "In Delete Me Albums"],
+                ["Overview"] + Passes.all.map(\.title) + ["Unsure"], ["Not in Photos Yet", "In Delete Me Albums"],
                 ["Export", "Import"],
             ])
         // Nothing counted yet; Unsure is read at launch.
@@ -582,6 +582,41 @@ extension ReviewModel {
         #expect(m.photos.map(\.id) == ["b"])
         await m.select(.unsure)
         #expect(m.photos.map(\.id) == ["a"] && m.header(m.groups[0]) == "Screenshots · 1")
+    }
+
+    @Test func overviewCountsWhatIsLeftAndStartsAtTheFirstPassWithPhotos() async throws {
+        let (c, _) = try await makeCleanup(
+            shots("a", "b") + [Photo(uuid: "v", isMovie: true, duration: 1)], verdicts: ["a": dropV],
+            judge: FakeJudge(off: "off"))
+        let m = ReviewModel(cleanup: c, dir: tempDir())
+        #expect(m.view == .overview && m.overviewHeadline == "Checking your library…" && !m.canMark)
+        await m.refreshCounts()
+        #expect(m.overviewHeadline == "3 photos to review" && m.summary == m.overviewHeadline)
+        #expect(m.overviewRows.map(\.title) == Passes.all.map(\.title) + ["Unsure"])
+        #expect(m.overviewRows.first?.count == 2 && m.nextToReview == .pass("screenshots"))
+        #expect(m.overviewNotes.isEmpty)
+        await m.select(.pass("videos"))
+        #expect(m.nextToReview == .pass("screenshots"))  // after the open pass, wrapping round
+        await m.select(.pass("screenshots"))
+        await m.confirmEverySection()
+        await m.refreshCounts()
+        // Paperwork and the passes at 0 are skipped.
+        #expect(m.nextToReview == .pass("videos") && m.continueLabel == "Continue to Videos (1)")
+        #expect(m.overviewHeadline == "1 photo to review")
+        #expect(m.overviewNotes == ["2 accepted, not in Photos yet: Apply to Photos… adds them to their albums."])
+        await m.apply()
+        await m.select(.overview)
+        #expect(m.overviewNotes == ["1 waiting in Delete Me albums: Delete in Photos… deletes them."])
+        await m.select(.pass("videos"))
+        m.mark(["v"], .unsure)
+        await m.confirmEverySection()
+        await m.refreshCounts()
+        #expect(m.nextToReview == .unsure && m.overviewRows.last?.count == 1)
+        await m.select(.unsure)
+        m.mark(["v"], .keep)
+        await m.confirmEverySection()
+        await m.refreshCounts()
+        #expect(m.nextToReview == nil && m.overviewHeadline == ReviewModel.completeLabel)
     }
 
     @Test func cleanupIsCompleteWhenEveryPassAndUnsureAreEmpty() async throws {

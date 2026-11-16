@@ -206,16 +206,27 @@ struct ReviewScreen: View {
 
     /// The window shows a photo grid: not Export, Import or an empty state.
     private var showsGrid: Bool {
-        ![.export, .importFolders].contains(model.view) && !model.showsEmptyState
+        ![.export, .importFolders, .overview].contains(model.view) && !model.showsEmptyState
     }
 
     @ViewBuilder private var content: some View {
-        if model.view == .export {
+        if model.view == .overview {
+            OverviewView(model: model)
+        } else if model.view == .export {
             ExportView(model: model)
         } else if model.view == .importFolders {
             ImportView(model: model)
         } else if model.showsEmptyState {
-            ContentUnavailableView(model.emptyStateLabel, systemImage: "checkmark.circle")
+            ContentUnavailableView {
+                Label(model.emptyStateLabel, systemImage: "checkmark.circle")
+            } actions: {
+                if model.canMark, let next = model.nextToReview, let label = model.continueLabel {
+                    Button(label) { Task { await model.select(next) } }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                        .accessibilityIdentifier("continue")
+                }
+            }
         } else {
             VStack(spacing: 0) {
                 if model.showsHeader { header }
@@ -394,7 +405,7 @@ struct ReviewScreen: View {
             case .deleted: .deleteMe
             case .pending: model.pending[p.id]?.keep == true ? .none : .decision(.delete)
             case .pass, .unsure: model.decision(p.id).map { .decision($0) } ?? .none
-            case .export, .importFolders: .none
+            case .export, .importFolders, .overview: .none
             }
         return PhotoCell(
             photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id), compact: compact,
@@ -467,6 +478,7 @@ extension View {
 extension ReviewView {
     var sidebarID: String {
         switch self {
+        case .overview: "tab-overview"
         case .pass(let key): "tab-\(key)"
         case .unsure: "tab-unsure"
         case .deleted: "tab-deleted"

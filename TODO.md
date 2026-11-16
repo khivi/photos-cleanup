@@ -236,7 +236,12 @@ Phase 2b: Inbox Zero (branch `khivi/inbox-zero`, on #19).
 - [x] "Cleanup complete" when every pass and Unsure are empty.
 - [x] Bursts and Similar: the ★ back at 1.8× the cell (at most 420 pt) with the other shots small beside it, as in #17, instead of filling the window.
 
-Phase 3, a later experiment: a dashboard ("You can recover 18.2 GB", counts per category, Start Cleanup). The current navigation stays.
+Phase 3: Overview (branch `khivi/overview`, on `khivi/inbox-zero`).
+
+- [x] The app opens on Overview: "214 photos to review", each pass's count and caption, Unsure, then what waits to apply or delete. Start Cleanup opens the first pass with photos; a row opens its pass. "Cleanup complete" when all are empty.
+- [x] An emptied pass or Unsure offers "Continue to Bursts (7)" (Return): the next pass with photos, skipping those at 0 or still counting.
+- [ ] Paperwork is skipped until opened: its count waits for verdicts, which start only when the pass opens.
+- [ ] "You can recover 18.2 GB": needs each asset's file size (`PHAssetResource`), which the app doesn't read yet.
 
 Open naming questions:
 
