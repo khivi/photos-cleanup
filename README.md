@@ -130,13 +130,14 @@ A tile marks a Live Photo "Live" and a screen recording "Screen recording".
 
 Every pass is in sections: a group in Bursts and Similar, a month in the others, newest first.
 A pass shows one section at a time. Bursts and Similar show the best shot (★ Best shot) large, with the other shots below it. The other passes show the month's photos as a grid.
-A section left with only Unsure photos is skipped; Show Only Unsure (⌥⌘U) finds it.
 Select the ★, or select nothing, and the Info panel's "Why this photo?" lists what the app measured: its Vision score against the group's, its face quality where faces counted, an edit, or your pick.
 In Bursts and Similar, hover a photo and click its ☆ (or right-click it and pick Pick as Best; shortcut: 1–9). That photo becomes the group's ★ and is kept; the rest are marked Remove. Nothing is accepted until you press Return or click the group's Accept.
 What's left in a pass is what you haven't accepted, so you can work through a big one over several sittings.
 
-All shows every photo by month in one scrolling grid, for photos no pass suggests.
-Mark a photo Remove there, then click its section's Accept and Apply to Photos…. Accept files only the section's Remove photos, to "All - Delete Me". As in a pass, accepted photos leave All and wait in Not in Photos Yet.
+Mark a photo Unsure (?) when you can't decide. Accepting its section moves it to Unsure, so the pass still empties.
+Unsure lists those photos by the pass they came from. Mark each Keep (K) or Remove (⌫), then click the section's Accept: they file into that pass's albums.
+Unsure is saved, so it survives a relaunch.
+When every pass and Unsure are empty, the app says "Cleanup complete".
 
 | Key | Action |
 | --- | --- |
@@ -144,15 +145,14 @@ Mark a photo Remove there, then click its section's Accept and Apply to Photos�
 | Arrow keys | Move the selection within the section |
 | Return | Same as Accept: accept the section and go to the next |
 | 1–9 | In Bursts and Similar: pick photo N of the group as best (★); the rest are marked Remove |
-| K | In a pass: same as Keep All, keep every photo in the section and accept it. In All: mark Keep |
+| K | In a pass: same as Keep All, keep every photo in the section and accept it. In Unsure: mark Keep |
 | ⌫ | Switch between Keep and Remove |
-| ? | Mark unsure: it stays in the pass when its section is accepted |
+| ? | Mark unsure: it moves to Unsure when its section is accepted |
 | Space, Esc | Show or close the large preview (videos play) |
 | ⌘I | Show the Info panel: date, albums, and why the photo was picked |
 | ⌘R | Show the photo in Photos |
 | ⌘Z / ⇧⌘Z | Same as the toolbar Undo button / redo |
 | ⌥⌘D | Show only photos marked delete |
-| ⌥⌘U | Show only photos marked unsure |
 | ⌘+ / ⌘− | Larger / smaller thumbnails |
 | ⌥↓ / ⌥↑ | Next / previous month or group |
 

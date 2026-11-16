@@ -256,7 +256,7 @@ public actor Cleanup {
     }
 
     public func counts() -> [String: Int?] {
-        var out: [String: Int?] = ["all": photos.count]
+        var out: [String: Int?] = [:]
         for (kind, _) in Passes.all {
             guard let found = try? candidates(kind) else { continue }
             if kind == "screenshots" || Passes.plain.contains(kind) {

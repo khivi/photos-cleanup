@@ -161,14 +161,6 @@ struct ReviewScreen: View {
                 .accessibilityIdentifier("only-delete-toggle")
             }
         }
-        if model.canMarkUnsure {
-            ToolbarItem {
-                @Bindable var model = model
-                Toggle(ReviewModel.onlyUnsureLabel, systemImage: "questionmark.circle", isOn: $model.onlyUnsure)
-                    .help(ReviewModel.onlyUnsureLabel)
-                    .accessibilityIdentifier("only-unsure-toggle")
-            }
-        }
         if model.view == .deleted {
             ToolbarItem {
                 Button(model.deleteInPhotosLabel, systemImage: "trash") { Task { await model.deleteInPhotos() } }
@@ -213,7 +205,9 @@ struct ReviewScreen: View {
     }
 
     /// The window shows a photo grid: not Export, Import or an empty state.
-    private var showsGrid: Bool { model.view != .export && model.view != .importFolders && !model.showsEmptyState }
+    private var showsGrid: Bool {
+        ![.export, .importFolders].contains(model.view) && !model.showsEmptyState
+    }
 
     @ViewBuilder private var content: some View {
         if model.view == .export {
@@ -339,37 +333,50 @@ struct ReviewScreen: View {
         }
     }
 
-    /// A pass's one section on screen. Bursts and Similar: the ★ as large as the window allows, the
-    /// other shots below. The other passes: the month's photos.
+    /// A pass's one section on screen. Bursts and Similar: the ★ as the hero, 1.8× the cell (capped so the
+    /// row fits), the other shots smaller beside it, wrapping. The other passes: the month's photos.
     private func focusSection(_ group: BurstGroup) -> some View {
-        let cells = [
-            GridItem(.adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
-        ]
         let star = model.isGrouped ? group.photos.first { model.isBest($0.id) } ?? group.photos[0] : nil
         let rest = group.photos.filter { $0.id != star?.id }.map { PassPhoto(photo: $0) }
         let verdicts = Dictionary(model.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        // 90: the header line, and the label and a row of the other shots below the ★.
-        let hero = max(
-            model.cellSize,
-            min(size.width - 2 * gridPadding, size.height - (rest.isEmpty ? 40 : model.cellSize + 90)))
+        let width = size.width - 2 * gridPadding
+        let small = (model.cellSize * 0.6).rounded()
+        let big = max(model.cellSize, min((model.cellSize * 1.8).rounded(), 420, width - small - 8))
+        let perRow = max(1, Int((width - big) / (small + 4)))
+        let rows = stride(from: 0, to: rest.count, by: perRow).map { Array(rest[$0..<min($0 + perRow, rest.count)]) }
         return VStack(alignment: .leading, spacing: 8) {
             Text(model.header(group)).font(.headline).padding(.top, 8)
             if let star {
-                cell(PassPhoto(photo: star), large: hero).frame(width: hero, height: hero)
-                    .frame(maxWidth: .infinity)
-                    .id(star.id)
-                if !rest.isEmpty, let others = model.othersLabel {
-                    Text(others).font(.caption).foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 4) {
+                    cell(PassPhoto(photo: star), large: big).frame(width: big, height: big).id(star.id)
+                    VStack(alignment: .leading, spacing: 4) {
+                        if !rest.isEmpty, let others = model.othersLabel {
+                            Text(others).font(.caption).foregroundStyle(.secondary).frame(height: 16)
+                        }
+                        ForEach(rows.indices, id: \.self) { r in
+                            HStack(spacing: 4) {
+                                ForEach(rows[r]) {
+                                    cell(verdicts[$0.id] ?? $0, compact: true).frame(width: small, height: small)
+                                }
+                            }
+                        }
+                    }
                 }
-            }
-            LazyVGrid(columns: cells, spacing: 4) {
-                ForEach(rest) { p in cell(verdicts[p.id] ?? p, compact: star != nil) }
+            } else {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
+                    ],
+                    spacing: 4
+                ) {
+                    ForEach(rest) { p in cell(verdicts[p.id] ?? p) }
+                }
             }
         }
         .padding(.horizontal, gridPadding)
     }
 
-    /// Files the section's Remove marks: All's sections each have one.
+    /// Files the section's Keep and Remove marks: Unsure's sections each have one.
     private func confirmButton(_ group: BurstGroup) -> some View {
         Button(ReviewModel.confirmLabel) {
             focused = true
@@ -384,12 +391,9 @@ struct ReviewScreen: View {
     private func cell(_ p: PassPhoto, compact: Bool = false, large: CGFloat? = nil) -> some View {
         let mark: PhotoCell.Mark =
             switch model.view {
-            case .all:
-                model.decision(p.id).map { .decision($0) }
-                    ?? (model.deletedAlbum[p.id] != nil ? .deleteMe : .none)
             case .deleted: .deleteMe
             case .pending: model.pending[p.id]?.keep == true ? .none : .decision(.delete)
-            case .pass: model.decision(p.id).map { .decision($0) } ?? .none
+            case .pass, .unsure: model.decision(p.id).map { .decision($0) } ?? .none
             case .export, .importFolders: .none
             }
         return PhotoCell(
@@ -463,8 +467,8 @@ extension View {
 extension ReviewView {
     var sidebarID: String {
         switch self {
-        case .all: "tab-all"
         case .pass(let key): "tab-\(key)"
+        case .unsure: "tab-unsure"
         case .deleted: "tab-deleted"
         case .export: "tab-export"
         case .importFolders: "tab-import"
@@ -485,7 +489,7 @@ struct ReviewCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Photo") {
-            // K keeps the whole section in a pass, one photo in All.
+            // K keeps the whole section in a pass, the selection in Unsure.
             Button(model?.keepKeyLabel ?? Decision.keep.label) { Task { await model?.keepKey() } }
                 .keyboardShortcut("k", modifiers: [])
                 .accessibilityIdentifier("mark-keep")
@@ -530,9 +534,6 @@ struct ReviewCommands: Commands {
             Button(ReviewModel.onlyDeleteLabel) { model?.onlyDelete.toggle() }
                 .keyboardShortcut("d", modifiers: [.command, .option])
                 .disabled(model?.canFilter != true)
-            Button(ReviewModel.onlyUnsureLabel) { model?.onlyUnsure.toggle() }
-                .keyboardShortcut("u", modifiers: [.command, .option])
-                .disabled(model?.canMarkUnsure != true)
             Button("Next Section") { model?.moveSection(by: 1) }
                 .keyboardShortcut(.downArrow, modifiers: .option)
                 .disabled(model?.canMoveSection != true)

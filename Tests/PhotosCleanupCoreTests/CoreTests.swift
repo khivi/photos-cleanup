@@ -74,7 +74,6 @@ import Testing
     }
     // All's one album derives from the All title, and the All tab reads that title.
     #expect(Passes.allDeleteAlbum == "\(Passes.allTitle) - Delete Me")
-    #expect(ReviewModel.tabs.contains { $0.view == .all && $0.title == Passes.allTitle })
     // The app's tabs read exactly the pass titles.
     for (key, title) in Passes.all {
         #expect(ReviewModel.tabs.contains { $0.view == .pass(key) && $0.title == title })
@@ -222,7 +221,7 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     var (c, lib) = try await makeCleanup(photos, judge: judge, cacheDir: dir)
     lib.gate.close()  // hold the Vision job so its results don't land yet
     var counts = await c.counts()
-    #expect(counts["all"] == 3 && counts["screenshots"] == 0)
+    #expect(counts["all"] == nil && counts["screenshots"] == 0)
     #expect(counts["low-quality"] == .some(nil) && counts["bursts"] == .some(nil) && counts["paperwork"] == .some(nil))
     lib.gate.open()
     await settle(c)

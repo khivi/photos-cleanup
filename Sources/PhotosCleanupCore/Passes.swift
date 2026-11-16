@@ -76,7 +76,8 @@ public enum Passes {
     /// Passes shown as groups of photos, with the best of each marked.
     public static let grouped: Set<String> = ["bursts", "similar"]
 
-    /// The All view is not a pass, but it has a title and one Delete Me album, derived like a pass's.
+    /// The All view, since removed: its Delete Me album and pending key stay, so photos filed or
+    /// confirmed under it still apply and count as filed.
     public static let allKey = "all"
     public static let allTitle = "All"
     public static let allDeleteAlbum = "\(allTitle) - Delete Me"
@@ -199,6 +200,23 @@ public func loadPending(dir: URL = settingsDir) -> [String: (pass: String, keep:
         if f.count == 3, f[2] == "keep" || f[2] == "delete" { pending[f[1]] = (f[0], f[2] == "keep") }
     }
     return pending
+}
+
+/// Accepted as Unsure, "pass\tuuid" per line: the pass each photo came from, by uuid.
+public func loadUnsure(dir: URL = settingsDir) -> [String: String] {
+    guard let text = try? String(contentsOf: dir.appendingPathComponent("unsure"), encoding: .utf8) else { return [:] }
+    var unsure: [String: String] = [:]
+    for line in text.split(whereSeparator: \.isNewline) {
+        let f = line.split(separator: "\t").map(String.init)
+        if f.count == 2 { unsure[f[1]] = f[0] }
+    }
+    return unsure
+}
+
+public func saveUnsure(_ unsure: [String: String], dir: URL = settingsDir) throws {
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try unsure.sorted { ($0.value, $0.key) < ($1.value, $1.key) }.map { "\($0.value)\t\($0.key)\n" }.joined()
+        .write(to: dir.appendingPathComponent("unsure"), atomically: true, encoding: .utf8)
 }
 
 public func savePending(_ pending: [String: (pass: String, keep: Bool)], dir: URL = settingsDir) throws {

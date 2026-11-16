@@ -109,7 +109,7 @@ sequenceDiagram
 2. **Vision analysis.** A background job sends all still photos to `PhotoKitLibrary.vision` in batches of 20. Results go to a disk cache. Bursts, Similar, Low Quality and Paperwork read this cache.
 3. **Verdicts.** When you open Screenshots or Paperwork, the classifier queues the photos with no verdict. It renders each as a 1024 px image and asks Foundation Models. Verdicts go to a disk cache. A photo the model cannot judge is not queued again until the next launch.
 4. **Thumbnails and preview.** The views ask `PHCachingImageManager` directly. Nothing is written to disk. The preview shows the local copy first. If the full photo is only in iCloud, Photos downloads it.
-5. **Accept, then Apply.** A section's Accept (or Keep All, which first marks every photo Keep) moves the section's photos to Not in Photos Yet (in a pass every photo, in All only the Remove marks): `ReviewModel.pending`, saved in `pending`, and held out of every pass by `Cleanup.hold`. Nothing is written to Photos, so ⌘Z restores the app's state alone. Apply to Photos… calls `Cleanup.commit` once per pass, which adds the photos to each album and logs your decision against the model's verdict. Apply is not undoable; nothing is deleted until Delete in Photos…. In All, only the Remove marks move, to one album ("All - Delete Me"); nothing is logged, because All has no verdicts.
+5. **Accept, then Apply.** A section's Accept (or Keep All, which first marks every photo Keep) moves the section's Keep and Remove photos to Not in Photos Yet, and its Unsure photos to Unsure (`ReviewModel.unsure`, saved in `unsure`; also held). Not in Photos Yet is `ReviewModel.pending`, saved in `pending`, and held out of every pass by `Cleanup.hold`. Nothing is written to Photos, so ⌘Z restores the app's state alone. Apply to Photos… calls `Cleanup.commit` once per pass, which adds the photos to each album and logs your decision against the model's verdict. Apply is not undoable; nothing is deleted until Delete in Photos…. Accepting in Unsure files each photo into the albums of the pass it came from. "All - Delete Me" is from the removed All view: it still counts as filed, and a pending photo saved under `all` still applies there.
 6. **Delete in Photos.** In In Delete Me Albums, `Cleanup.delete` keeps only photos in a Delete Me album and calls `PhotoLibrary.delete`. macOS shows its own confirmation. If you cancel, PhotoKit reports a user cancel, the library returns 0 and nothing changes. Otherwise the photos leave the model's lists. Photos keeps them in Recently Deleted for 30 days.
 
 Blocking PhotoKit and Vision calls run off the actor, so the screen never waits behind a batch.
@@ -130,7 +130,7 @@ After such a change, rename the constant to force a recompute. Old files stay in
 
 `Application Support/photos-cleanup/albums_ignore` lists albums whose membership doesn't protect a photo.
 
-`pending` in the same folder lists accepted photos not yet applied, as `bursts<TAB>uuid<TAB>keep`.
+`pending` in the same folder lists accepted photos not yet applied, as `bursts<TAB>uuid<TAB>keep`. `unsure` lists photos accepted as Unsure, as `bursts<TAB>uuid`; a photo no longer in the library drops out at launch.
 
 ## Security
 

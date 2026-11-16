@@ -229,6 +229,13 @@ Phase 2: focus view (branch `khivi/focus-view`, on #17).
 - [x] A section left with only Unsure photos is skipped; Show Only Unsure (⌥⌘U) finds it.
 - [x] All, Not in Photos Yet and In Delete Me Albums keep the scrolling grid.
 
+Phase 2b: Inbox Zero (branch `khivi/inbox-zero`, on #19).
+
+- [x] All is gone: it never reaches zero, and it turned cleanup into browsing. A class of bad photos the passes miss means a missing pass. "All - Delete Me" and pending photos saved under `all` still apply.
+- [x] Unsure is a view: accepting a section moves its Unsure photos there, by pass, so every pass reaches zero. K and ⌫ mark them, Accept files them into their pass's albums. Saved in `unsure`. Show Only Unsure (⌥⌘U) is gone: the view replaces it.
+- [x] "Cleanup complete" when every pass and Unsure are empty.
+- [x] Bursts and Similar: the ★ back at 1.8× the cell (at most 420 pt) with the other shots small beside it, as in #17, instead of filling the window.
+
 Phase 3, a later experiment: a dashboard ("You can recover 18.2 GB", counts per category, Start Cleanup). The current navigation stays.
 
 Open naming questions:
