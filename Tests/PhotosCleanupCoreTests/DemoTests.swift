@@ -8,7 +8,7 @@ private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().dele
 
 @Test func demoManifestLoads() throws {
     let photos = try DemoLibrary(directory: fixtures).photos()
-    #expect(photos.count == 44)
+    #expect(photos.count == 57)
     let byID = Dictionary(uniqueKeysWithValues: photos.map { ($0.uuid, $0) })
     #expect(byID["demo-screenshot-1"]?.screenshot == true)
     #expect(byID["demo-video-5"]?.isMovie == true)
@@ -26,9 +26,9 @@ private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().dele
 
     #expect(try lib.delete(uuids: ["demo-photo-1", "nope"]) == 1)
     #expect(try lib.delete(uuids: ["demo-photo-1"]) == 0)
-    #expect(try lib.photos().count == 43)
+    #expect(try lib.photos().count == 56)
     #expect(try lib.photos().contains { $0.uuid == "demo-photo-1" } == false)
-    #expect(try lib.exportable().count == 43)
+    #expect(try lib.exportable().count == 56)
     #expect(try lib.importIndex().contains { $0.id == "demo-photo-1" } == false)
     #expect(try lib.add(album: "Keepers", uuids: ["demo-photo-1"]) == 0)
 }
@@ -93,10 +93,13 @@ private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().dele
         found[key] = (r.photos.count, r.groups.count)
         #expect(r.photos.count + r.groups.count > 0, "\(key) has no candidates")
     }
-    #expect(found["screenshots"]?.photos == 6)
-    #expect(found["paperwork"]?.photos == 7)
-    #expect(found["bursts"]?.groups == 2)
-    #expect(found["similar"]?.groups ?? 0 >= 2)
+    #expect(found["screenshots"]?.photos == 7)
+    #expect(found["paperwork"]?.photos == 8)
+    #expect(found["bursts"]?.groups == 4)
+    #expect(found["similar"]?.groups == 3)
+    // Faces outrank the Vision score: c1 scores highest but blinks.
+    let bursts = try await c.pass("bursts").groups
+    #expect(bursts.first { $0.photos.count == 5 }?.best == "demo-burst-c2")
     #expect(found["low-quality"]?.photos == 6)
     #expect(found["videos"]?.photos == 3)  // one favorite, one in an album
 }

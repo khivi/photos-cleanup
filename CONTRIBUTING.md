@@ -52,7 +52,7 @@ scripts/app.sh demo
 It builds and opens "Photos Cleanup Demo" (`com.khivi.photos-cleanup.demo`) with the `--demo` argument.
 The app then runs the full UI on a fake library. It never reads or changes your Photos library.
 The demo has its own sandbox container, so it shares no settings with the Dev build or the release.
-`scripts/demo/manifest.json` lists the photos: dates, sizes, flags, Vision results, albums and AI verdicts. Every pass has candidates, and Bursts and Similar have groups.
+`scripts/demo/manifest.json` lists the photos: dates, sizes, flags, Vision results, albums and AI verdicts. Every pass has candidates. Bursts has 4 groups and Similar 3, so the header counts "Burst 1 of 4". One burst's ★ is picked by faces over a higher Vision score, and one shot is a Live Photo. Screenshots and Paperwork each have a borderline item to mark Unsure. No photo starts in a Delete Me album.
 `scripts/demo/generate.swift` draws the images into the bundle at build time. Only the manifest and the generator are committed.
 Apply and Delete in Photos… change memory only, so each launch starts from the manifest.
 Export writes real files into the folder you choose.
