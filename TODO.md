@@ -210,6 +210,8 @@ Why: Confirm All left untouched Keeps in the pass, and nothing on screen said so
 
 Positioning: "I help you keep the photos that matter". The workflow stays; the language and emphasis change.
 
+- [ ] **After #16–#23 merge: retake the App Store screenshots** (`docs/app-store/screenshots/`) and `docs/screenshot.jpg` from the demo (`scripts/app.sh demo`). They show the old grid, Delete Me albums and the All view.
+
 Phase 1: keep language (branch `khivi/keep-language`, on #16).
 
 - [x] No red ✗ Delete in the grid: a dimmed photo with a gray "Remove" tag (compact cells: dimming only); "★ Best shot" on the pick. "✗ Delete Me" only for photos really in a Delete Me album.
