@@ -881,7 +881,7 @@ extension ReviewModel {
         #expect(m.groups.map { $0.photos.map(\.id) } == [["p1"], ["p2"], ["p3"], ["p4"]])
     }
 
-    @Test func theOverviewSaysHowEachPassSplits() async throws {
+    @Test func theOverviewPointsToSectionsWhenAutoSplitsCoarserThanMonths() async throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = .current
         let shots = (0..<30).map {
@@ -893,11 +893,10 @@ extension ReviewModel {
         let (c, _) = try await makeCleanup(shots + few, vision: [:])
         let m = ReviewModel(cleanup: c, dir: tempDir(), defaults: freshDefaults())
         await m.refreshCounts()
-        let row = { (k: String) in m.overviewRows.first { $0.view == .pass(k) }?.sections }
-        #expect(row("screenshots") == "By quarter" && row("videos") == "By month" && row("bursts") == nil)
+        #expect(m.autoPeriods["screenshots"] == .quarter && m.autoPeriods["videos"] == .month)
         #expect(m.overviewNotes.contains(ReviewModel.sectionsNote))
         m.period = .month  // set by hand: no note
-        #expect(row("screenshots") == "By month" && !m.overviewNotes.contains(ReviewModel.sectionsNote))
+        #expect(!m.overviewNotes.contains(ReviewModel.sectionsNote))
     }
 }
 

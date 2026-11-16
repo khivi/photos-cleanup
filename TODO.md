@@ -256,7 +256,7 @@ Phase 4: Apply deletes; one Keep album (branch `khivi/apply-deletes`, on #21).
 Phase 5: Sections (branch `khivi/sections`, on #22).
 
 - [x] Passes without groups split by month, quarter or year: Settings, Sections (Auto, Month, Quarter, Year), applied at once. Auto takes the finest period with at most 25 sections, per pass.
-- [x] Overview rows say "By quarter"; a note points to Settings when Auto split a pass coarser than by month.
+- [x] The Overview notes when Auto split a pass coarser than by month, pointing to Settings. Rows carry no period label: Bursts, Similar and Unsure have none, so it read as missing there.
 - [x] Settings reworded: "Keep photos in albums" is "Photos in my albums are safe"; "Ignored albums" is "Albums that don't count", shown only while that is on. Captions no longer say videos are skipped or name Delete Me albums.
 - [ ] A single section with hundreds of photos (a trip in Videos) could split by week.
 

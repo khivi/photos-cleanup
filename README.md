@@ -129,7 +129,7 @@ A tile marks a Live Photo "Live" and a screen recording "Screen recording".
 
 Every pass is in sections: a group in Bursts and Similar, a month, quarter or year in the others, newest first.
 Settings (⌘,), Sections, sets the period: Auto (the default) picks the finest one that keeps a pass to 25 sections or fewer.
-The Overview shows each pass's period. The change applies at once.
+The change applies at once.
 A pass shows one section at a time. Bursts and Similar show the best shot (★ Best shot) large, with the other shots below it. The other passes show the section's photos as a grid.
 Select the ★, or select nothing, and the Info panel's "Why this photo?" lists what the app measured: its Vision score against the group's, its face quality where faces counted, an edit, or your pick.
 In Bursts and Similar, hover a photo and click its ☆ (or right-click it and pick Pick as Best; shortcut: 1–9). That photo becomes the group's ★ and is kept; the rest are marked Remove. Nothing is accepted until you press Return or click the group's Accept.

@@ -1273,16 +1273,13 @@ extension ReviewModel {
         public let title: String
         public let count: Int?
         public let caption: String?
-        /// "By quarter": how a pass without groups splits, once its photos are known.
-        public var sections: String? = nil
         public var id: ReviewView { view }
     }
 
     public var overviewRows: [OverviewRow] {
         Passes.all.map {
             OverviewRow(
-                view: .pass($0.key), title: $0.title, count: counts[$0.key] ?? nil, caption: Passes.captions[$0.key],
-                sections: sections($0.key).map { "By \($0.rawValue)" })
+                view: .pass($0.key), title: $0.title, count: counts[$0.key] ?? nil, caption: Passes.captions[$0.key])
         }
             + [
                 OverviewRow(
@@ -1300,9 +1297,13 @@ extension ReviewModel {
         return "\(n.formatted()) \(n == 1 ? "photo" : "photos") to review"
     }
 
-    private func sections(_ key: String) -> Period? {
-        guard !Passes.grouped.contains(key), (counts[key] ?? nil) ?? 0 > 0 else { return nil }
-        return period == .auto ? autoPeriods[key] : period
+    /// Auto split a pass with photos left by quarter or year.
+    private var autoIsCoarse: Bool {
+        period == .auto
+            && Passes.all.contains {
+                !Passes.grouped.contains($0.key) && (counts[$0.key] ?? nil) ?? 0 > 0
+                    && (autoPeriods[$0.key] ?? .month) != .month
+            }
     }
 
     public static let sectionsNote = "Long passes split by quarter or year. Change it in Settings (⌘,), Sections."
@@ -1316,7 +1317,7 @@ extension ReviewModel {
                 : "\(pending.count.formatted()) accepted, not in Photos yet: Apply to Photos… deletes the Remove ones, after macOS asks, and keeps the rest.",
             deleted.isEmpty
                 ? nil : "\(deleted.count.formatted()) waiting in Delete Me albums: Delete in Photos… deletes them.",
-            period == .auto && Passes.all.contains { (sections($0.key) ?? .month) != .month } ? Self.sectionsNote : nil,
+            autoIsCoarse ? Self.sectionsNote : nil,
         ].compactMap { $0 }
     }
 
