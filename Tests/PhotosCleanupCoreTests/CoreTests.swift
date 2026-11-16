@@ -243,6 +243,25 @@ private func atHours(_ hours: KeyValuePairs<String, Double>) -> [Photo] {
     #expect(counts["paperwork"] == 1 && counts["bursts"] == 2 && counts["low-quality"] == 1)
 }
 
+@Test func paperworkIsCountedWithoutOpeningItsPass() async throws {
+    let photos = [Photo(uuid: "a"), Photo(uuid: "b"), Photo(uuid: "odd")]
+    let vision: [String: VisionResult?] = [
+        "a": vr(0.5, utility: true, [0]), "b": vr(0.5, utility: true, [0.1]), "odd": vr(0.5, utility: true, [0.2]),
+    ]
+    let judge = FakeJudge([  // "odd" gets no verdict: unjudgeable, like the pass leaves it out
+        "a": Verdict(keep: false, kind: "receipt", reason: ""), "b": Verdict(keep: true, kind: "picture", reason: ""),
+    ])
+    judge.gate.close()
+    let (c, _) = try await makeCleanup(photos, vision: vision, judge: judge)
+    #expect(await c.counts()["paperwork"] == .some(nil))  // queued for verdicts, not yet judged
+    judge.gate.open()
+    await settle(c)
+    #expect(await c.counts()["paperwork"] == 1 && Set(judge.judged.withLock { $0 }) == ["a", "b", "odd"])
+
+    let (off, _) = try await makeCleanup(photos, vision: vision, judge: FakeJudge(off: "off"))
+    #expect(await off.counts()["paperwork"] == 0)  // no verdicts on this Mac: the pass shows none
+}
+
 // MARK: Background jobs
 
 @Test func visionJobAnalysesCachesAndReportsProgress() async throws {

@@ -977,10 +977,11 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
     #expect(row("Screenshots")?.progress == 0)
     #expect(row("Screenshots")?.help == m.passNote("screenshots") + "\nChecking photos with Apple Intelligence: 0 of 1")
 
-    lib.gate.open()  // Vision done; only Screenshots has photos in the verdict queue
+    lib.gate.open()  // Vision done: Paperwork's utility photo joins the verdict queue without its pass open
     for _ in 0..<500 where await c.visionRunning { try? await Task.sleep(for: .milliseconds(10)) }
     await m.refreshPassCounts()
-    #expect(row("Paperwork")?.progress == nil)
+    #expect(row("Paperwork")?.progress == 0)
+    #expect(row("Paperwork")?.help == m.passNote("paperwork") + "\nChecking photos with Apple Intelligence: 0 of 2")
     #expect(row("Screenshots")?.progress == 0)
 
     judge.gate.open()

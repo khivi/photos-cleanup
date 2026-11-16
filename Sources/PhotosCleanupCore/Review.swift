@@ -535,11 +535,8 @@ public final class ReviewModel {
         await loadWaiting()
     }
 
-    /// A pass count Vision will still fill in. Paperwork's count waits for its verdicts, which
-    /// only start when the pass is opened, so it doesn't count as pending.
-    public var countsPending: Bool {
-        Passes.all.contains { $0.key != "paperwork" && (counts[$0.key] ?? nil) == nil }
-    }
+    /// A pass count Vision or the verdicts will still fill in.
+    public var countsPending: Bool { Passes.all.contains { (counts[$0.key] ?? nil) == nil } }
 
     /// The pass counts alone, cheap enough to poll while Vision runs.
     public func refreshPassCounts() async {

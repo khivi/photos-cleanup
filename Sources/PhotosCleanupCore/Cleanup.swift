@@ -274,8 +274,14 @@ public actor Cleanup {
             if !done {
                 out[kind] = .some(nil)  // the background Vision analysis is still running
             } else if kind == "paperwork" {
-                let judged = narrowed.allSatisfy { verdicts[$0.uuid] != nil }
-                out[kind] = judged ? narrowed.filter { verdicts[$0.uuid]?.kind != "picture" } : .some(nil)
+                // Verdicts start once Vision is done, so the count comes without opening the pass. As in
+                // `pass`, photos without a verdict (unjudgeable, or verdicts off) don't count.
+                if verdictsOff == nil { startClassifier(narrowed) }
+                let judged =
+                    verdictsOff != nil
+                    || narrowed.allSatisfy { verdicts[$0.uuid] != nil || unjudgeable.contains($0.uuid) }
+                out[kind] =
+                    judged ? narrowed.filter { (verdicts[$0.uuid]?.kind ?? "picture") != "picture" } : .some(nil)
             } else if Passes.grouped.contains(kind) {
                 out[kind] = groups(kind, narrowed).flatMap { $0 }
             } else {

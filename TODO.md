@@ -47,7 +47,6 @@ Say on every page: macOS 15 or later; Screenshots and Paperwork verdicts need ma
 ## UX
 
 - [ ] **After #16–#23 merge: retake every screenshot from the demo** (`scripts/app.sh demo`): the App Store screenshots (`docs/app-store/screenshots/`), `docs/screenshot.jpg`, the Import screenshot (from a sample folder with a neutral path; the demo's is under `.build/`), and the social preview `docs/social-preview.png` (1280×640), which shows the real library and the old UI. Upload the social preview in GitHub Settings > General > Social preview; GitHub has no API for it.
-- [ ] Paperwork is skipped by Start Cleanup and Continue until opened: its count waits for verdicts, which start only when the pass opens.
 
 Open naming questions:
 
