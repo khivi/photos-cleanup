@@ -89,6 +89,8 @@ public final class ReviewModel {
     public private(set) var inRun = false
     /// The open step's section count when the run reached it, for its share done.
     @ObservationIgnored private var runStart = 0
+    /// The steps that had photos when the run started, and Unsure: what the run's one bar averages.
+    @ObservationIgnored private var runCounted: Set<ReviewView> = []
     /// The open pass's own order (worst first, longest first), kept within a section.
     @ObservationIgnored private var passOrder: [String: Int] = [:]
     /// The background Vision analysis and verdict queue, refreshed with `counts`.
@@ -394,7 +396,8 @@ public final class ReviewModel {
     public var canDeleteInPhotos: Bool { view == .deleted && !loading && !deleting && !deleted.isEmpty }
     public var inspectorToggleLabel: String { showsInspector ? "Hide Info" : "Show Info" }
     public static let keepAllLabel = "Keep All"
-    public static let focusNote = "Nothing is deleted until you confirm in Photos."
+    public static let focusNote = "Nothing is deleted until you confirm in Apply to Photos…"
+    public static let safetyNote = "\(focusNote) Deleted photos stay in Recently Deleted for 30 days."
     public static let deleteMeBadge = "✗ Delete Me"
     public static let bestBadge = "★ Best shot"
     /// Above the photos beside a group's ★.
@@ -1329,6 +1332,8 @@ extension ReviewModel {
     /// Start Cleanup and Continue: the next pass with photos, as a step of a cleanup run.
     public func advance() async {
         guard let next = nextToReview else { return }
+        let starting = !inRun
+        if starting { runCounted = Set(overviewRows.filter { $0.view == .unsure || $0.count != 0 }.map(\.view)) }
         await select(next)
         inRun = true
         runStart = groups.count
@@ -1342,7 +1347,7 @@ extension ReviewModel {
         public var id: ReviewView { view }
     }
 
-    /// The strip over a cleanup run: every pass, then Unsure. Empty outside a run, so a pass opened
+    /// The steps of a cleanup run: every pass, then Unsure. Empty outside a run, so a pass opened
     /// from the sidebar or the Overview shows none.
     public var runSteps: [RunStep] {
         guard inRun else { return [] }
@@ -1355,7 +1360,14 @@ extension ReviewModel {
         }
     }
 
-    /// "Cleanup, Bursts, step 3 of 7": the strip for VoiceOver.
+    /// The whole run's share done, for the strip's one bar. Passes empty from the start don't count,
+    /// so a run starts at 0.
+    public var runProgress: Double {
+        let steps = runSteps.filter { runCounted.contains($0.view) }
+        return steps.isEmpty ? 0 : steps.map(\.progress).reduce(0, +) / Double(steps.count)
+    }
+
+    /// "Cleanup, Bursts, step 3 of 7": the strip's text.
     public var runLabel: String {
         let steps = runSteps
         guard let i = steps.firstIndex(where: { $0.view == view }) else { return "" }

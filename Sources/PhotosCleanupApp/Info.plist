@@ -27,7 +27,7 @@
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Show in Photos asks Photos to select the photo you're looking at.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Photos Cleanup reads your library to find photos to review and files them into review albums. It deletes only the photos you confirm with Delete in Photos…, and Photos keeps them in Recently Deleted for 30 days.</string>
+	<string>Photos Cleanup reads your library to find photos to review and adds the ones you keep to one album. It deletes only the photos you confirm with Apply to Photos…, and Photos keeps them in Recently Deleted for 30 days.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

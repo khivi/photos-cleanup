@@ -10,7 +10,8 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a PR replaces its run; on master a run may be releasing, so the next one waits.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # The hooks only run locally where someone ran `pre-commit install`; this enforces them.
@@ -34,8 +35,10 @@ jobs:
       - run: pre-commit run --all-files --show-diff-on-failure
 
   ci:
+    # master only: the pre-push hook already builds, tests and smoke-tests a PR's commits on a Mac.
     # macos-latest lacks the macOS 27 SDK, so it builds the no-verdicts fallback;
     # xcode-27 (preview) compiles the Foundation Models code the release ships.
+    if: github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -85,3 +88,19 @@ jobs:
         run: |
           pip install pre-commit
           pre-commit run swift-format --all-files
+
+  # Releases only from a green master: a version change in Info.plist ships once lint and both
+  # builds pass for that commit.
+  release:
+    needs: [pre-commit, ci]
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    uses: $/.github/workflows/release.yml
+    secrets:
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+      NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

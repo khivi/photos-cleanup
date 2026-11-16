@@ -624,8 +624,10 @@ extension ReviewModel {
         #expect(progress(.pass("screenshots")) == 0 && progress(.pass("bursts")) == 1 && progress(.pass("videos")) == 0)
         #expect(progress(.unsure) == 0)  // empty, but not done while passes have photos
         #expect(m.runLabel == "Cleanup, Screenshots, step 1 of \(Passes.all.count + 1)")
+        #expect(m.runProgress == 0)  // passes empty from the start don't count
         await m.confirm(m.groups[0])
         #expect(progress(.pass("screenshots")) == 0.5)  // one of two months accepted
+        #expect(abs(m.runProgress - 0.5 / 3) < 1e-9)  // Screenshots, Videos and Unsure count
         await m.confirm(m.groups[0])
         await m.refreshCounts()
         #expect(progress(.pass("screenshots")) == 1)
