@@ -31,7 +31,7 @@ struct SettingsView: View {
                 Toggle("Keep photos in albums", isOn: $keepAlbumPhotos)
                     .accessibilityIdentifier("settings-keep-album-photos")
                 Text(
-                    "On: a photo in one of your own albums is never suggested. Off: it can be. Favorites, videos and photos already filed by a pass are always skipped."
+                    "On: a photo in one of your own albums is never suggested. Off: it can be. Favorites and photos you’ve already reviewed are always skipped."
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }
