@@ -624,8 +624,11 @@ extension ReviewModel {
         #expect(progress(.pass("screenshots")) == 0 && progress(.pass("bursts")) == 1 && progress(.pass("videos")) == 0)
         #expect(progress(.unsure) == 0)  // empty, but not done while passes have photos
         #expect(m.runLabel == "Cleanup, Screenshots, step 1 of \(Passes.all.count + 1)")
+        let before = m.runProgress
+        #expect(before > 0 && before < 1)
         await m.confirm(m.groups[0])
         #expect(progress(.pass("screenshots")) == 0.5)  // one of two months accepted
+        #expect(abs(m.runProgress - before - 0.5 / Double(Passes.all.count + 1)) < 1e-9)
         await m.confirm(m.groups[0])
         await m.refreshCounts()
         #expect(progress(.pass("screenshots")) == 1)

@@ -11,6 +11,8 @@ struct OverviewView: View {
                 Text(model.overviewHeadline).font(.title2.weight(.semibold))
                     .accessibilityIdentifier("overview-headline")
                 ForEach(model.overviewNotes, id: \.self) { Text($0).foregroundStyle(.secondary) }
+                Label(ReviewModel.safetyNote, systemImage: "checkmark.shield")
+                    .accessibilityIdentifier("overview-safety")
                 if model.nextToReview != nil {
                     Button(ReviewModel.startLabel) { Task { await model.advance() } }
                         .buttonStyle(.borderedProminent)

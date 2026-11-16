@@ -395,6 +395,7 @@ public final class ReviewModel {
     public var inspectorToggleLabel: String { showsInspector ? "Hide Info" : "Show Info" }
     public static let keepAllLabel = "Keep All"
     public static let focusNote = "Nothing is deleted until you confirm in Photos."
+    public static let safetyNote = "\(focusNote) Deleted photos stay in Recently Deleted for 30 days."
     public static let deleteMeBadge = "✗ Delete Me"
     public static let bestBadge = "★ Best shot"
     /// Above the photos beside a group's ★.
@@ -1342,7 +1343,7 @@ extension ReviewModel {
         public var id: ReviewView { view }
     }
 
-    /// The strip over a cleanup run: every pass, then Unsure. Empty outside a run, so a pass opened
+    /// The steps of a cleanup run: every pass, then Unsure. Empty outside a run, so a pass opened
     /// from the sidebar or the Overview shows none.
     public var runSteps: [RunStep] {
         guard inRun else { return [] }
@@ -1355,7 +1356,13 @@ extension ReviewModel {
         }
     }
 
-    /// "Cleanup, Bursts, step 3 of 7": the strip for VoiceOver.
+    /// The whole run's share done, for the strip's one bar.
+    public var runProgress: Double {
+        let steps = runSteps
+        return steps.isEmpty ? 0 : steps.map(\.progress).reduce(0, +) / Double(steps.count)
+    }
+
+    /// "Cleanup, Bursts, step 3 of 7": the strip's text.
     public var runLabel: String {
         let steps = runSteps
         guard let i = steps.firstIndex(where: { $0.view == view }) else { return "" }

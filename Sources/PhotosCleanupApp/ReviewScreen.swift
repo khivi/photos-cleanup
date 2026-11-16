@@ -238,23 +238,16 @@ struct ReviewScreen: View {
         }
     }
 
-    /// During a cleanup run: a bar per pass and Unsure, filled as it empties; the open one's title in bold.
+    /// During a cleanup run: which pass of how many, and one bar for the whole run.
     private var runStrip: some View {
-        HStack(spacing: 6) {
-            ForEach(model.runSteps) { step in
-                VStack(alignment: .leading, spacing: 2) {
-                    ProgressView(value: step.progress)
-                    Text(step.title).font(.caption2).lineLimit(1)
-                        .fontWeight(step.view == model.view ? .semibold : .regular)
-                        .foregroundStyle(step.view == model.view ? .primary : .secondary)
-                }
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            Text(model.runLabel).font(.caption).foregroundStyle(.secondary)
+            ProgressView(value: model.runProgress)
         }
         .padding(.horizontal, gridPadding).padding(.vertical, 6)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(model.runLabel)
+        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("cleanup-progress")
     }
 
@@ -268,12 +261,11 @@ struct ReviewScreen: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
             if let g = model.currentGroup, let at = model.focusPosition {
-                HStack {
+                HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(at).font(.subheadline.weight(.semibold)).accessibilityIdentifier("focus-position")
-                        Text(ReviewModel.focusNote).font(.caption).foregroundStyle(.secondary)
+                        Text(ReviewModel.focusNote).font(.callout).foregroundStyle(.secondary)
                     }
-                    Spacer()
                     Button(ReviewModel.keepAllLabel, systemImage: "checkmark") {
                         focused = true
                         Task { await model.keepAll() }

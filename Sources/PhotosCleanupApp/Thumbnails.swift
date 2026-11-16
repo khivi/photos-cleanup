@@ -214,7 +214,7 @@ struct PhotoCell: View {
                 if let pickBest, !best { Button(ReviewModel.pickBestLabel, systemImage: "star", action: pickBest) }
             }
             .clipped()
-            .overlay { if selected { Rectangle().strokeBorder(Color.accentColor, lineWidth: 4) } }
+            .overlay { if selected { RoundedRectangle(cornerRadius: 4).strokeBorder(Color.accentColor, lineWidth: 3) } }
             .clipShape(.rect(cornerRadius: 4))
             .contentShape(.rect)
             .onTapGesture { onTap?() }
