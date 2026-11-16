@@ -8,9 +8,9 @@ private let keepV = Verdict(keep: true, kind: "receipt", reason: "r")
 private let dropV = Verdict(keep: false, kind: "junk", reason: "r")
 
 extension ReviewModel {
-    /// Confirm Up to Here on the last section: every section, as the last one's button does.
+    /// Accept on every section, top to bottom.
     fileprivate func confirmEverySection() async {
-        if let last = shownGroups.last { await confirmUpToHere(last) }
+        for g in shownGroups { await confirm(g) }
     }
 }
 
@@ -88,14 +88,20 @@ extension ReviewModel {
         #expect(m3.decisions.isEmpty && m3.photos.count == 1)
     }
 
-    @Test func toggleAndSetAll() async throws {
+    @Test func deleteKeyTogglesKeepAndRemove() async throws {
         let (c, _) = try await makeCleanup(shots("a", "b"), judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c, dir: tempDir())
         await m.select(.pass("screenshots"))
-        m.mark(["a"], .delete)
-        #expect(m.decisions["a"] == .delete && m.touched == ["a"])
-        m.setAll(.keep)
-        #expect(m.decisions == ["a": .keep, "b": .keep] && m.touched == ["a", "b"])
+        m.click("a")
+        #expect(m.decisions["a"] == .keep && m.deleteKeyLabel == "Remove")
+        m.deleteKey()
+        #expect(m.decisions["a"] == .delete && m.touched == ["a"] && m.deleteKeyLabel == "Keep")
+        m.deleteKey()
+        #expect(m.decisions["a"] == .keep)
+        m.mark(["b"], .unsure)
+        m.click("b")
+        m.deleteKey()  // Unsure isn't Remove: ⌫ marks it Remove
+        #expect(m.decisions["b"] == .delete)
     }
 
     @Test func refreshKeepsTouchedAndFollowsVerdicts() async throws {
@@ -310,11 +316,11 @@ extension ReviewModel {
         let (c, _) = try await makeCleanup(shots("a", "b"), verdicts: ["a": dropV], judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c, dir: tempDir())
         await m.select(.all)
-        #expect(m.canConfirm && !m.canSetAll)
+        #expect(m.canConfirm)
         await m.select(.pass("screenshots"))
-        #expect(m.canConfirm && m.canSetAll)
+        #expect(m.canConfirm)
         await m.select(.deleted)
-        #expect(!m.canConfirm && !m.canSetAll)
+        #expect(!m.canConfirm)
     }
 
     @Test func previewOpensForOnePhotoAndClosesWithTheSelection() async throws {
@@ -389,15 +395,15 @@ extension ReviewModel {
         m.undoManager.redo()
         #expect(m.decisions[ids[0]] == .delete && m.decisions[ids[1]] == .delete && m.touched == Set(ids[0...1]))
 
-        m.setAll(.keep)
-        #expect(m.undoManager.undoActionName == "Keep All")
+        m.mark(ids, .keep)
+        #expect(m.undoManager.undoActionName == "Keep")
         m.undoManager.undo()
         #expect(m.decisions[ids[0]] == .delete && m.decisions[ids[2]] == .keep && m.touched == Set(ids[0...1]))
 
         // Confirm is undoable too: the photos come back from Pending. Apply is not.
         await m.confirmEverySection()
         #expect(m.pending.count == 3 && m.photos.isEmpty && lib.adds.withLock { $0 }.isEmpty)
-        #expect(m.undoManager.undoActionName == ReviewModel.confirmUpToHereLabel)
+        #expect(m.undoManager.undoActionName == ReviewModel.confirmLabel)
         m.undoManager.undo()
         #expect(m.pending.isEmpty && m.photos.count == 3)
         m.undoManager.redo()
@@ -477,7 +483,7 @@ extension ReviewModel {
 
         // A session commit of an already-listed photo does not duplicate it.
         await m.select(.pass("screenshots"))
-        m.setAll(.delete)
+        m.mark(m.photos.map(\.id), .delete)
         await m.confirmEverySection()
         await m.apply()
         await m.select(.deleted)
@@ -489,7 +495,7 @@ extension ReviewModel {
 @MainActor
 
 @Suite struct ConfirmSectionTests {
-    @Test func confirmUpToHereOnTheLastSectionFilesEveryPhoto() async throws {
+    @Test func returnOnEachSectionFilesEveryPhoto() async throws {
         let month = 40 * 86400.0
         let clips = [
             Photo(uuid: "s", date: t0, isMovie: true, duration: 1),
@@ -500,8 +506,11 @@ extension ReviewModel {
         let m = ReviewModel(cleanup: c, dir: tempDir())
         await m.select(.pass("videos"))
         #expect(m.groups.count == 3 && m.summary == "3 photos · keeping 2 · removing 1")
-        await m.confirmUpToHere(try #require(m.groups.last))
-        #expect(m.photos.isEmpty)
+        for n in (1...3).reversed() {
+            #expect(m.focusPosition == "Month 1 of \(n)")
+            await m.confirm()  // Return: the next month comes up
+        }
+        #expect(m.photos.isEmpty && m.showsEmptyState && m.emptyStateLabel == ReviewModel.emptyState)
         #expect(m.pending.mapValues(\.keep) == ["s": false, "a": true, "b": true])
         #expect(Set(m.pending.values.map(\.pass)) == ["videos"])
     }
@@ -542,10 +551,14 @@ extension ReviewModel {
         await m.confirm(m.groups[0])
         #expect(m.pending == ["s": Pending(pass: "videos", keep: false), "a": Pending(pass: "videos", keep: true)])
         #expect(m.photos.map(\.id) == ["b"] && m.decisions == ["b": .unsure])
+        #expect(m.showsEmptyState)  // a section left with only Unsure photos isn't shown
+        m.onlyUnsure = true
         await m.confirm(m.groups[0])  // only Unsure left: nothing is filed, and the status bar says why
         #expect(
             m.photos.map(\.id) == ["b"]
-                && m.status == "Nothing to accept in this month: every photo is Unsure. Mark them K or ⌫ first.")
+                && m.status
+                    == "Nothing to accept in this month: every photo is Unsure. Mark one with ⌫, or press K to keep them all."
+        )
         m.mark(["b"], .keep)
 
         await m.select(.all)
@@ -559,9 +572,8 @@ extension ReviewModel {
         await m.select(.pass("screenshots"))
         #expect(m.summary == "1 photo · keeping 1 · removing 0" && m.showsHeader && m.windowSubtitle.isEmpty)
         #expect(m.windowTitle == "Screenshots")
-        m.setAll(.delete)
+        m.mark(["a"], .delete)
         #expect(m.summary == "1 photo · keeping 0 · removing 1")
-        #expect(ReviewModel.keepAllLabel == "Keep All" && ReviewModel.deleteAllLabel == "Remove All")
     }
 
     @Test func marksSurviveSwitchingViews() async throws {
@@ -636,7 +648,8 @@ extension ReviewModel {
         let m = ReviewModel(cleanup: c, dir: tempDir())
         await m.select(.pass("screenshots"))
         #expect(m.inspectorInfo() == nil && m.inspectorPlaceholder == "No photo selected")
-        m.selectAll()
+        m.click("a")
+        m.click("b", toggle: true)
         #expect(m.inspectorInfo() == nil && m.inspectorPlaceholder == "2 photos selected")
 
         m.click("a")
@@ -699,7 +712,7 @@ extension ReviewModel {
         let m = ReviewModel(cleanup: c, dir: tempDir())
         m.undoManager.groupsByEvent = false
         await m.select(.all)
-        #expect(m.decisions.isEmpty && !m.canSetAll && m.canMark)
+        #expect(m.decisions.isEmpty && m.canMark && m.focusPosition == nil)
         m.mark(["a", "b"], .delete)
         m.mark(["b"], .keep)  // Keep clears the mark in All
         #expect(m.decisions == ["a": .delete])
@@ -711,7 +724,6 @@ extension ReviewModel {
         #expect(m.inspectorInfo()?.target == "→ \(album)" && m.inspectorInfo()?.decision == .delete)
         m.click("c")
         #expect(m.inspectorInfo()?.target == nil && m.inspectorInfo()?.decision == .keep)
-        m.setAll(.delete)  // no-op in All
         await m.confirmEverySection()
         #expect(m.pending == ["a": Pending(pass: Passes.allKey, keep: false)])
         await m.apply()
@@ -725,13 +737,15 @@ extension ReviewModel {
         #expect(m.photos.count == 3 && m.deletedAlbum["a"] == album)
     }
 
-    @Test func keepAllIsDisabledInAll() async throws {
-        let (c, _) = try await makeCleanup(shots("a"), judge: FakeJudge(off: "off"))
+    @Test func kKeepsOnePhotoInAll() async throws {
+        let (c, _) = try await makeCleanup(shots("a", "b"), judge: FakeJudge(off: "off"))
         let m = ReviewModel(cleanup: c, dir: tempDir())
         await m.select(.all)
-        #expect(!m.canSetAll)
-        await m.select(.pass("screenshots"))
-        #expect(m.canSetAll)
+        m.mark(["a", "b"], .delete)
+        m.click("a")
+        #expect(m.keepKeyLabel == "Keep")
+        await m.keepKey()  // clears a's mark; nothing is accepted
+        #expect(m.decisions == ["b": .delete] && m.pending.isEmpty)
     }
 
     @Test func onlyDeleteFiltersEveryView() async throws {
@@ -1032,23 +1046,6 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         #expect(ids.map(m.isBest) == [false, false, true] && ids.map { m.decision($0) } == [.delete, .delete, .keep])
     }
 
-    @Test func confirmUpToHereCoversWholeGroupsThroughTheSelectedOne() async throws {
-        let photos = dated(["a": 0, "b": 1, "c": 86_400, "d": 86_401, "e": 172_800, "f": 172_801])
-        let (c, _) = try await makeCleanup(
-            photos, vision: ["a": vr(0.9), "b": vr(0.1), "c": vr(0.9), "d": vr(0.1), "e": vr(0.9), "f": vr(0.1)])
-        let m = ReviewModel(cleanup: c, dir: tempDir(), defaults: freshDefaults())
-        await m.select(.pass("bursts"))
-        let gs = m.groups
-        m.onlyDelete = true  // the filter hides the ★s; Confirm still takes them, as Keep
-        m.click(gs[1].photos[1].id)
-        await m.confirmUpToHere()
-        #expect(Set(m.pending.keys) == Set((gs[0].photos + gs[1].photos).map(\.id)))
-        #expect(m.pending[gs[0].photos[0].id]?.keep == true)
-        #expect(m.groups.map(\.best) == [gs[2].best] && m.anchor == gs[2].photos[1].id)
-        m.undoManager.undo()
-        #expect(m.groups.count == 3 && m.pending.isEmpty)
-    }
-
     @Test func allSectionsConfirmOnlyTheirDeleteMarks() async throws {
         func at(_ iso: String) -> Date { ISO8601DateFormatter().date(from: iso)! }
         let photos = [
@@ -1061,9 +1058,8 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         await m.select(.all)
         #expect(m.groups.count == 2 && m.canConfirm)
         let oct = try #require(m.groups.first { $0.photos.count == 2 })
-        let last = try #require(m.groups.last)
-        await m.confirmUpToHere(last)  // nothing marked: nothing is filed, and the status bar says why
-        #expect(m.pending.isEmpty && m.status == "Nothing to accept in these months: mark photos Remove (⌫) first.")
+        await m.confirm(try #require(m.groups.last))  // nothing marked: nothing is filed, and the status bar says why
+        #expect(m.pending.isEmpty && m.status == "Nothing to accept in this month: mark photos Remove (⌫) first.")
         m.mark(["c"], .delete)
         m.mark(["a", "c"], .delete)
         await m.confirm(oct)
@@ -1092,17 +1088,6 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         #expect(m.confirmHelp(m.groups[1]) == "Accept this month")
     }
 
-    @Test func aGroupHoldingTheAnchorIsExpanded() async throws {
-        let (m, _, _) = try await twoBursts()
-        let (a, b) = (m.groups[0], m.groups[1])
-        m.click(a.photos[1].id)
-        #expect(m.isExpanded(a) && !m.isExpanded(b))
-        m.toggleExpanded(b)
-        #expect(m.isExpanded(b))
-        m.toggleExpanded(b)
-        #expect(!m.isExpanded(b))
-    }
-
     @Test func theSelectedGroupShowsItsKeyNumbers() async throws {
         let (m, _, _) = try await twoBursts()
         let (a, b) = (m.groups[0], m.groups[1])
@@ -1112,15 +1097,45 @@ private func badge(_ m: ReviewModel, _ v: ReviewView) -> Int? {
         #expect(m.isCurrent(b) && m.keyNumber(b.photos[1].id) == 2 && m.keyNumber(a.photos[0].id) == nil)
         #expect(m.confirmHelp(a) == "Accept this group" && m.confirmHelp(b) == "Accept this group (Return)")
         #expect(m.pickBestHelp(b.photos[1].id).hasSuffix("(2)") && m.canPickBest)
-        #expect(m.confirmUpToHereHelp(b).hasSuffix("(⇧Return)"))
     }
 
-    @Test func confirmUpToHereOnASectionNeedsNoSelection() async throws {
+    @Test func confirmOnASectionNeedsNoSelection() async throws {
         let (m, _, _) = try await twoBursts()
         let gs = m.groups
         m.clearSelection()
-        await m.confirmUpToHere(gs[0])
+        await m.confirm(gs[0])
         #expect(Set(m.pending.keys) == Set(gs[0].photos.map(\.id)) && m.groups.map(\.best) == [gs[1].best])
+    }
+
+    @Test func aPassShowsOneSectionAndSkipsThoseLeftUnsure() async throws {
+        let (m, _, _) = try await twoBursts()
+        let (a, b) = (m.groups[0], m.groups[1])
+        #expect(m.currentGroup?.best == a.best && m.focusPosition == "Burst 1 of 2")
+        m.click(a.photos[0].id)
+        m.moveSelection(by: 5)  // the arrows stay in the section on screen
+        #expect(m.anchor == a.photos.last?.id)
+        m.mark([a.photos[1].id], .unsure)
+        await m.confirm()  // the Unsure photo stays; its section is skipped
+        #expect(m.groups.count == 2 && m.currentGroup?.best == b.best && m.focusPosition == "Burst 1 of 1")
+        m.moveSection(by: -1)
+        #expect(m.currentGroup?.best == b.best)
+        await m.confirm()
+        #expect(m.showsEmptyState && m.emptyStateLabel.contains("1 marked Unsure"))
+        m.onlyUnsure = true  // Show Only Unsure brings it back
+        #expect(m.currentGroup?.photos.map(\.id) == [a.photos[1].id] && !m.showsEmptyState)
+    }
+
+    @Test func kKeepsTheWholeSectionAndAcceptsIt() async throws {
+        let (m, _, _) = try await twoBursts()
+        m.undoManager.groupsByEvent = false
+        let a = m.groups[0]
+        #expect(m.keepKeyLabel == ReviewModel.keepAllLabel && m.canKeepKey)
+        await m.keepKey()
+        #expect(m.pending.keys.sorted() == a.photos.map(\.id).sorted() && m.pending.values.allSatisfy(\.keep))
+        #expect(m.groups.count == 1 && m.undoManager.undoActionName == ReviewModel.keepAllLabel)
+        m.undoManager.undo()  // one undo: back in the pass, with Vision's marks
+        #expect(m.pending.isEmpty && m.groups.count == 2)
+        #expect(a.photos.map { m.decision($0.id) } == [.keep, .delete] && m.touched.isEmpty)
     }
 
     @Test func pickBestThenConfirmFilesOnlyThatPhotoAsKeep() async throws {

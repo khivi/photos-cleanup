@@ -149,6 +149,8 @@ struct PhotoCell: View {
     var best = false
     /// A small cell in a group's row: no Remove tag (dimming says it), a bare ★, and no kind or duration pill.
     var compact = false
+    /// The hero of a pass's section, this many points wide: a large image, not the grid's thumbnail.
+    var large: CGFloat?
     /// Pick as Best: set in Bursts and Similar. A ☆ on hover where the ★ goes, and in the context menu.
     var pickBest: (() -> Void)?
     var pickBestHelp = ""
@@ -224,7 +226,9 @@ struct PhotoCell: View {
             .help(photo.verdict.map { "\($0.kind): \($0.reason)" } ?? "")
             .onAppear {
                 thumbnails.near(photo.id)
-                requestID = thumbnails.request(photo.id) { image = $0 ?? image }
+                requestID =
+                    large.map { thumbnails.requestLarge(photo.id, side: $0) { image = $0 ?? image } }
+                    ?? thumbnails.request(photo.id) { image = $0 ?? image }
             }
             .onDisappear {
                 if let requestID { thumbnails.cancel(requestID) }

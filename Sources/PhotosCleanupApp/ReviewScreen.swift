@@ -8,11 +8,11 @@ struct ReviewScreen: View {
     let model: ReviewModel
     let thumbnails: Thumbnails
     @State private var position = ScrollPosition(edge: .top)
-    @State private var width: CGFloat = 800
+    @State private var size = CGSize(width: 800, height: 600)
     @FocusState private var focused: Bool
 
     /// The adaptive grid fits as many columns as the width allows.
-    private var columns: Int { max(1, Int((width - 2 * gridPadding + 4) / (model.cellSize + 4))) }
+    private var columns: Int { max(1, Int((size.width - 2 * gridPadding + 4) / (model.cellSize + 4))) }
     private let gridPadding: CGFloat = 12
 
     private var pollKey: String { "\(model.view.passKey ?? "")\(model.progress.pending > 0)" }
@@ -84,6 +84,7 @@ struct ReviewScreen: View {
                 position.scrollTo(id: a)
             }
         }
+        .onChange(of: model.currentGroup?.best) { if model.inPass { position.scrollTo(edge: .top) } }
         .onChange(of: model.view) { model.showsInspector = savedInspector(model.view) }
         .onChange(of: model.showsInspector) {
             UserDefaults.standard.set(model.showsInspector, forKey: inspectorKey(model.view))
@@ -229,8 +230,8 @@ struct ReviewScreen: View {
         }
     }
 
-    /// Above the grid, outside its ScrollView so it stays put: the counts, the pass's caption, and the
-    /// buttons that act on the whole pass. A section's own Accept sits on its header in the grid.
+    /// Above the grid, outside its ScrollView so it stays put: the counts and the pass's caption; in a
+    /// pass also where the section on screen is, and its Keep All and Accept.
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(model.summary).font(.headline).accessibilityIdentifier("pass-summary")
@@ -238,16 +239,29 @@ struct ReviewScreen: View {
                 Text(caption).help(model.captionHelp ?? "")
                     .font(.callout).foregroundStyle(.secondary)
             }
-            HStack {
-                if model.inPass {
-                    Group {
-                        Button(ReviewModel.keepAllLabel, systemImage: "checkmark") { model.setAll(.keep) }
-                            .accessibilityIdentifier("keep-all")
-                        Button(ReviewModel.deleteAllLabel, systemImage: "trash") { model.setAll(.delete) }
-                            .accessibilityIdentifier("delete-all")
+            if let g = model.currentGroup, let at = model.focusPosition {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(at).font(.subheadline.weight(.semibold)).accessibilityIdentifier("focus-position")
+                        Text(ReviewModel.focusNote).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button(ReviewModel.keepAllLabel, systemImage: "checkmark") {
+                        focused = true
+                        Task { await model.keepAll() }
                     }
                     .labelStyle(.titleAndIcon)
-                    .disabled(!model.canSetAll)
+                    .help(model.keepAllHelp)
+                    .disabled(!model.canKeepKey)
+                    .accessibilityIdentifier("keep-all")
+                    Button(ReviewModel.confirmLabel) {
+                        focused = true
+                        Task { await model.confirm(g) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .help(model.confirmHelp(g))
+                    .disabled(!model.canConfirm)
+                    .accessibilityIdentifier("confirm-\(g.best)")
                 }
             }
         }
@@ -261,11 +275,8 @@ struct ReviewScreen: View {
     private var grid: some View {
         // One ScrollView for every list: a second one would leave keyboard focus on the old one.
         ScrollView {
-            if model.isGrouped {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(model.shownGroups, id: \.best) { groupRow($0) }
-                }
-                .padding(.horizontal, gridPadding)
+            if model.inPass {
+                if let g = model.currentGroup { focusSection(g) }
             } else {
                 LazyVGrid(
                     columns: [
@@ -306,7 +317,7 @@ struct ReviewScreen: View {
             }
         }
         .scrollPosition($position)
-        .keyboardSelection(model: model, focused: $focused, width: $width) { move($0) }
+        .keyboardSelection(model: model, focused: $focused, size: $size) { move($0) }
         .overlay {  // an overlay, not a swap: the grid stays in the hierarchy and keeps keyboard focus
             if let p = model.preview {
                 PhotoPreview(preview: p, thumbnails: thumbnails).onTapGesture { model.closePreview() }
@@ -328,56 +339,38 @@ struct ReviewScreen: View {
         }
     }
 
-    /// A grouped pass's row: the ★ as the hero, 1.8× the cell (capped so the row fits), the others
-    /// smaller beside it. Collapsed, they fill the ★'s height and end in "+N"; expanded, they wrap on.
-    private func groupRow(_ group: BurstGroup) -> some View {
-        let small = (model.cellSize * 0.6).rounded()
-        let big = max(model.cellSize, min((model.cellSize * 1.8).rounded(), 420, width - 2 * gridPadding - small - 8))
-        let perRow = max(1, Int((width - 2 * gridPadding - big) / (small + 4)))
-        let rest = group.photos.dropFirst().map { PassPhoto(photo: $0) }
-        let open = model.isExpanded(group)
-        let fit = perRow * max(1, Int((big - 20) / (small + 4)))  // 20: the label above them
-        let shown = open || rest.count <= fit ? rest : Array(rest.prefix(fit - 1))
-        let rows = stride(from: 0, to: shown.count, by: perRow).map { Array(shown[$0..<min($0 + perRow, shown.count)]) }
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(model.header(group)).font(.headline)
-                confirmButton(group)
-                if model.expanded.contains(group.best) {
-                    Button("Show Less") { model.toggleExpanded(group) }.buttonStyle(.link).focusable(false)
+    /// A pass's one section on screen. Bursts and Similar: the ★ as large as the window allows, the
+    /// other shots below. The other passes: the month's photos.
+    private func focusSection(_ group: BurstGroup) -> some View {
+        let cells = [
+            GridItem(.adaptive(minimum: model.cellSize, maximum: model.cellSize * cellGrowth), spacing: 4)
+        ]
+        let star = model.isGrouped ? group.photos.first { model.isBest($0.id) } ?? group.photos[0] : nil
+        let rest = group.photos.filter { $0.id != star?.id }.map { PassPhoto(photo: $0) }
+        let verdicts = Dictionary(model.photos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        // 90: the header line, and the label and a row of the other shots below the ★.
+        let hero = max(
+            model.cellSize,
+            min(size.width - 2 * gridPadding, size.height - (rest.isEmpty ? 40 : model.cellSize + 90)))
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(model.header(group)).font(.headline).padding(.top, 8)
+            if let star {
+                cell(PassPhoto(photo: star), large: hero).frame(width: hero, height: hero)
+                    .frame(maxWidth: .infinity)
+                    .id(star.id)
+                if !rest.isEmpty, let others = model.othersLabel {
+                    Text(others).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .padding(.top, 8)
-            HStack(alignment: .top, spacing: 4) {
-                cell(PassPhoto(photo: group.photos[0])).frame(width: big, height: big)
-                VStack(alignment: .leading, spacing: 4) {
-                    if !rest.isEmpty, let others = model.othersLabel {
-                        Text(others).font(.caption).foregroundStyle(.secondary).frame(height: 16)
-                    }
-                    ForEach(rows.indices, id: \.self) { r in
-                        HStack(spacing: 4) {
-                            ForEach(rows[r]) { cell($0, compact: true).frame(width: small, height: small) }
-                            if r == rows.count - 1 && shown.count < rest.count {
-                                Button {
-                                    model.toggleExpanded(group)
-                                } label: {
-                                    Text("+\(rest.count - shown.count)").font(.title3.weight(.semibold))
-                                        .frame(width: small, height: small)
-                                        .background(.gray.opacity(0.15), in: .rect(cornerRadius: 4))
-                                }
-                                .buttonStyle(.plain).focusable(false)
-                                .accessibilityIdentifier("expand-\(group.best)")
-                            }
-                        }
-                    }
-                }
+            LazyVGrid(columns: cells, spacing: 4) {
+                ForEach(rest) { p in cell(verdicts[p.id] ?? p, compact: star != nil) }
             }
         }
-        .id(sectionID(group.best))
+        .padding(.horizontal, gridPadding)
     }
 
-    /// Files the section as marked; the second button files every section from the top through this one.
-    @ViewBuilder private func confirmButton(_ group: BurstGroup) -> some View {
+    /// Files the section's Remove marks: All's sections each have one.
+    private func confirmButton(_ group: BurstGroup) -> some View {
         Button(ReviewModel.confirmLabel) {
             focused = true
             Task { await model.confirm(group) }
@@ -386,19 +379,9 @@ struct ReviewScreen: View {
         .controlSize(.small).focusable(false)
         .disabled(!model.canConfirm)
         .accessibilityIdentifier("confirm-\(group.best)")
-        Button {
-            focused = true
-            Task { await model.confirmUpToHere(group) }
-        } label: {
-            Label(ReviewModel.confirmUpToHereLabel, systemImage: "arrow.up").labelStyle(.titleAndIcon)
-        }
-        .help(model.confirmUpToHereHelp(group))
-        .controlSize(.small).focusable(false)
-        .disabled(!model.canConfirm)
-        .accessibilityIdentifier("confirm-through-\(group.best)")
     }
 
-    private func cell(_ p: PassPhoto, compact: Bool = false) -> some View {
+    private func cell(_ p: PassPhoto, compact: Bool = false, large: CGFloat? = nil) -> some View {
         let mark: PhotoCell.Mark =
             switch model.view {
             case .all:
@@ -411,13 +394,14 @@ struct ReviewScreen: View {
             }
         return PhotoCell(
             photo: p, mark: mark, selected: model.selected.contains(p.id), best: model.isBest(p.id), compact: compact,
+            large: large,
             pickBest: model.canPickBest
                 ? {
                     focused = true
                     model.pickBest(p.id)
                 } : nil,
             pickBestHelp: model.pickBestHelp(p.id),
-            label: model.accessibilityLabel(p), thumbnails: thumbnails, aspectFit: model.aspectFit,
+            label: model.accessibilityLabel(p), thumbnails: thumbnails, aspectFit: model.aspectFit || large != nil,
             onTap: {
                 focused = true  // keys go to the grid, not the ScrollView's own arrow scrolling
                 let mods = NSEvent.modifierFlags
@@ -430,16 +414,16 @@ struct ReviewScreen: View {
 
 extension View {
     /// The grid takes keyboard focus: arrows move the selection, Space toggles the preview, ⌘A selects all,
-    /// Return confirms the selected section, and 1–9 in Bursts and Similar keep one photo of it. K and ⌫ are menu commands.
+    /// Return accepts the current section, and 1–9 in Bursts and Similar pick its ★. K and ⌫ are menu commands.
     fileprivate func keyboardSelection(
-        model: ReviewModel, focused: FocusState<Bool>.Binding, width: Binding<CGFloat>,
+        model: ReviewModel, focused: FocusState<Bool>.Binding, size: Binding<CGSize>,
         move: @escaping (KeyEquivalent) -> Void
     ) -> some View {
         self
-            .onGeometryChange(for: CGFloat.self) {
-                $0.size.width
+            .onGeometryChange(for: CGSize.self) {
+                $0.size
             } action: {
-                width.wrappedValue = $0
+                size.wrappedValue = $0
             }
             .focusable()
             .focused(focused)
@@ -501,10 +485,11 @@ struct ReviewCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Photo") {
-            Button(Decision.keep.label) { model?.markSelection(.keep) }
+            // K keeps the whole section in a pass, one photo in All.
+            Button(model?.keepKeyLabel ?? Decision.keep.label) { Task { await model?.keepKey() } }
                 .keyboardShortcut("k", modifiers: [])
                 .accessibilityIdentifier("mark-keep")
-                .disabled(model?.canMark != true)
+                .disabled(model?.canKeepKey != true)
             // ⌫ also removes an Import folder from its list: this menu item owns the key everywhere.
             Button(model?.deleteKeyLabel ?? Decision.delete.label) { model?.deleteKey() }
                 .keyboardShortcut(.delete, modifiers: [])
@@ -517,17 +502,6 @@ struct ReviewCommands: Commands {
             // No shortcut: a bare Return key equivalent would also catch Return in dialogs; the grid handles it.
             Button(ReviewModel.confirmLabel) { Task { await model?.confirm() } }.disabled(
                 model?.canConfirm != true)
-            Button(ReviewModel.confirmUpToHereLabel) {
-                Task { await model?.confirmUpToHere() }
-            }
-            .keyboardShortcut(.return, modifiers: .shift)
-            .disabled(model?.canConfirm != true)
-            Divider()
-            Group {
-                Button(ReviewModel.keepAllLabel) { model?.setAll(.keep) }
-                Button(ReviewModel.deleteAllLabel) { model?.setAll(.delete) }
-            }
-            .disabled(model?.canSetAll != true)
             Divider()
             // No shortcut here: the grid's own Space handler toggles the preview, and a bare-Space key equivalent would also catch Space in dialogs.
             Button(model?.inspectorToggleLabel ?? "Show Info") { model?.showsInspector.toggle() }

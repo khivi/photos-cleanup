@@ -220,7 +220,14 @@ Phase 1: keep language (branch `khivi/keep-language`, on #16).
 - [x] The ★ is the hero of its row: 1.8× the cell, capped at 420 pt; "Other shots from this burst/moment" above the rest.
 - [x] Captions are one sentence, so the Show Less / Show More fold is gone. The Bursts and Similar tooltip names the Vision score, not "the sharpest". `docs/app-store/listing.md` Description follows, for the next submission.
 
-Phase 2, to discuss: "Inbox Zero for Photos". One group at a time ("Burst 12 of 847"), the recommended photo large, Accept or Review. Keyboard first: Space accepts, ← keeps all, → accepts the recommendation.
+Phase 2: focus view (branch `khivi/focus-view`, on #17).
+
+- [x] Every pass shows one section at a time; the header has "Burst 12 of 847" (Moment, Month), "Nothing is deleted until you confirm in Photos.", Keep All and Accept.
+- [x] Bursts and Similar: the ★ as a hero filling the window, the other shots below. Month passes: the month's grid.
+- [x] Return accepts; K keeps the section and accepts it (in All, K marks Keep); ⌫ switches Keep and Remove; 1–9 pick the ★; ⌥↑/⌥↓ skip.
+- [x] Removed: Accept Up to Here (⇧Return), the pass-wide Keep All / Remove All, the "+N" fold.
+- [x] A section left with only Unsure photos is skipped; Show Only Unsure (⌥⌘U) finds it.
+- [x] All, Not in Photos Yet and In Delete Me Albums keep the scrolling grid.
 
 Phase 3, a later experiment: a dashboard ("You can recover 18.2 GB", counts per category, Start Cleanup). The current navigation stays.
 

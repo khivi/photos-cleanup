@@ -57,8 +57,6 @@ public final class ReviewModel {
     public private(set) var pending: [String: Pending]
     /// Every photo by uuid, read when Pending opens: it lists photos from every pass.
     private var library: [String: Photo] = [:]
-    /// Grouped passes: groups shown past their first row, by `best`.
-    public private(set) var expanded: Set<String> = []
     /// Photos this session's commits moved to a Delete Me album, newest first.
     private var committed: [Photo] = []
     private var committedAlbum: [String: String] = [:]
@@ -211,8 +209,6 @@ public final class ReviewModel {
     }
 
     public var doomed: [PassPhoto] { photos.filter { decisions[$0.id] == .delete } }
-    /// Keep All and Delete All can run now.
-    public var canSetAll: Bool { inPass && !loading && !photos.isEmpty }
     /// K, ⌫ and the Inspector's picker work: in a pass, and in All (where Keep clears a mark).
     public var canMark: Bool { inPass || view == .all }
 
@@ -366,13 +362,20 @@ public final class ReviewModel {
             + unexported
     }
 
+    /// A pass shows one section at a time; with none left to show, the empty state.
     public var showsEmptyState: Bool {
-        (inPass || onlyDelete || onlyUnsure || view == .pending) && !loading && displayed.isEmpty
+        guard !loading else { return false }
+        if inPass { return currentGroup == nil }
+        return (onlyDelete || onlyUnsure || view == .pending) && displayed.isEmpty
     }
     public var emptyStateLabel: String {
-        onlyDelete
-            ? "Nothing marked Remove."
-            : onlyUnsure ? "Nothing marked Unsure." : view == .pending ? Self.nothingPending : Self.emptyState
+        if onlyDelete { return "Nothing marked Remove." }
+        if onlyUnsure { return "Nothing marked Unsure." }
+        if view == .pending { return Self.nothingPending }
+        let unsure = photos.count { decisions[$0.id] == .unsure }
+        guard inPass, unsure > 0 else { return Self.emptyState }
+        return
+            "Nothing left to review. \(unsure.formatted()) marked Unsure: \(Self.onlyUnsureLabel) (⌥⌘U) finds \(unsure == 1 ? "it" : "them")."
     }
     public static let nothingPending =
         "Nothing here. Accept photos in a pass; they wait here until Apply to Photos…."
@@ -402,7 +405,7 @@ public final class ReviewModel {
     public var canDeleteInPhotos: Bool { view == .deleted && !loading && !deleting && !deleted.isEmpty }
     public var inspectorToggleLabel: String { showsInspector ? "Hide Info" : "Show Info" }
     public static let keepAllLabel = "Keep All"
-    public static let deleteAllLabel = "Remove All"
+    public static let focusNote = "Nothing is deleted until you confirm in Photos."
     public static let deleteMeBadge = "✗ Delete Me"
     public static let bestBadge = "★ Best shot"
     /// Above the photos beside a group's ★.
@@ -478,7 +481,6 @@ public final class ReviewModel {
             decisions = [:]
             touched = []
             starred = savedStars[v] ?? [:]
-            expanded = []
             if v != .all { for p in items { decisions[p.id] = initialDecision(p) } }
             let ids = Set(items.map(\.id))
             for (id, d) in savedMarks[v] ?? [:] where ids.contains(id) && pending[id] == nil {
@@ -588,13 +590,29 @@ public final class ReviewModel {
         if grouping { undoName = name ?? "" }
     }
 
-    /// ⌫: marks Remove, or on the Import screen removes the selected folder from the list (never from disk).
-    public var deleteKeyLabel: String { view == .importFolders ? "Remove from List" : Decision.delete.label }
+    /// ⌫: toggles the selection between Keep and Remove, or on the Import screen removes the selected
+    /// folder from the list (never from disk).
+    public var deleteKeyLabel: String {
+        view == .importFolders ? "Remove from List" : toggled == .keep ? Decision.keep.label : Decision.delete.label
+    }
     public var canDeleteKey: Bool { view == .importFolders ? importFolder != nil && importBusy == nil : canMark }
     public func deleteKey() {
         guard canDeleteKey else { return }
         if view == .importFolders, let url = importFolder { return removeImportFolder(url) }
-        markSelection(.delete)
+        markSelection(toggled)
+    }
+    /// What ⌫ marks: Keep when every selected photo is already Remove.
+    private var toggled: Decision {
+        !selected.isEmpty && selected.allSatisfy { decisions[$0] == .delete } ? .keep : .delete
+    }
+
+    /// K: in a pass, keeps the whole section and accepts it; in All, marks the selection Keep (clears its mark).
+    public var keepKeyLabel: String { inPass ? Self.keepAllLabel : Decision.keep.label }
+    public var canKeepKey: Bool { inPass ? canConfirm : canMark }
+    public func keepKey() async {
+        guard canKeepKey else { return }
+        if inPass { return await keepAll() }
+        markSelection(.keep)
     }
 
     /// Marks the selected photos; only a pass and All have marks. The selection stays on the photo, unless a filter hides it.
@@ -613,16 +631,12 @@ public final class ReviewModel {
         anchor = ids[min(at, ids.count - 1)]
     }
 
-    public func setAll(_ d: Decision) {
-        guard inPass else { return }  // marking the whole library isn't useful
-        apply(
-            Dictionary(photos.map { ($0.id, (d, true)) }, uniquingKeysWith: { a, _ in a }),
-            name: d == .keep ? Self.keepAllLabel : Self.deleteAllLabel)
-    }
-
     // MARK: Selection
 
-    private var order: [String] { displayed.map(\.id) }
+    /// What the arrows, ⇧-click and ⌘A walk: in a pass, the section on screen.
+    private var order: [String] {
+        inPass ? currentGroup?.photos.map(\.id) ?? [] : displayed.map(\.id)
+    }
 
     /// A click: replaces the selection; ⇧ extends from the anchor to `id`; ⌘ toggles `id`.
     public func click(_ id: String, extend: Bool = false, toggle: Bool = false) {
@@ -837,7 +851,7 @@ public final class ReviewModel {
 
     /// ⌥↓ / ⌥↑: selects the first photo of the next or previous section (a group in Bursts and Similar, else a month).
     public func moveSection(by delta: Int) {
-        let gs = shownGroups
+        let gs = inPass ? focusSections : shownGroups
         guard hasSections, !gs.isEmpty else { return }
         let at = anchor.flatMap { a in gs.firstIndex { $0.photos.contains { $0.id == a } } }
         let i = at.map { min(gs.count - 1, max(0, $0 + delta)) } ?? (delta > 0 ? 0 : gs.count - 1)
@@ -1076,19 +1090,34 @@ extension ReviewModel {
     /// Sections to confirm one at a time: groups in Bursts and Similar, months in All and the other passes.
     public var hasSections: Bool { view == .all || inPass }
 
-    /// Shown in full: opened by hand, or holding the anchor, so arrow keys never select a hidden photo.
-    public func isExpanded(_ g: BurstGroup) -> Bool {
-        expanded.contains(g.best) || anchor.map { a in g.photos.contains { $0.id == a } } == true
-    }
-
-    public func toggleExpanded(_ g: BurstGroup) {
-        if expanded.remove(g.best) == nil { expanded.insert(g.best) }
-    }
-
-    /// The anchor's section, or the first one shown: where Return and 1–9 act.
-    private var currentGroup: BurstGroup? {
+    /// The anchor's section, or the first one to review: where Return, K and 1–9 act, and in a pass the
+    /// one section on screen.
+    public var currentGroup: BurstGroup? {
         let gs = shownGroups
-        return anchor.flatMap { a in gs.first { $0.photos.contains { $0.id == a } } } ?? gs.first
+        return anchor.flatMap { a in gs.first { $0.photos.contains { $0.id == a } } }
+            ?? (inPass ? focusSections : gs).first
+    }
+
+    /// A pass's sections to review: those with a photo not marked Unsure. Accept leaves Unsure photos
+    /// behind, so their sections would come round again; Show Only Unsure brings them back.
+    var focusSections: [BurstGroup] {
+        onlyUnsure ? shownGroups : shownGroups.filter { g in g.photos.contains { decisions[$0.id] != .unsure } }
+    }
+
+    /// "Burst 12 of 847" above a pass's section: where the section on screen is among those left.
+    public var focusPosition: String? {
+        guard inPass, let g = currentGroup else { return nil }
+        let gs = focusSections
+        let unit =
+            switch view.passKey {
+            case "bursts": "Burst"
+            case "similar": "Moment"
+            default: "Month"
+            }
+        guard let i = gs.firstIndex(where: { $0.best == g.best }) else {
+            return "\(unit) · \(gs.count.formatted()) left"
+        }
+        return "\(unit) \((i + 1).formatted()) of \(gs.count.formatted())"
     }
 
     /// The current group's ★: the user's pick, else Vision's.
@@ -1104,32 +1133,32 @@ extension ReviewModel {
     /// A section confirms what it shows: a pass files every photo, All only its Delete marks.
     public var canConfirm: Bool { hasSections && !loading && !committing && currentGroup != nil }
     /// Why an Accept filed nothing, in the status bar: the buttons stay enabled, so a click always answers.
-    func nothingToConfirm(_ sections: Int) -> String {
-        let here = sections == 1 ? "this \(sectionUnit)" : "these \(sectionUnit)s"
-        return view == .all
-            ? "Nothing to accept in \(here): mark photos Remove (⌫) first."
-            : "Nothing to accept in \(here): every photo is Unsure. Mark them K or ⌫ first."
+    var nothingToConfirm: String {
+        view == .all
+            ? "Nothing to accept in this \(sectionUnit): mark photos Remove (⌫) first."
+            : "Nothing to accept in this \(sectionUnit): every photo is Unsure. Mark one with ⌫, or press K to keep them all."
     }
-    private func filesSomething(_ gs: [BurstGroup]) -> Bool {
+    private func filesSomething(_ g: BurstGroup) -> Bool {
         let files: (Decision?) -> Bool = view == .all ? { $0 == .delete } : { $0 != .unsure }
-        return gs.contains { $0.photos.contains { files(decisions[$0.id]) } }
+        return g.photos.contains { files(decisions[$0.id]) }
     }
     public static let confirmLabel = "Accept"
-    public static let confirmUpToHereLabel = "Accept Up to Here"
 
     /// Return, or a section's Accept button: files the section as marked, then selects the next one.
     public func confirm(_ section: BurstGroup? = nil) async {
         guard canConfirm, let g = section ?? currentGroup else { return }
-        await confirm([full(g)], name: Self.confirmLabel)
+        await confirm(full(g), name: Self.confirmLabel)
     }
 
-    /// ⇧Return, or a section's Accept Up to Here button: accepts every section from the top through
-    /// `section` (default the current one), for a pass reviewed by scrolling.
-    public func confirmUpToHere(_ section: BurstGroup? = nil) async {
-        guard canConfirm, let g = section ?? currentGroup else { return }
-        let gs = shownGroups
-        guard let i = gs.firstIndex(where: { $0.best == g.best }) else { return }
-        await confirm(gs[...i].map(full), name: Self.confirmUpToHereLabel)
+    /// K in a pass: every photo of the current section is kept, then accepted. One undo takes back both.
+    public func keepAll() async {
+        guard inPass, canConfirm, let g = currentGroup.map(full) else { return }
+        let before = snapshot
+        for p in g.photos {
+            decisions[p.id] = .keep
+            touched.insert(p.id)
+        }
+        await confirm(g, name: Self.keepAllLabel, undoTo: before)
     }
 
     /// A photo's ☆, or a number key: this photo becomes its group's ★ and Keep, the rest Delete. Not confirmed:
@@ -1163,9 +1192,7 @@ extension ReviewModel {
     public func confirmHelp(_ g: BurstGroup) -> String {
         "Accept this \(sectionUnit)" + (inPass ? "" : ": files its Remove marks") + (isCurrent(g) ? " (Return)" : "")
     }
-    public func confirmUpToHereHelp(_ g: BurstGroup) -> String {
-        "Accept every section from the top through this \(sectionUnit)" + (isCurrent(g) ? " (⇧Return)" : "")
-    }
+    public var keepAllHelp: String { "Keep every photo in this \(sectionUnit), then accept it (K)" }
     public static let pickBestLabel = "Pick as Best"
     public func pickBestHelp(_ id: String) -> String {
         "Pick as best: keep this photo, mark the rest of the group Remove" + (keyNumber(id).map { " (\($0))" } ?? "")
@@ -1173,24 +1200,27 @@ extension ReviewModel {
     public var canPickBest: Bool { isGrouped && !loading && !committing }
 
     /// Confirming means the user looked: in a pass every photo goes to its album, Keep included.
-    private func confirm(_ sections: [BurstGroup], name: String) async {
-        guard filesSomething(sections) else {
-            status = nothingToConfirm(sections.count)
+    /// `undoTo` is the state before the caller changed marks for this accept (K).
+    private func confirm(_ section: BurstGroup, name: String, undoTo: Snapshot? = nil) async {
+        let before = undoTo ?? snapshot
+        guard filesSomething(section) else {
+            (decisions, touched) = (before.decisions, before.touched)
+            status = nothingToConfirm
             return
         }
-        let gs = shownGroups
-        let last = sections.last.flatMap { s in gs.firstIndex { $0.best == s.best } }
-        let next = last.flatMap { $0 + 1 < gs.count ? gs[$0 + 1] : nil }
-        let ids = Set(sections.flatMap { $0.photos.map(\.id) })
-        let before = snapshot
+        // The next section to review; a pass skips those left with only Unsure photos.
+        let gs = inPass ? focusSections : shownGroups
+        let at = gs.firstIndex { $0.best == section.best }
+        let next = at.flatMap { $0 + 1 < gs.count ? gs[$0 + 1] : nil }
+        let ids = Set(section.photos.map(\.id))
         let mine = photos.filter { ids.contains($0.id) }
         let doomed = mine.filter { decisions[$0.id] == .delete }
         let kept = inPass ? mine.filter { decisions[$0.id] == .keep }.map(\.id) : []
         guard await send(doomed, keep: kept, name: name, undoTo: before) else {
-            decisions = before.decisions
+            (decisions, touched) = (before.decisions, before.touched)
             return
         }
-        if let id = next?.photos.first?.id, order.contains(id) {
+        if let id = next?.photos.first?.id {
             selected = [id]
             anchor = id
         }
