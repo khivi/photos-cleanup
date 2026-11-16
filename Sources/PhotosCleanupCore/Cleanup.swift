@@ -31,14 +31,12 @@ public struct BurstGroup: Sendable, Hashable {
 
 public enum CleanupError: Error, Equatable {
     case unknownPass
-    case noMatchingPhotos
 }
 
 extension CleanupError: CustomStringConvertible {
     public var description: String {
         switch self {
         case .unknownPass: "Unknown pass."
-        case .noMatchingPhotos: "Those photos are no longer in the library."
         }
     }
 }
@@ -68,8 +66,6 @@ public actor Cleanup {
     var committed: Set<String> = []
     /// Confirmed in the app and not yet applied to Photos: out of every pass, like `committed`.
     var held: Set<String> = []
-    /// The subset of `committed` filed into a Delete Me album.
-    var filedDelete: Set<String> = []
 
     /// nil: no local image. Prints are dropped once paired into `near`: 3 KB each, ~600 MB at 200k photos.
     var vision: [String: VisionResult?] = [:]
@@ -144,12 +140,9 @@ public actor Cleanup {
                 photos, ignoring: ignoreAlbums, requireValidDate: true, keepAlbumPhotos: keepAlbumPhotos)
         default: throw CleanupError.unknownPass
         }
-        // Similar also skips photos Bursts already filed: they are the same kind of decision.
-        let owners = kind == "similar" ? ["similar", "bursts"] : [kind]
-        let filed = Set(owners.flatMap { [Passes.deleteAlbum($0)!, Passes.keepAlbum($0)!] } + [Passes.allDeleteAlbum])
-            .union(owners.flatMap { Passes.legacyAlbums[$0] ?? [] })
         return found.filter {
-            !committed.contains($0.uuid) && !held.contains($0.uuid) && filed.isDisjoint(with: $0.albums)
+            !committed.contains($0.uuid) && !held.contains($0.uuid) && !$0.albums.contains(Passes.keepAlbum)
+                && Passes.waitingAlbum(in: $0.albums) == nil
         }
     }
 
@@ -439,54 +432,54 @@ public actor Cleanup {
 
     // MARK: Commit
 
-    public struct Committed: Sendable, Equatable {
-        public var added: Int
-        public var album: String
-        public var kept: Int
-        public var keepAlbum: String
+    public struct Applied: Sendable, Equatable {
+        public var deleted: [String]
+        public var kept: [String]
     }
 
-    /// File photos into the pass's Delete Me (`delete`) and Keep (`keep`) albums.
-    /// `Passes.allKey` is the All view: only `delete` is filed, into "All - Delete Me"; `keep` is ignored
-    /// and nothing is logged, since All has no verdicts.
-    public func commit(_ kind: String, delete: [String], keep: [String]) async throws -> Committed {
-        let isAll = kind == Passes.allKey
-        guard let album = isAll ? Passes.allDeleteAlbum : Passes.deleteAlbum(kind),
-            let keepAlbum = isAll ? "" : Passes.keepAlbum(kind)
-        else { throw CleanupError.unknownPass }
-        let keep = isAll ? [] : keep
-        let doomed = delete.filter { byUUID[$0] != nil }
-        let kept = keep.filter { byUUID[$0] != nil }
-        guard !doomed.isEmpty || !kept.isEmpty else { throw CleanupError.noMatchingPhotos }
+    /// Deletes `delete` after one macOS confirmation (Photos keeps them in Recently Deleted for
+    /// 30 days), then files `keep` into `Passes.keepAlbum`. Both map a uuid to its pass. nil when the
+    /// user cancels: nothing changes. Photos no longer in the library are skipped.
+    public func apply(delete: [String: String], keep: [String: String]) async throws -> Applied? {
+        let doomed = delete.keys.filter { byUUID[$0] != nil }
+        let kept = keep.keys.filter { byUUID[$0] != nil && delete[$0] == nil }
         let library = library
-        for (uuids, name) in [(doomed, album), (kept, keepAlbum)] where !uuids.isEmpty {
-            _ = try await offload { try library.add(album: name, uuids: uuids) }
+        if !doomed.isEmpty {
+            guard try await offload({ try library.delete(uuids: doomed) }) > 0 else { return nil }
+            forget(doomed)
         }
-        committed.formUnion(doomed + kept)
-        filedDelete.formUnion(doomed)
+        if !kept.isEmpty {
+            _ = try await offload { try library.add(album: Passes.keepAlbum, uuids: kept) }
+            committed.formUnion(kept)
+        }
         generation += 1
-        if Passes.verdictKinds.contains(kind) {
-            logDecisions(kind, doomed.map { ($0, "delete") } + kept.map { ($0, "keep") })
+        for kind in Passes.verdictKinds {
+            logDecisions(
+                kind,
+                doomed.filter { delete[$0] == kind }.map { ($0, "delete") }
+                    + kept.filter { keep[$0] == kind }.map { ($0, "keep") })
         }
-        return Committed(added: doomed.count, album: album, kept: kept.count, keepAlbum: keepAlbum)
+        return Applied(deleted: doomed, kept: kept)
     }
 
     /// Deletes the photos of `uuids` that sit in a Delete Me album, after macOS confirms; they stay in
     /// Recently Deleted for 30 days. Returns the uuids deleted: none when the user cancels.
     public func delete(_ uuids: [String]) async throws -> [String] {
-        let waiting = Set(photos.filter { Passes.waitingAlbum(in: $0.albums) != nil }.map(\.uuid)).union(filedDelete)
-        let doomed = uuids.filter { waiting.contains($0) && byUUID[$0] != nil }
+        let doomed = uuids.filter { byUUID[$0].map { Passes.waitingAlbum(in: $0.albums) != nil } ?? false }
         guard !doomed.isEmpty else { return [] }
         let library = library
         let n = try await offload { try library.delete(uuids: doomed) }
         guard n > 0 else { return [] }
-        let gone = Set(doomed)
-        photos.removeAll { gone.contains($0.uuid) }
-        for u in gone { byUUID[u] = nil }
-        filedDelete.subtract(gone)
-        committed.subtract(gone)
+        forget(doomed)
         generation += 1
         return doomed
+    }
+
+    private func forget(_ uuids: [String]) {
+        let gone = Set(uuids)
+        photos.removeAll { gone.contains($0.uuid) }
+        for u in gone { byUUID[u] = nil }
+        committed.subtract(gone)
     }
 
     /// One line per committed photo that has a verdict, to measure the model's accuracy.

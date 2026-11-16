@@ -71,7 +71,7 @@ struct ReviewScreen: View {
                         .accessibilityIdentifier("apply-confirm")
                 } message: {
                     Text(
-                        (model.applyPreview.map(\.label) + ["Nothing is deleted: Delete in Photos… does that."])
+                        model.applyPreview
                             .joined(separator: "\n"))
                 }
         }
@@ -179,7 +179,7 @@ struct ReviewScreen: View {
         }
         if model.showsApply {
             ToolbarItem {
-                Button(model.applyButtonLabel) { model.confirmingApply = true }
+                Button(model.applyButtonLabel) { Task { await model.askApply() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(!model.canApply)
                     .accessibilityIdentifier("apply")
@@ -525,7 +525,7 @@ struct ReviewCommands: Commands {
             Button("Preview") { model?.togglePreview() }.disabled(model == nil)
             Button(model?.deleteInPhotosLabel ?? "Delete in Photos…") { Task { await model?.deleteInPhotos() } }
                 .disabled(model?.canDeleteInPhotos != true)
-            Button(model?.applyButtonLabel ?? "Apply to Photos…") { model?.confirmingApply = true }
+            Button(model?.applyButtonLabel ?? "Apply to Photos…") { Task { await model?.askApply() } }
                 .disabled(model?.canApply != true)
             Button(ReviewModel.sendBackLabel) { model?.sendBack() }.disabled(model?.canSendBack != true)
                 .accessibilityIdentifier("commit-menu")

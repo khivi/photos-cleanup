@@ -26,8 +26,8 @@ Photos itself may download a photo from iCloud when the app asks for a preview o
 
 ## Changes to your library
 
-- The app adds photos to review albums, such as "Bursts - Delete Me" and "Bursts - Keep".
-- The app deletes only photos you flagged, only when you click Delete in Photos…, and only after macOS asks you to confirm.
+- The app adds photos you keep to one album, "Photos Cleanup - Keep".
+- The app deletes only photos you flagged, only when you click Apply to Photos… (or Delete in Photos… for an old Delete Me album), and only after macOS asks you to confirm.
 - Photos keeps deleted photos in Recently Deleted for 30 days. You can restore them there.
 
 ## Contact

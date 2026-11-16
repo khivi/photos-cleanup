@@ -23,7 +23,7 @@ Photos Cleanup is free. It has no subscription, no account and no limit on how m
 
 It runs on your Mac. Apple's on-device Vision and Foundation Models do the analysis. The app makes no network calls, and nothing leaves your Mac.
 
-It never deletes on its own. When you mark a photo to remove, the app files it into an album such as "Screenshots - Delete Me". Photos are deleted only when you click Delete in Photos… and confirm in the macOS dialog. Photos then keeps them in Recently Deleted for 30 days.
+It never deletes on its own. Photos you mark to remove wait in the app until you click Apply to Photos…, which shows what it will delete. Nothing is deleted until you confirm in the macOS dialog. Photos then keeps them in Recently Deleted for 30 days.
 
 PASSES
 
@@ -42,7 +42,7 @@ You work through a pass in sections and accept each one. Accepted photos wait un
 
 SAFE BY DEFAULT
 
-Favorites are never suggested. Photos in your own albums are not suggested either, unless you change that in Settings. Photos you edited start as keep in Bursts, Similar and Low Quality. Photos you keep go into a "Keep" album, and later runs skip them.
+Favorites are never suggested. Photos in your own albums are not suggested either, unless you change that in Settings. Photos you edited start as keep in Bursts, Similar and Low Quality. Photos you keep go into one album, "Photos Cleanup - Keep", and no pass suggests them again.
 
 EXPORT AND IMPORT
 

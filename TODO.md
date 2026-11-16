@@ -21,8 +21,8 @@ Not pursuing:
 - **HEIC savings estimate** (from the old command-line tool). Photos and iCloud already store new photos as HEIC, and converting goes through Photos' Export.
 - **Threshold settings** (the old tool's `--threshold`, `--window`). The constants in `Passes` are set by eye on the real library; add a setting only when a pass's picks are wrong in practice.
 - **Dry run** (the old tool's `--dry-run`). Nothing moves until Move to Albums is confirmed.
-- **Date range** (the old tool's `--since`, `--last`, `--until`). Each pass's Keep album hides reviewed photos, so a rerun shows only new ones; All by month covers browsing by date.
-- **Album name override** (the old tool's `--album-name`). A pass's albums are always derived from its title (`everyPassHasOneName`).
+- **Date range** (the old tool's `--since`, `--last`, `--until`). The Keep album hides reviewed photos, so a rerun shows only new ones; All by month covers browsing by date.
+- **Album name override** (the old tool's `--album-name`). The one Keep album is fixed (`Passes.keepAlbum`).
 - **Side-by-side compare in a group** (decided 2026-10-30), as in PhotoSweeper's Face-to-Face. The ★ is rarely wrong, and ←/→ in the preview already flips between frames.
 - **Screen Recordings pass** (decided 2026-10-30). The library has 4; they show in Videos.
 - **Streaks, widgets, reminders, video compression, Live Photo → still** (swipe apps, CleanMy Phone). Phone retention features; compression and conversion re-import through PhotoKit and lose metadata.
@@ -243,10 +243,17 @@ Phase 3: Overview (branch `khivi/overview`, on `khivi/inbox-zero`).
 - [ ] Paperwork is skipped until opened: its count waits for verdicts, which start only when the pass opens.
 - [ ] "You can recover 18.2 GB": needs each asset's file size (`PHAssetResource`), which the app doesn't read yet.
 
+Phase 4: Apply deletes; one Keep album (branch `khivi/apply-deletes`, on #21).
+
+- [x] Apply deletes the Remove photos behind one macOS confirmation for every pass, then files the Keeps. A cancel changes nothing.
+- [x] The Apply dialog: "Ready to delete", counts per pass, the total, the Keeps, and a warning when the export lacks them (or there is no export).
+- [x] One `Photos Cleanup - Keep` album for every pass: a keep in one pass hides the photo from all. `legacyAlbums` and the per-pass Keep albums are gone; the old Keep albums still protect their photos while Settings' "Keep photos in albums" is on.
+- [x] No Delete Me albums are written. In Delete Me Albums shows only while older versions' albums still hold photos.
+- [x] Album names no longer come from pass titles, so renaming a pass needs no migration.
+
 Open naming questions:
 
-- "Low Quality" → "Likely Missed Shots". A pass title is its album prefix: needs `Passes.legacyAlbums`.
-- The `<Pass> - Delete Me` album names (same migration).
+- "Low Quality" → "Likely Missed Shots". Albums no longer use the title; only an old `Low Quality - Delete Me` album would be stranded.
 - "candidate" in docs and code (the UI says "photos" now).
 - Delete in Photos… and the macOS dialog keep "delete": that step really deletes.
 

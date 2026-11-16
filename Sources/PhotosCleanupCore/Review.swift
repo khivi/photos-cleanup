@@ -60,19 +60,10 @@ public final class ReviewModel {
     public private(set) var unsure: [String: String]
     /// Every photo by uuid, read when Pending opens: it lists photos from every pass.
     private var library: [String: Photo] = [:]
-    /// Photos this session's commits moved to a Delete Me album, newest first.
-    private var committed: [Photo] = []
-    private var committedAlbum: [String: String] = [:]
-    /// Photos already in a Delete Me album when the library loaded.
-    private var loaded: [Photo] = []
-    private var loadedAlbum: [String: String] = [:]
-    /// Every photo waiting in a Delete Me album: this session's commits, then the loaded ones.
-    public var deleted: [Photo] {
-        let seen = Set(committed.map(\.id))
-        return committed + loaded.filter { !seen.contains($0.id) }
-    }
+    /// Photos an earlier version left in a Delete Me album, read when the library loads.
+    public private(set) var deleted: [Photo] = []
     /// The Delete Me album each photo in `deleted` is in.
-    public var deletedAlbum: [String: String] { loadedAlbum.merging(committedAlbum) { _, new in new } }
+    public private(set) var deletedAlbum: [String: String] = [:]
     public private(set) var progress = JobProgress()
     public private(set) var export = ExportStatus()
     /// Photos in `deleted` the export doesn't hold: Delete in Photos would lose them.
@@ -213,9 +204,9 @@ public final class ReviewModel {
             ),
             (
                 .pending, "Not in Photos Yet",
-                "Photos you accepted, not yet in their albums. Apply to Photos… adds them; nothing changes in Photos before."
+                "Photos you accepted. Apply to Photos… deletes the Remove ones after macOS asks, and adds the rest to “\(Passes.keepAlbum)”."
             ),
-            (.deleted, "In Delete Me Albums", "Photos waiting in a Delete Me album. Delete them there in Photos."),
+            (.deleted, "In Delete Me Albums", "Photos an earlier version left in a Delete Me album. Delete them here."),
             (
                 .export, "Export",
                 "Copies every photo and video to a folder or disk. Each run copies only what’s new or changed."
@@ -286,7 +277,7 @@ public final class ReviewModel {
         func items(_ keep: (ReviewView) -> Bool) -> [SidebarItem] { Self.tabs.filter { keep($0.view) }.map(item) }
         return [
             SidebarSection(title: "Cleanup", items: items { $0.passKey != nil || $0 == .unsure || $0 == .overview }),
-            SidebarSection(title: "Review", items: items { $0 == .pending || $0 == .deleted }),
+            SidebarSection(title: "Review", items: items { $0 == .pending || ($0 == .deleted && !deleted.isEmpty) }),
             SidebarSection(title: "Transfer", items: items { $0 == .export || $0 == .importFolders }),
         ]
     }
@@ -366,7 +357,7 @@ public final class ReviewModel {
     }
     public static let nothingPending =
         "Nothing here. Accept photos in a pass; they wait here until Apply to Photos…."
-    public static let emptyState = "Nothing left to review. Photos already filed in this pass’s albums are hidden."
+    public static let emptyState = "Nothing left to review. Photos you kept or deleted before are hidden."
     public static let nothingUnsure = "Nothing is Unsure. Photos you accept as Unsure (?) in a pass wait here."
     public static let completeLabel = "Cleanup complete. Every pass and Unsure are empty."
     public static let unsureTitle = "Unsure"
@@ -374,16 +365,6 @@ public final class ReviewModel {
     /// Every pass's count is known and 0, and nothing waits in Unsure.
     public var cleanupComplete: Bool {
         unsure.isEmpty && Passes.all.allSatisfy { (counts[$0.key] ?? nil) == 0 }
-    }
-
-    // MARK: Commit preview (Phase 5 labels)
-
-    /// One album Apply to Photos will fill, and how many photos go in.
-    public struct CommitLine: Sendable, Equatable {
-        public var count: Int
-        public var album: String
-        /// "12 → Bursts - Delete Me"
-        public var label: String { "\(count) → \(album)" }
     }
 
     /// Window title: the sidebar item's title.
@@ -544,12 +525,12 @@ public final class ReviewModel {
             unsure = unsure.filter { ids.contains($0.key) }
             saveState()
         }
-        loaded = []
-        loadedAlbum = [:]
+        deleted = []
+        deletedAlbum = [:]
         for p in all {
             if let a = Passes.waitingAlbum(in: p.albums) {
-                loaded.append(p)
-                loadedAlbum[p.id] = a
+                deleted.append(p)
+                deletedAlbum[p.id] = a
             }
         }
         deletedNotExported = await exporter?.missing(deleted.map(\.id)) ?? 0
@@ -724,11 +705,13 @@ public final class ReviewModel {
         /// Why Vision's score made it a candidate or the ★, from `scoreLine`.
         public let score: String?
         public let albums: String
-        /// "→ Screenshots - Delete Me": where Move to Albums puts it; nil when it stays put.
+        /// "→ Photos Cleanup - Keep": where Apply puts it; nil when it stays put.
         public let target: String?
         /// The mark, in a pass only.
         public let decision: Decision?
     }
+
+    static let deletedTarget = "Recently Deleted, on Apply"
 
     /// The single selected photo, nil with none or several selected.
     public func inspectorInfo(locale: Locale = .current, timeZone: TimeZone = .current) -> Info? {
@@ -740,8 +723,8 @@ public final class ReviewModel {
         var target: String?
         if let key = origin(id), let d = decisions[id] {
             switch d {
-            case .delete: target = Passes.deleteAlbum(key)
-            case .keep: target = Passes.keepAlbum(key)
+            case .delete: target = Self.deletedTarget
+            case .keep: target = Passes.keepAlbum
             case .unsure: target = nil  // waits in Unsure
             }
         }
@@ -881,12 +864,8 @@ public final class ReviewModel {
         do {
             let gone = Set(try await cleanup.delete(deleted.map(\.id)))
             guard !gone.isEmpty else { return }
-            committed.removeAll { gone.contains($0.id) }
-            loaded.removeAll { gone.contains($0.id) }
-            for id in gone {
-                committedAlbum[id] = nil
-                loadedAlbum[id] = nil
-            }
+            deleted.removeAll { gone.contains($0.id) }
+            for id in gone { deletedAlbum[id] = nil }
             clearSelection()
             forgetUndo()  // a confirm's undo would bring back deleted photos
             counts = await cleanup.counts()
@@ -979,31 +958,53 @@ public final class ReviewModel {
         }
     }
 
-    /// The album a pending photo goes to. `Passes.allKey` is from before All was removed.
-    public func album(_ p: Pending) -> String {
-        p.pass == Passes.allKey
-            ? Passes.allDeleteAlbum : (p.keep ? Passes.keepAlbum(p.pass) : Passes.deleteAlbum(p.pass)) ?? p.pass
+    /// A pending photo's section in Not in Photos Yet: "Bursts: Delete", "Bursts: Keep".
+    public func section(_ p: Pending) -> String {
+        "\(Passes.title(p.pass) ?? Passes.allTitle): \(p.keep ? Decision.keep.label : "Delete")"
     }
 
-    /// Not in Photos Yet, one section per album: "Bursts - Delete Me". Newest photo first.
+    /// Not in Photos Yet, one section per pass and mark. Newest photo first.
     public var pendingGroups: [BurstGroup] {
-        Dictionary(grouping: pending.keys) { album(pending[$0]!) }
-            .map { album, ids in
+        Dictionary(grouping: pending.keys) { section(pending[$0]!) }
+            .map { name, ids in
                 BurstGroup(
                     photos: ids.compactMap { library[$0] }.sorted {
                         ($0.date ?? .distantPast) > ($1.date ?? .distantPast)
                     },
-                    best: album)
+                    best: name)
             }
             .filter { !$0.photos.isEmpty }
             .sorted { $0.best < $1.best }
     }
 
-    /// What Apply to Photos sends, per album.
-    public var applyPreview: [CommitLine] {
-        Dictionary(grouping: pending.values, by: album).map { CommitLine(count: $0.value.count, album: $0.key) }
-            .sorted { $0.album < $1.album }
+    private var pendingDeletes: [String] { pending.filter { !$0.value.keep }.map(\.key) }
+
+    /// The Apply dialog's lines: what is deleted per pass, the total, and what is kept.
+    public var applyPreview: [String] {
+        let byPass = Dictionary(grouping: pending.values.filter { !$0.keep }, by: \.pass)
+            .map { "\(Passes.title($0.key) ?? Passes.allTitle): \($0.value.count.formatted())" }
+            .sorted()
+        let deletes = pendingDeletes.count
+        let keeps = pending.count - deletes
+        return (deletes > 0 ? ["Ready to delete"] + byPass + ["Total: \(Self.photos(deletes))"] : [])
+            + (keeps > 0 ? ["\(Self.photos(keeps)) to keep, in “\(Passes.keepAlbum)”"] : [])
+            + (deletes > 0 ? [Self.applyDeleteNote] + [applyExportWarning].compactMap { $0 } : [])
     }
+    static let applyDeleteNote =
+        "macOS asks you to confirm the deletion. Photos keeps deleted photos in Recently Deleted for 30 days."
+
+    /// Pending Remove photos with no copy in the export, counted when the Apply dialog opens.
+    private var applyNotExported = 0
+    var applyExportWarning: String? {
+        if export.destination == nil {
+            return "No export is set up, so Photos holds the only copy. Run Export first to keep one."
+        }
+        guard applyNotExported > 0 else { return nil }
+        return
+            "\(applyNotExported.formatted()) of them \(applyNotExported == 1 ? "isn’t" : "aren’t") in your export: run Export first to keep a copy."
+    }
+
+    static func photos(_ n: Int) -> String { "\(n.formatted()) \(n == 1 ? "photo" : "photos")" }
 
     public var canApply: Bool { !pending.isEmpty && !loading && !committing }
     public var applyButtonLabel: String {
@@ -1011,6 +1012,14 @@ public final class ReviewModel {
     }
     /// The "Apply to Photos?" dialog is open.
     public var confirmingApply = false
+
+    /// Opens the Apply dialog, once it knows which Remove photos the export lacks.
+    public func askApply() async {
+        guard canApply else { return }
+        applyNotExported = await exporter?.missing(pendingDeletes) ?? 0
+        confirmingApply = true
+    }
+
     public static let sendBackLabel = "Send Back to Review"
     public var canSendBack: Bool { view == .pending && !selected.isEmpty && !committing }
 
@@ -1022,42 +1031,35 @@ public final class ReviewModel {
         changed(before, name: Self.sendBackLabel)
     }
 
-    /// Writes every pending photo into its album, one batch per pass. Not undoable: the albums are in
-    /// Photos now, and nothing is deleted until Delete in Photos….
+    /// Deletes the pending Remove photos and files the Keeps, after macOS confirms the deletion. Not
+    /// undoable; Photos keeps deleted photos in Recently Deleted for 30 days. A cancel changes nothing.
     public func apply() async {
         guard canApply else { return }
         committing = true
         status = nil
         defer { committing = false }
-        let all = Dictionary(await cleanup.photos.map { ($0.uuid, $0) }, uniquingKeysWith: { a, _ in a })
-        var added = 0
-        var failures: [String] = []
-        for (key, entries) in Dictionary(grouping: pending, by: \.value.pass).sorted(by: { $0.key < $1.key }) {
-            let del = entries.filter { !$0.value.keep }.map(\.key)
-            let keep = entries.filter { $0.value.keep }.map(\.key)
-            do {
-                let r = try await cleanup.commit(key, delete: del, keep: keep)
-                let seen = Set(committed.map(\.id))
-                committed = del.compactMap { all[$0] }.filter { !seen.contains($0.id) } + committed
-                for id in del { committedAlbum[id] = r.album }
-                added += r.added + r.kept
-            } catch CleanupError.noMatchingPhotos {
-                // Deleted in Photos since they were confirmed: nothing left to file.
-            } catch {
-                failures.append("\(error)")
-                continue
+        let delete = pending.filter { !$0.value.keep }.mapValues(\.pass)
+        let keep = pending.filter { $0.value.keep }.mapValues(\.pass)
+        do {
+            guard let r = try await cleanup.apply(delete: delete, keep: keep) else {
+                status = "Nothing applied: the deletion was cancelled."
+                return
             }
-            for id in del + keep { pending[id] = nil }
+            for id in delete.keys { pending[id] = nil }
+            for id in keep.keys { pending[id] = nil }
+            status = [
+                r.deleted.isEmpty
+                    ? nil
+                    : "Deleted \(Self.photos(r.deleted.count)). Photos keeps them in Recently Deleted for 30 days.",
+                r.kept.isEmpty ? nil : "Kept \(Self.photos(r.kept.count)) in “\(Passes.keepAlbum)”.",
+            ].compactMap { $0 }.joined(separator: " ")
+        } catch {
+            status = "\(error)"
         }
         saveState()
-        forgetUndo()  // a confirm's undo can't take photos back out of the albums
+        forgetUndo()  // a confirm's undo can't bring back deleted photos
         await syncHeld()
         counts = await cleanup.counts()
-        deletedNotExported = await exporter?.missing(deleted.map(\.id)) ?? 0
-        status =
-            failures.isEmpty
-            ? "Applied \(added.formatted()) \(added == 1 ? "photo" : "photos") to their albums in Photos."
-            : failures.joined(separator: " ")
     }
 }
 
@@ -1263,12 +1265,12 @@ extension ReviewModel {
         return "\(n.formatted()) \(n == 1 ? "photo" : "photos") to review"
     }
 
-    /// The other steps waiting: photos to apply, then photos to delete in Photos.
+    /// The other steps waiting: photos to apply, then photos an older version left in Delete Me albums.
     public var overviewNotes: [String] {
         [
             pending.isEmpty
                 ? nil
-                : "\(pending.count.formatted()) accepted, not in Photos yet: Apply to Photos… adds them to their albums.",
+                : "\(pending.count.formatted()) accepted, not in Photos yet: Apply to Photos… deletes the Remove ones, after macOS asks, and keeps the rest.",
             deleted.isEmpty
                 ? nil : "\(deleted.count.formatted()) waiting in Delete Me albums: Delete in Photos… deletes them.",
         ].compactMap { $0 }

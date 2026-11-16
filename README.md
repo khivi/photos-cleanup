@@ -6,7 +6,7 @@ Photos Cleanup is a free Mac app. It clears screenshots, bursts, look-alikes and
 
 - **Free and open source.** No subscription, no account, no daily delete limit.
 - **Private.** Everything runs on your Mac, with no network calls. Apple's on-device Vision and Apple Intelligence do the analysis.
-- **Never deletes on its own.** Your marks go into albums. You delete in Photos, and Photos keeps deleted photos for 30 days.
+- **Never deletes on its own.** You review and accept in the app. Apply deletes only after macOS asks you to confirm, and Photos keeps deleted photos for 30 days.
 - **Fast on big libraries.** You review a whole pass in one grid and mark photos keep or delete with one key.
 
 ```bash
@@ -26,15 +26,15 @@ It also does two jobs around the library:
 
 **Nothing is deleted until you say so.**
 
-- Marking a photo Remove only files it into an album, such as "Screenshots - Delete Me".
-- Photos are deleted only when you click Delete in Photos… and confirm in the macOS dialog.
+- Marking a photo Remove and accepting it changes nothing in Photos. It waits in Not in Photos Yet, and Undo reverses it.
+- Photos are deleted only when you click Apply to Photos… and confirm in the macOS dialog. The Apply dialog warns you first if they are not in your export.
 - Deleted photos stay in Photos' Recently Deleted for 30 days.
 
 **Some photos are protected from the start.**
 
 - Favorites are never suggested. Photos in your own albums are not either, unless you change it in Settings.
 - Photos you edited start as keep in Bursts, Similar and Low Quality.
-- Photos you keep go into a "Keep" album, such as "Screenshots - Keep". Later runs skip them.
+- Photos you keep go into one album, "Photos Cleanup - Keep". No pass suggests them again.
 
 **Export and Import never delete files.**
 
@@ -109,8 +109,7 @@ To change this later, open System Settings > Privacy & Security > Automation.
 2. Check the recommendations. A pass shows one section at a time, with its place in the header ("Burst 12 of 847"). The ★ in Bursts and Similar is the best shot; photos to remove are dimmed and tagged Remove.
 3. Fix any mark: ⌫ switches a photo between Keep and Remove. Can't decide? Press ? to mark it Unsure: accepting its section leaves it in the pass for later.
 4. Click Accept (shortcut: Return), or Keep All (shortcut: K) to keep every photo in the section and accept it. The section leaves the pass and waits in Not in Photos Yet, and the next one opens. Nothing changes in Photos yet, and Undo (toolbar, ⌘Z) reverses it.
-5. Click Apply to Photos…. Every pending photo goes to its album: marked ones to the pass's "Delete Me" album, the rest to its "Keep" album.
-6. Open In Delete Me Albums and click Delete in Photos…. macOS asks you to confirm.
+5. Click Apply to Photos…. The dialog counts what will be deleted per pass. macOS then asks you to confirm the deletion. The rest go to "Photos Cleanup - Keep".
 
 Not in Photos Yet, under Review, lists what you accepted by album. Select photos there and click Send Back to Review to change your mind. The list is saved, so it survives a quit.
 The header above the grid counts the photos you keep and remove, and says what the pass recommends; hover it for how. Marks stay when you switch to another view.
@@ -135,7 +134,7 @@ In Bursts and Similar, hover a photo and click its ☆ (or right-click it and pi
 What's left in a pass is what you haven't accepted, so you can work through a big one over several sittings.
 
 Mark a photo Unsure (?) when you can't decide. Accepting its section moves it to Unsure, so the pass still empties.
-Unsure lists those photos by the pass they came from. Mark each Keep (K) or Remove (⌫), then click the section's Accept: they file into that pass's albums.
+Unsure lists those photos by the pass they came from. Mark each Keep (K) or Remove (⌫), then click the section's Accept: they go to Not in Photos Yet with the pass they came from.
 Unsure is saved, so it survives a relaunch.
 When every pass and Unsure are empty, the app says "Cleanup complete".
 
@@ -187,8 +186,8 @@ Photos that are stored only in iCloud download first, so a first run can take ho
 Export runs 4 downloads at a time.
 If a photo fails, Export lists it. The next run tries it again.
 
-In Delete Me Albums warns you when photos in it are not in your export yet.
-Run Export before Delete in Photos… to keep a copy.
+The Apply dialog warns you when photos it will delete are not in your export yet.
+Run Export before Apply to keep a copy.
 
 ## Import: bring old photos into Photos
 

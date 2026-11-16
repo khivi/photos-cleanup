@@ -76,22 +76,19 @@ public enum Passes {
     /// Passes shown as groups of photos, with the best of each marked.
     public static let grouped: Set<String> = ["bursts", "similar"]
 
-    /// The All view, since removed: its Delete Me album and pending key stay, so photos filed or
-    /// confirmed under it still apply and count as filed.
+    /// The All view, since removed: pending photos saved under its key still apply.
     public static let allKey = "all"
     public static let allTitle = "All"
-    public static let allDeleteAlbum = "\(allTitle) - Delete Me"
 
     public static func title(_ key: String) -> String? { all.first { $0.key == key }?.title }
-    public static func deleteAlbum(_ key: String) -> String? { title(key).map { "\($0) - Delete Me" } }
-    // Not in cleanupAlbumNames, so they count as user albums and the candidate filter skips
-    // their photos on every later run.
-    public static func keepAlbum(_ key: String) -> String? { title(key).map { "\($0) - Keep" } }
+    /// Every photo kept by Apply, from any pass: none of them is suggested again. Not in
+    /// cleanupAlbumNames, so it also counts as a user album.
+    public static let keepAlbum = "Photos Cleanup - Keep"
 
-    /// The Delete Me album among a photo's albums (a pass's own, All's, or a legacy one), if any.
+    /// The Delete Me album among a photo's albums, if any. Apply deletes directly; these albums are
+    /// from versions that filed Remove photos into "<Pass title> - Delete Me" first.
     public static func waitingAlbum(in albums: [String]) -> String? {
-        let names = Set(all.compactMap { deleteAlbum($0.key) }).union([allDeleteAlbum]).union(
-            legacyAlbums.values.joined().filter { $0.hasSuffix(" - Delete Me") })
+        let names = Set((all.map(\.title) + [allTitle]).map { "\($0) - Delete Me" })
         return albums.sorted().first(where: names.contains)
     }
 
@@ -125,11 +122,6 @@ public enum Passes {
             "Your videos, longest first. Clips under \(Int(accidentalVideoMax)) seconds are marked Remove: they are usually accidental.",
     ]
 
-    /// Earlier names of a pass's album: photos in them still count as filed.
-    public static let legacyAlbums: [String: Set<String>] = [
-        "low-quality": ["Low Quality - Review Me"],
-        "paperwork": ["Utility - Delete Me", "Utility - Keep"],
-    ]
     /// Passes judged by Foundation Models.
     public static let verdictKinds: Set<String> = ["screenshots", "paperwork"]
 

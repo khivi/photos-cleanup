@@ -1,9 +1,9 @@
 # photos-cleanup
 
 A native macOS app (SwiftUI) for reviewing and clearing unwanted photos in the
-Photos library. It moves flagged photos into a "Delete Me" album. It deletes only
-those photos, only when the user clicks Delete in Photos…, after macOS confirms; Photos
-keeps them in Recently Deleted for 30 days.
+Photos library. It deletes only photos the user accepted as Remove, only when the user
+clicks Apply to Photos…, after macOS confirms; Photos keeps them in Recently Deleted for
+30 days. Kept photos go to one album, "Photos Cleanup - Keep".
 
 ## One Swift package
 
@@ -29,13 +29,13 @@ Keep this sibling-repo note out of code and config comments — it belongs only 
 ## Naming a pass
 
 A pass has exactly one name, set in `Passes.all` in `Sources/PhotosCleanupCore/Passes.swift`: the key (`bursts`) is the
-view and the `decisions.jsonl` kind; the title (`Bursts`) is the tab label and the album prefix. Its
-albums are always `<Title> - Delete Me` and `<Title> - Keep`, derived from the title,
-never written out. No synonyms: not "clusters" for Bursts, not "Review Me" for an album.
-`everyPassHasOneName` (Swift Core tests) enforces this, including the app's tab labels (`ReviewModel.tabs`).
+view and the `decisions.jsonl` kind; the title (`Bursts`) is the tab label. No synonyms: not
+"clusters" for Bursts. `everyPassHasOneName` (Swift Core tests) enforces this, including the
+app's tab labels (`ReviewModel.tabs`).
 
-Renaming a pass whose albums already exist in users' libraries: add the old album names
-to `Passes.legacyAlbums`, so photos filed under them don't come back as candidates.
+Album names don't come from pass titles: every pass keeps into `Passes.keepAlbum`. Only
+`Passes.waitingAlbum` reads `<Title> - Delete Me`, the albums older versions filed Remove
+photos into, so renaming a pass strands its old Delete Me album.
 `decisions.jsonl` keeps old keys (`utility` is now `paperwork`).
 
 ## Dev

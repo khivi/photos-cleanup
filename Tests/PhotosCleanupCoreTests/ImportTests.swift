@@ -112,7 +112,7 @@ private func jpeg(_ url: URL, _ w: Int, _ h: Int, taken: String?, gray: CGFloat 
     // A rerun after importing: Import/ moves to Done/. A Delete Me photo counts as removed from the
     // library: its files (and copies) go to Removed/, not back to Import/.
     let later = FakeLibrary([
-        Photo(uuid: "A", date: taken, albums: [Passes.allDeleteAlbum]),
+        Photo(uuid: "A", date: taken, albums: ["All - Delete Me"]),
         Photo(uuid: "B", date: taken + 3600),
     ])
     later.sizes.withLock { $0 = ["A": (64, 48), "B": (64, 48)] }
